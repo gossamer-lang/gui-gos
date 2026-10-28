@@ -1,0 +1,233 @@
+// buttons: action controls. Buttons activate on pointer release over the
+// pressed control (a release elsewhere cancels), on Enter, and on Space
+// release; checkboxes, switches, radio groups, and segmented controls
+// change on the same gestures and report the new value. None of them
+// changes its own value: the application stores the reported value and
+// the next view shows it.
+
+
+use crate::accessibility::{AccessNode, Role}
+use crate::geometry::Size
+use crate::render::icons::Icon
+use crate::style::{Theme, TextRole}
+use crate::style::color::Color
+use crate::widgets::cx::{CheckState, Node}
+use crate::widgets::menus::MenuItem
+use crate::localization
+use crate::widgets::state::StateStore
+
+/// A button's visual weight.
+#[derive(PartialEq, Eq)]
+pub enum ButtonKind {
+    Normal
+    Primary
+    Danger
+    Flat
+    Tool
+}
+
+/// A push, toggle, tool, or command button.
+#[derive(PartialEq)]
+pub struct Button {
+    pub id: String
+    pub label: String
+    /// A built-in icon name shown before the label (or alone for tools).
+    pub icon: Option<crate::render::icons::Icon>
+    pub kind: ButtonKind
+    /// A command to run instead of emitting `Click`.
+    pub command: String
+    /// -1 a push button; 0/1 a toggle button's state.
+    pub toggled: i64
+    /// The dialog default: Enter in the dialog activates it.
+    pub is_default: bool
+    /// A small menu arrow after the label (a menu button).
+    pub menu_arrow: bool
+    /// The menu it opens: the whole button opens it, or with `split` only
+    /// its arrow part does while the rest runs the button.
+    pub menu: Vec<MenuItem>
+    pub split: bool
+    /// A disclosure header: `toggled` is whether its section is open, shown
+    /// by a chevron and reported as expanded rather than pressed.
+    pub expander: bool
+    /// A color a tool button shows in place of an icon (a palette swatch).
+    pub swatch: Option<Color>
+}
+
+impl Button {
+    pub fn new(id: String, label: String, kind: ButtonKind) -> Button {
+        Button { id: id, label: label, icon: None, kind: kind, command: String::new(), toggled: -1, is_default: false, menu_arrow: false, menu: #[], split: false, expander: false, swatch: None }
+    }
+}
+
+fn label_style(theme: Theme, kind: ButtonKind) -> crate::text::layout::TextStyle {
+    let mut s = theme.font(TextRole::Body)
+    if kind == ButtonKind::Primary { s.bold = true }
+    s
+}
+
+
+// A pointer press is tracked in the control's "ppress" field: "1" while the
+// pointer is over where it went down, "0" once it has left, absent otherwise.
+// Only a release while it reads "1" acts.
+
+
+fn arrow_width(theme: Theme) -> i64 { theme.px(28) }
+
+// An expander paints as a flat push button; its chevron shows the state.
+fn expander_face(b: Button) -> Button {
+    let mut face = b
+    face.toggled = -1
+    face
+}
+
+// The chevron of an expander: down when open, else pointing along the text.
+fn expander_icon(b: Button, rtl: bool) -> Icon {
+    if b.toggled == 1 { Icon::ChevronDown } else if rtl { Icon::ChevronLeft } else { Icon::ChevronRight }
+}
+
+
+pub fn button_semantics(b: Button, st: StateStore) -> Option<AccessNode> {
+    if b.expander {
+        let mut n = AccessNode::control(Role::Button, b.id, b.label, "press")
+        n.expanded = if b.toggled == 1 { 1 } else { 0 }
+        return Some(n)
+    }
+    let role = if b.toggled >= 0 { Role::ToggleButton } else { Role::Button }
+    let mut n = AccessNode::control(role, b.id, b.label, "press")
+    if b.toggled >= 0 { n.pressed = b.toggled == 1 }
+    if !b.menu.is_empty() {
+        let expanded = if st.menu(b.id).open >= 0 { 1 } else { 0 }
+        if b.split {
+            let mut more = AccessNode::new(Role::Button, localization::message("button", "More {label} options", 1, { "label": b.label }))
+            more.id = f"{b.id}#menu"
+            more.expanded = expanded
+            more.actions.push("press")
+            n.children.push(more)
+        } else {
+            n.expanded = expanded
+        }
+    }
+    Some(n)
+}
+
+/// A checkbox or switch.
+#[derive(PartialEq)]
+pub struct Check {
+    pub id: String
+    pub label: String
+    pub state: CheckState
+    pub tristate: bool
+    /// Clicking a tri-state box cycles through mixed too.
+    pub cycle_mixed: bool
+    pub switch: bool
+}
+
+impl Check {
+    pub fn checkbox(id: String, label: String, state: CheckState) -> Check {
+        Check { id: id, label: label, state: state, tristate: false, cycle_mixed: false, switch: false }
+    }
+}
+
+fn indicator_size(theme: Theme, switch: bool) -> Size {
+    let s = theme.indicator()
+    if switch { Size::new(s * 2, s) } else { Size::new(s, s) }
+}
+
+
+fn next_state(k: Check) -> CheckState {
+    match k.state {
+        CheckState::Unchecked => CheckState::Checked
+        CheckState::Checked => if k.tristate && k.cycle_mixed { CheckState::Mixed } else { CheckState::Unchecked }
+        CheckState::Mixed => CheckState::Unchecked
+    }
+}
+
+
+pub fn check_semantics(k: Check) -> Option<AccessNode> {
+    let role = if k.switch { Role::Switch } else { Role::CheckBox }
+    let mut n = AccessNode::control(role, k.id, k.label, "toggle")
+    n.checked = match k.state {
+        CheckState::Unchecked => 0
+        CheckState::Checked => 1
+        CheckState::Mixed => 2
+    }
+    Some(n)
+}
+
+/// Exclusive options with one focus stop; arrows move the choice.
+#[derive(PartialEq)]
+pub struct RadioGroup {
+    pub id: String
+    /// (key, label) pairs.
+    pub options: Vec<(String, String)>
+    pub selected: String
+    pub horizontal: bool
+    pub disabled_keys: Vec<String>
+}
+
+
+fn selected_index(r: RadioGroup) -> i64 {
+    let mut i = 0
+    while i < r.options.len() {
+        if r.options[i].0 == r.selected { return i }
+        i += 1
+    }
+    -1
+}
+
+
+// The option part at local (`x`, `y`), or -1.
+fn part_at(node: Node, x: i64, y: i64) -> i64 {
+    let mut i = 0
+    while i < node.parts.len() {
+        if node.parts[i].contains(x, y) { return i }
+        i += 1
+    }
+    -1
+}
+
+
+pub fn radio_group_semantics(r: RadioGroup, node: Node) -> Option<AccessNode> {
+    let mut g = AccessNode::control(Role::RadioGroup, r.id, String::new(), "")
+    let mut i = 0
+    while i < r.options.len() {
+        let key, label = r.options[i]
+        let mut item = AccessNode::new(Role::RadioButton, label)
+        item.id = f"{r.id}#{key}"
+        item.checked = if key == r.selected { 1 } else { 0 }
+        item.disabled = r.disabled_keys.contains(key)
+        item.pos_in_set = i + 1
+        item.set_size = r.options.len()
+        item.actions.push("select")
+        if i < node.parts.len() { item.bounds = node.parts[i] }
+        g.children.push(item)
+        i += 1
+    }
+    Some(g)
+}
+
+/// A joined row of exclusive buttons.
+#[derive(PartialEq)]
+pub struct Segmented {
+    pub id: String
+    pub options: Vec<(String, String)>
+    pub selected: String
+}
+
+
+pub fn segmented_semantics(s: Segmented) -> Option<AccessNode> {
+    let mut g = AccessNode::control(Role::RadioGroup, s.id, String::new(), "")
+    let mut i = 0
+    while i < s.options.len() {
+        let key, label = s.options[i]
+        let mut item = AccessNode::new(Role::RadioButton, label)
+        item.id = f"{s.id}#{key}"
+        item.checked = if key == s.selected { 1 } else { 0 }
+        item.actions.push("select")
+        item.pos_in_set = i + 1
+        item.set_size = s.options.len()
+        g.children.push(item)
+        i += 1
+    }
+    Some(g)
+}

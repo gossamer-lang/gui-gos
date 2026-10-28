@@ -1,0 +1,1 @@
+build: 12438536B native executable at /tmp/gui-memory-application-launcher/bin/app-launcher (target x86_64-unknown-linux-gnu)

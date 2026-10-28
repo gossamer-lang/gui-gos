@@ -1,0 +1,253 @@
+// A workspace of docked panes: drag a tab beside a group's edge or among its
+// tabs, move panes with Ctrl+Alt+arrows, detach them into windows of their
+// own, and find the arrangement as it was on the next start.
+
+use std::{env, errors, fs, path}
+use std::encoding::json
+
+use gui
+use gui::{Effect, UiMsg, Widget}
+use gui::commands::Command
+use gui::dock::{Change, Drop, Layout, Pane, Zone}
+use gui::widgets::menus
+
+const DOCK: String = "dock"
+
+struct Model {
+    layout: Layout
+    notes: String
+    focused: String
+    status: String
+    log: Vec<String>
+}
+
+fn panes_known() -> Vec<String> {
+    #["editor", "outline", "console", "preview"]
+}
+
+fn layout_file() -> String {
+    path::join(env::var("XDG_CONFIG_HOME").unwrap_or(env::temp_dir()), "gui-docking-layout.json")
+}
+
+// The editor in the middle, the outline to its left, the preview to its
+// right and the console below.
+fn first_layout() -> Layout {
+    let mut layout = Layout::new(panes_known())
+    let group = layout.group_of("editor").unwrap_or(1)
+    let _ = layout.place("outline", group, Zone::Left)
+    let _ = layout.place("preview", group, Zone::Right)
+    let _ = layout.place("console", group, Zone::Bottom)
+    let _ = layout.set_share("outline", 0.22)
+    let _ = layout.set_share("preview", 0.28)
+    let _ = layout.set_share("console", 0.3)
+    layout
+}
+
+fn init() -> Model {
+    match fs::read_to_string(layout_file()) {
+        Ok(saved) => {
+            let layout, repairs = Layout::restore(saved, panes_known())
+            let status = if repairs.is_empty() { "Restored the saved layout" } else { f"Repaired: {repairs.join("; ")}" }
+            Model { layout: layout, notes: "", focused: "editor", status: status, log: #[status] }
+        }
+        Err(_) => Model { layout: first_layout(), notes: "", focused: "editor", status: "Drag a tab beside or onto a group to rearrange the panes", log: #[] }
+    }
+}
+
+fn persist(m: Model) {
+    let _ = fs::create_dir_all(path::parent(layout_file()).unwrap_or("."))
+    let _ = fs::write(layout_file(), m.layout.save().bytes())
+}
+
+// Keeps the latest twenty notes for the console pane.
+fn note(m: Model, text: String) -> Model {
+    let mut n = m
+    n.status = text
+    n.log.push(text)
+    if n.log.len() > 20 {
+        let _ = n.log.remove(0)
+    }
+    n
+}
+
+fn apply(m: Model, changes: Vec<Change>) -> Model {
+    let mut n = m
+    for change in changes {
+        match change {
+            Change::Opened(window) => {
+                gui::perform(Effect::OpenWindow { key: window.window, title: "Pane", width: window.width, height: window.height })
+                n = note(n, "Detached a pane into its own window")
+            }
+            Change::Closed(window) => {
+                gui::perform(Effect::CloseWindow(window))
+                n = note(n, "Closed a window; its panes returned")
+            }
+            Change::PaneClosed(pane) => n = note(n, f"Closed {pane}")
+            Change::Layout => ()
+            Change::Focus { strip, pane } => {
+                n.focused = pane
+                gui::perform(Effect::Focus(strip))
+            }
+        }
+    }
+    if !changes.is_empty() {
+        persist(n)
+    }
+    n
+}
+
+fn update(m: Model, msg: UiMsg) -> Model {
+    let mut n = m
+    match msg {
+        UiMsg::Text(id, text) if id == "notes" => {
+            n.notes = text
+            n.focused = "editor"
+        }
+        UiMsg::Tab(_, pane) => n.focused = pane
+        UiMsg::Command(id) if id.starts_with("show.") => {
+            let pane = id.substring(5, id.byte_len())
+            match n.layout.group_of(pane) {
+                Some(group) => {
+                    let changes = n.layout.handle(DOCK, UiMsg::Tab(gui::dock::group_strip(DOCK, group), pane))
+                    n = apply(n, changes)
+                }
+                None => {
+                    n.layout.add(pane)
+                    persist(n)
+                    n = note(n, f"Reopened {pane}")
+                }
+            }
+            n.focused = pane
+            return n
+        }
+        UiMsg::Command(id) if id.starts_with("dock.") => {
+            let changes = n.layout.command(DOCK, n.focused, id)
+            return apply(n, changes)
+        }
+        _ => ()
+    }
+    let changes = n.layout.handle(DOCK, msg)
+    apply(n, changes)
+}
+
+fn panes(m: Model) -> Vec<(String, Pane)> {
+    #[
+        ("editor", Pane { title: "Editor", content: Widget::text_area("notes", m.notes, 12), closable: false })
+        ("outline", Pane { title: "Outline", content: Widget::label(f"{m.notes.len()} characters"), closable: true })
+        ("console", Pane { title: "Console", content: Widget::column(m.log.map(|line| Widget::label(line)), 2), closable: true })
+        ("preview", Pane { title: "Preview", content: Widget::label(m.notes.to_uppercase()), closable: true })
+    ]
+}
+
+fn view(m: Model) -> Widget {
+    let menu = Widget::menu_bar("menu", #[
+        menus::Menu::new("&File", #[menus::item("gui.quit")])
+        menus::Menu::new("&View", #[menus::item("show.outline"), menus::item("show.console"), menus::item("show.preview")])
+    ])
+    let body = Widget::column(#[m.layout.view(DOCK, "", panes(m)).grow(1), Widget::label(m.status)], 6).padding(8)
+    Widget::column(#[menu, body.grow(1)], 0)
+}
+
+fn window_view(m: Model, key: String) -> Widget {
+    m.layout.view(DOCK, key, panes(m))
+}
+
+fn commands(m: Model) -> Vec<Command> {
+    let mut all = gui::dock::commands()
+    all.push(Command::new("show.outline", "Outline").category("View"))
+    all.push(Command::new("show.console", "Console").category("View"))
+    all.push(Command::new("show.preview", "Preview").category("View"))
+    all
+}
+
+fn app() -> gui::App<Model> {
+    gui::application("Docking", "dev.gossamer.gui-docking", init, update, view)
+        .size(960, 640)
+        .windows(window_view)
+        .commands(commands)
+        .focus("notes")
+}
+
+fn require(value: bool, why: String) -> Result<(), errors::Error> {
+    if value { Ok(()) } else { Err(errors::new(why)) }
+}
+
+fn fixture() -> Result<(), errors::Error> {
+    // A version 1 save naming a pane the application no longer has.
+    fs::create_dir_all(path::parent(layout_file()).unwrap_or("."))?
+    fs::write(layout_file(), "{\"version\":1,\"groups\":[[\"editor\",\"retired\"],[\"outline\"]]}".bytes())?
+    let mut s = app().start()?
+    let first = s.semantics(0).dump()
+    require(first.contains("Repaired: migrated a version 1 layout"), f"no migration: {first}")?
+    println("restored: version 1 migrated, unknown pane dropped, missing panes added")
+    s.type_text("hello dock")?
+    // A pointer drag of the outline's tab onto the lower quarter of the
+    // editor's group docks the outline below the editor.
+    let shown, _ = Layout::restore(fs::read_to_string(layout_file())?, panes_known())
+    let strip_of = |pane: String| gui::dock::group_strip(DOCK, shown.group_of(pane).unwrap_or(0))
+    let outline = s.rect_of(strip_of("outline")).ok_or(errors::new("no outline strip"))?
+    let editor = s.rect_of(strip_of("editor")).ok_or(errors::new("no editor strip"))?
+    // A group's rectangle starts with its tab strip, first tab leftmost.
+    s.press_pointer(outline.x + 30, outline.y + 12)?
+    let low = editor.y + editor.height - editor.height / 8
+    s.move_pointer(editor.x + editor.width / 2, low, true)?
+    s.release_pointer(editor.x + editor.width / 2, low)?
+    s.flush()?
+    let dragged = fs::read_to_string(layout_file())?
+    require(dragged.contains("Vertical"), f"dragging the outline tab did not dock it below the editor: {dragged}")?
+    println("pointer: dragging a tab to a group's lower edge docks it there")
+    // Edge and center drops, as the session reports tabs dropped on groups.
+    s.emit(UiMsg::Dock(DOCK, Drop { pane: "console", group: gui::dock::group_strip(DOCK, 1), zone: Zone::Bottom }))
+    s.flush()?
+    let after = s.semantics(0).dump()
+    require(after.contains("Console") && after.contains("Editor"), f"panes missing after a drop: {after}")?
+    // Keyboard: move the editor right, then back left into the group there.
+    s.focus("notes")?
+    s.run_command(0, "dock.move-right")
+    s.flush()?
+    let moved = fs::read_to_string(layout_file())?
+    require(moved.contains("Horizontal"), f"Ctrl+Alt+Right did not move the editor: {moved}")?
+    s.run_command(0, "dock.move-left")
+    s.flush()?
+    s.run_command(0, "dock.next-group")
+    s.flush()?
+    require(s.focused().starts_with("dock:group:"), f"focus did not reach a group: {s.focused()}")?
+    println("keyboard: the editor moved right into a new group and back; focus cycles groups")
+    // Detach the preview into its own window and bring it back.
+    s.emit(UiMsg::TabAction(gui::dock::group_strip(DOCK, 1), "preview", "detach"))
+    s.flush()?
+    let saved = fs::read_to_string(layout_file())?
+    require(saved.contains("dock-window-"), f"no floating window: {saved}")?
+    let detached = s.semantics(1).dump()
+    require(detached.contains("HELLO DOCK"), f"the preview lost its content: {detached}")?
+    println("floating: preview detached with its content")
+    let windows = json::get(json::parse(saved)?, "floating").ok_or(errors::new("no floating windows"))?
+    let window = json::get(json::at(windows, 0), "window").and_then(json::as_str).unwrap_or("")
+    s.emit(UiMsg::CloseRequested(window))
+    s.flush()?
+    let back = fs::read_to_string(layout_file())?
+    require(!back.contains(window), f"the floating window remained: {back}")?
+    s.emit(UiMsg::Tab(gui::dock::group_strip(DOCK, 1), "editor"))
+    s.flush()?
+    let main = s.semantics(0).dump()
+    require(main.contains("hello dock"), f"the editor lost its text: {main}")?
+    println("reattached: closing the window returned its pane; the editor kept its text")
+    s.shutdown()
+    // A clean save restores exactly; a corrupt one starts over.
+    let restored, repairs = Layout::restore(back, panes_known())
+    require(repairs.is_empty() && restored.save() == back, f"round trip repaired {repairs}")?
+    let fresh, fixes = Layout::restore("{corrupt", panes_known())
+    require(fresh.panes() == panes_known() && fixes[0].starts_with("started over"), "corrupt save")?
+    println(f"persisted: round trip exact, corrupt save recovered with {fresh.panes().len()} panes")
+    fs::remove_file(layout_file())?
+    Ok(())
+}
+
+fn main() -> Result<(), errors::Error> {
+    if env::args().contains("--fixture") {
+        fixture()?
+        require(gui::app::host::callback_count() == 0, "the docking example leaked callbacks")?
+        return Ok(())
+    }
+    app().run()
+}

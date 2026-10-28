@@ -1,0 +1,5 @@
+name = "Docking"
+app_id = "dev.gossamer.gui-docking"
+comment = "Arrange panes in docked groups, splits and floating windows"
+categories = "Development;"
+icon = false

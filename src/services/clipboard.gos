@@ -1,0 +1,96 @@
+// clipboard: text, primary selection, and MIME data through windowing's
+// clipboard, or through an in-memory board for tests and headless runs.
+// Every editing control goes through these functions, so one switch makes
+// a whole session deterministic.
+
+use windowing
+
+static mut MEMORY: bool = false
+static mut BOARD: String = ""
+static mut PRIMARY: String = ""
+
+/// Routes clipboard calls to an in-memory board (`true`) or the system.
+pub fn use_memory(memory: bool) {
+    MEMORY = memory
+    BOARD = ""
+    PRIMARY = ""
+}
+
+pub fn is_memory() -> bool {
+    MEMORY
+}
+
+/// The clipboard's text, or "" when it holds none or cannot be read.
+pub fn text() -> String {
+    if MEMORY {
+        return BOARD
+    }
+    match windowing::clipboard::text() {
+        Ok(t) => t
+        Err(_) => ""
+    }
+}
+
+/// Replaces the clipboard's contents with `text`. A system failure leaves
+/// the clipboard unchanged and is not fatal to editing.
+pub fn set_text(text: String) {
+    if MEMORY {
+        BOARD = text
+        return
+    }
+    if let Err(e) = windowing::clipboard::set_text(text) {
+        eprintln(f"gui: could not set the clipboard: {e}")
+    }
+}
+
+pub fn has_text() -> bool {
+    if MEMORY { !BOARD.is_empty() } else { windowing::clipboard::has_text() }
+}
+
+/// The X11/Wayland primary selection (middle-click paste), where supported.
+pub fn primary_text() -> String {
+    if MEMORY {
+        return PRIMARY
+    }
+    match windowing::clipboard::primary_text() {
+        Ok(t) => t
+        Err(_) => ""
+    }
+}
+
+pub fn set_primary_text(text: String) {
+    if MEMORY {
+        PRIMARY = text
+        return
+    }
+    let _ = windowing::clipboard::set_primary_text(text)
+}
+
+/// Offers several representations at once (e.g. text/plain and text/html).
+pub fn set_data(items: Vec<(String, Vec<u8>)>) {
+    if MEMORY {
+        for (mime, bytes) in items {
+            if mime == "text/plain" || mime == "text/plain;charset=utf-8" {
+                BOARD = String::from_utf8(bytes).unwrap_or("")
+            }
+        }
+        return
+    }
+    if let Err(e) = windowing::clipboard::set_data(items) {
+        eprintln(f"gui: could not set clipboard data: {e}")
+    }
+}
+
+/// The clipboard data offered as `mime`, if any.
+pub fn data(mime: String) -> Option<Vec<u8>> {
+    if MEMORY {
+        if mime.starts_with("text/plain") && !BOARD.is_empty() {
+            return Some(BOARD.bytes())
+        }
+        return None
+    }
+    match windowing::clipboard::data(mime) {
+        Ok(d) => d
+        Err(_) => None
+    }
+}

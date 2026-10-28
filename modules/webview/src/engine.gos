@@ -1,0 +1,651 @@
+// engine: the WebKitGTK side, run on one OS thread. GTK and WebKit are
+// called only from that thread: commands queue on a channel and `wake`
+// schedules a GLib idle callback that drains them there. Signal handlers
+// receive the page (or download) id as their user data.
+
+use std::errors
+
+use crate::Runner
+
+#[cfg(target_os = "linux")]
+pub fn run(runner: Runner) -> Result<(), errors::Error> {
+    linux::run(runner)
+}
+
+#[cfg(target_os = "linux")]
+pub fn wake() {
+    linux::wake()
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn run(runner: Runner) -> Result<(), errors::Error> {
+    let why = "web pages need WebKitGTK, which this platform does not provide here"
+    runner.events.send(crate::Event::Unavailable(why))
+    if let Some(m) = runner.mailbox { m.post(gui::UiMsg::Custom(crate::WAKE, "")) }
+    Err(errors::new(why))
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn wake() {}
+
+#[cfg(target_os = "linux")]
+mod linux {
+    use std::{env, errors, ffi, path}
+    use std::ffi::Ptr
+
+    use gui
+    use gui::CustomInput
+    use windowing
+    use windowing::{Key, Mods, MouseButton}
+
+    use crate::{Command, Event, Frame, Runner, WAKE}
+    use crate::gtk::native as g
+    use crate::gtk::native::Void
+
+    // One page's widgets.
+    struct Native {
+        view: Ptr<Void>
+        window: Ptr<Void>
+        snapshot_pending: bool
+        buttons: u32
+        width: i64
+        height: i64
+        scale: f64
+    }
+
+    // Engine-thread state; touched only on the GTK thread.
+    static mut RUNNER: Option<Runner> = None
+    // The engine's own web context. WebKit's default context would be torn
+    // down by an exit handler on whichever thread exits, which WebKit refuses
+    // off its own thread; this one is released on the engine thread.
+    static mut CONTEXT: Option<Ptr<Void>> = None
+    static mut PAGES: Map<i64, Native> = {}
+    static mut DOWNLOADS: Map<i64, String> = {}
+    // Downloads that reported `failed`, whose following `finished` is not a success.
+    static mut FAILED_DOWNLOADS: Set<i64> = #{}
+    static mut DOWNLOAD_DIR: String = ""
+    static mut PERMISSIONS: Map<i64, Ptr<Void>> = {}
+    static mut SCRIPTS: Map<i64, i64> = {}
+    static mut NEXT_ID: i64 = 1_000_000_000
+
+    const LOAD_STARTED: i32 = 0
+    const LOAD_COMMITTED: i32 = 2
+    const LOAD_FINISHED: i32 = 3
+    const POLICY_NEW_WINDOW: i32 = 1
+    const ACCELERATION_NEVER: i32 = 2
+
+    const BUTTON_PRESS: i32 = 4
+    const DOUBLE_PRESS: i32 = 5
+    const BUTTON_RELEASE: i32 = 7
+    const MOTION: i32 = 3
+    const SCROLL: i32 = 31
+    const KEY_PRESS: i32 = 8
+    const KEY_RELEASE: i32 = 9
+    const LEAVE: i32 = 11
+    const FOCUS: i32 = 12
+    const SCROLL_SMOOTH: i32 = 4
+
+    pub fn run(runner: Runner) -> Result<(), errors::Error> {
+        RUNNER = Some(runner)
+        // Core pointer devices: GTK's XInput 2 path queries the pointer on the
+        // offscreen windows' nonexistent X windows when given forwarded input.
+        unsafe { g::gdk_disable_multidevice() }
+        if unsafe { g::gtk_init_check(None, None) } == 0 {
+            let why = "the web engine needs a display (GTK could not open one)"
+            emit(Event::Unavailable(why))
+            return Err(errors::new(why))
+        }
+        let context = unsafe { g::webkit_web_context_new() }
+        CONTEXT = Some(context)
+        let _ = unsafe { g::connect_pointer(context, c("download-started"), download_started, None, None, 0) }
+        let _ = drain(None)
+        unsafe { g::gtk_main() }
+        for (_, n) in PAGES { unsafe { g::gtk_widget_destroy(n.window) } }
+        PAGES = Map::new()
+        for (_, p) in PERMISSIONS { unsafe { g::g_object_unref(p) } }
+        PERMISSIONS = Map::new()
+        CONTEXT = None
+        unsafe { g::g_object_unref(context) }
+        RUNNER = None
+        Ok(())
+    }
+
+    pub fn wake() {
+        let _ = unsafe { g::g_idle_add(drain, None) }
+    }
+
+    fn c(text: String) -> Vec<u8> {
+        // SAFETY: the engine passes literal and URI text, which holds no NUL.
+        ffi::cstring(text).unwrap()
+    }
+
+    fn id_pointer(id: i64) -> Option<Ptr<Void>> {
+        unsafe { Ptr::from_address(id as u64) }
+    }
+
+    fn id_of(data: Option<Ptr<Void>>) -> i64 {
+        match data { Some(p) => p.address() as i64, None => 0 }
+    }
+
+    fn fresh() -> i64 {
+        NEXT_ID += 1
+        NEXT_ID
+    }
+
+    fn emit(event: Event) {
+        let Some(r) = RUNNER else { return }
+        r.events.send(event)
+        if let Some(m) = r.mailbox { m.post(gui::UiMsg::Custom(WAKE, "")) }
+    }
+
+    fn page_of_view(view: Ptr<Void>) -> i64 {
+        for (id, n) in PAGES {
+            if n.view == view { return id }
+        }
+        0
+    }
+
+    // Runs every queued command; the engine wakes it after each send.
+    fn drain(_data: Option<Ptr<Void>>) -> i32 {
+        let Some(r) = RUNNER else { return 0 }
+        while let Some(command) = r.commands.try_recv() {
+            handle(command)
+        }
+        0
+    }
+
+    fn handle(command: Command) {
+        match command {
+            Command::Create(id) => create(id)
+            Command::Close(id) => {
+                if let Some(n) = PAGES.get(id) {
+                    unsafe { g::gtk_widget_destroy(n.window) }
+                    let _ = PAGES.remove(id)
+                }
+            }
+            Command::Load(id, uri) => with_view(id, |v| unsafe { g::webkit_web_view_load_uri(v, c(uri)) })
+            Command::LoadHtml(id, html, base) => with_view(id, |v| unsafe { g::webkit_web_view_load_html(v, c(html), c(base)) })
+            Command::Reload(id) => with_view(id, |v| unsafe { g::webkit_web_view_reload(v) })
+            Command::Stop(id) => with_view(id, |v| unsafe { g::webkit_web_view_stop_loading(v) })
+            Command::Back(id) => with_view(id, |v| unsafe { g::webkit_web_view_go_back(v) })
+            Command::Forward(id) => with_view(id, |v| unsafe { g::webkit_web_view_go_forward(v) })
+            Command::Resize(id, w, h, scale) => {
+                let Some(n) = PAGES.get(id) else { return }
+                if n.width == w && n.height == h && n.scale == scale { return }
+                // An offscreen window has no window manager to configure it; it
+                // takes its default size whenever it is laid out again.
+                unsafe { g::gtk_window_set_default_size(n.window, w as i32, h as i32) }
+                unsafe { g::gtk_window_resize(n.window, w as i32, h as i32) }
+                unsafe { g::gtk_widget_queue_resize(n.window) }
+                unsafe { g::webkit_web_view_set_zoom_level(n.view, scale) }
+                let mut next = n
+                next.width = w
+                next.height = h
+                next.scale = scale
+                PAGES[id] = next
+            }
+            Command::Input(id, input) => forward(id, input)
+            Command::Evaluate(id, request, script) => {
+                SCRIPTS[request] = id
+                with_view(id, |v| unsafe { g::webkit_web_view_evaluate_javascript(v, c(script), -1, None, None, None, script_done, id_pointer(request)) })
+            }
+            Command::Permission(request, allow) => {
+                if let Some(p) = PERMISSIONS.get(request) {
+                    if allow { unsafe { g::webkit_permission_request_allow(p) } } else { unsafe { g::webkit_permission_request_deny(p) } }
+                    unsafe { g::g_object_unref(p) }
+                    let _ = PERMISSIONS.remove(request)
+                }
+            }
+            Command::Download(id, uri) => with_view(id, |v| { let _ = unsafe { g::webkit_web_view_download_uri(v, c(uri)) } })
+            Command::DownloadDir(dir) => DOWNLOAD_DIR = dir
+            Command::Terminate(id) => with_view(id, |v| unsafe { g::webkit_web_view_terminate_web_process(v) })
+            Command::SaveSession(id) => with_view(id, |v| {
+                let state = unsafe { g::webkit_web_view_get_session_state(v) }
+                let bytes = unsafe { g::webkit_web_view_session_state_serialize(state) }
+                let mut size: usize = 0
+                let data = match unsafe { g::g_bytes_get_data(bytes, &mut size) } {
+                    Some(p) => unsafe { ffi::View::new(p, size as i64) }.to_vec()
+                    None => #[]
+                }
+                unsafe { g::g_bytes_unref(bytes) }
+                unsafe { g::webkit_web_view_session_state_unref(state) }
+                emit(Event::Session { page: id, state: data })
+            })
+            Command::RestoreSession(id, data) => with_view(id, |v| {
+                let bytes = unsafe { g::g_bytes_new(data, data.len() as usize) }
+                let state = unsafe { g::webkit_web_view_session_state_new(bytes) }
+                unsafe { g::g_bytes_unref(bytes) }
+                let Some(s) = state else { return }
+                unsafe { g::webkit_web_view_restore_session_state(v, s) }
+                unsafe { g::webkit_web_view_session_state_unref(s) }
+                let list = unsafe { g::webkit_web_view_get_back_forward_list(v) }
+                if let Some(item) = unsafe { g::webkit_back_forward_list_get_current_item(list) } {
+                    unsafe { g::webkit_web_view_go_to_back_forward_list_item(v, item) }
+                }
+            })
+            Command::Quit => unsafe { g::gtk_main_quit() }
+        }
+    }
+
+    fn with_view(id: i64, act: Fn(Ptr<Void>)) {
+        if let Some(n) = PAGES.get(id) { act(n.view) }
+    }
+
+    fn create(id: i64) {
+        if PAGES.contains_key(id) { return }
+        let window = unsafe { g::gtk_offscreen_window_new() }
+        unsafe { g::gtk_window_set_default_size(window, 800, 600) }
+        let Some(context) = CONTEXT else { return }
+        let view = unsafe { g::webkit_web_view_new_with_context(context) }
+        // Software rendering keeps the offscreen window's pixels readable.
+        unsafe { g::webkit_settings_set_hardware_acceleration_policy(g::webkit_web_view_get_settings(view), ACCELERATION_NEVER) }
+        unsafe { g::gtk_container_add(window, view) }
+        unsafe { g::gtk_widget_show_all(window) }
+        PAGES[id] = Native { view: view, window: window, snapshot_pending: false, buttons: 0, width: 800, height: 600, scale: 1.0 }
+        let data = id_pointer(id)
+        unsafe {
+            g::connect_int(view, c("load-changed"), load_changed, data, None, 0)
+            g::connect_load_failed(view, c("load-failed"), load_failed, data, None, 0)
+            g::connect_pointer(view, c("notify::title"), title_changed, data, None, 0)
+            g::connect_pointer(view, c("notify::uri"), uri_changed, data, None, 0)
+            g::connect_pointer(view, c("notify::estimated-load-progress"), progress_changed, data, None, 0)
+            g::connect_int(view, c("web-process-terminated"), process_terminated, data, None, 0)
+            g::connect_decide_policy(view, c("decide-policy"), decide_policy, data, None, 0)
+            g::connect_pointer_bool(view, c("permission-request"), permission_request, data, None, 0)
+            g::connect_pointer_object(view, c("create"), create_requested, data, None, 0)
+            g::connect_pointer_bool(window, c("damage-event"), damaged, data, None, 0)
+            let _ = g::connect_history(g::webkit_web_view_get_back_forward_list(view), c("changed"), history_changed, data, None, 0)
+        }
+    }
+
+    // ---- signals ----
+
+    fn load_changed(view: Ptr<Void>, event: i32, data: Option<Ptr<Void>>) {
+        let page = id_of(data)
+        let uri = g::text(unsafe { g::webkit_web_view_get_uri(view) })
+        if event == LOAD_STARTED { emit(Event::Started { page: page, uri: uri }) }
+        if event == LOAD_COMMITTED { emit(Event::Committed { page: page, uri: uri }) }
+        if event == LOAD_FINISHED { emit(Event::Finished { page: page, uri: uri }) }
+    }
+
+    fn load_failed(_view: Ptr<Void>, _event: i32, uri: Option<Ptr<u8>>, error: Option<Ptr<g::Error>>, data: Option<Ptr<Void>>) -> i32 {
+        emit(Event::Failed { page: id_of(data), uri: g::text(uri), error: g::message(error, "the page could not be loaded") })
+        0
+    }
+
+    fn title_changed(view: Ptr<Void>, _spec: Option<Ptr<Void>>, data: Option<Ptr<Void>>) {
+        emit(Event::Title { page: id_of(data), title: g::text(unsafe { g::webkit_web_view_get_title(view) }) })
+    }
+
+    fn uri_changed(view: Ptr<Void>, _spec: Option<Ptr<Void>>, data: Option<Ptr<Void>>) {
+        emit(Event::Uri { page: id_of(data), uri: g::text(unsafe { g::webkit_web_view_get_uri(view) }) })
+    }
+
+    fn progress_changed(view: Ptr<Void>, _spec: Option<Ptr<Void>>, data: Option<Ptr<Void>>) {
+        emit(Event::Progress { page: id_of(data), fraction: unsafe { g::webkit_web_view_get_estimated_load_progress(view) } })
+    }
+
+    fn history_changed(_list: Ptr<Void>, _added: Option<Ptr<Void>>, _removed: Option<Ptr<Void>>, data: Option<Ptr<Void>>) {
+        let page = id_of(data)
+        let Some(n) = PAGES.get(page) else { return }
+        emit(Event::History { page: page, back: unsafe { g::webkit_web_view_can_go_back(n.view) } != 0, forward: unsafe { g::webkit_web_view_can_go_forward(n.view) } != 0 })
+    }
+
+    fn process_terminated(_view: Ptr<Void>, reason: i32, data: Option<Ptr<Void>>) {
+        let why = match reason { 0 => "crashed", 1 => "exceeded its memory limit", _ => "was ended" }
+        emit(Event::Crashed { page: id_of(data), reason: why })
+    }
+
+    fn decide_policy(_view: Ptr<Void>, decision: Ptr<Void>, kind: i32, data: Option<Ptr<Void>>) -> i32 {
+        if kind != POLICY_NEW_WINDOW { return 0 }
+        let action = unsafe { g::webkit_navigation_policy_decision_get_navigation_action(decision) }
+        let uri = g::text(unsafe { g::webkit_uri_request_get_uri(g::webkit_navigation_action_get_request(action)) })
+        unsafe { g::webkit_policy_decision_ignore(decision) }
+        emit(Event::NewWindow { page: id_of(data), uri: uri })
+        1
+    }
+
+    fn create_requested(_view: Ptr<Void>, action: Option<Ptr<Void>>, data: Option<Ptr<Void>>) -> Option<Ptr<Void>> {
+        let Some(a) = action else { return None }
+        let uri = g::text(unsafe { g::webkit_uri_request_get_uri(g::webkit_navigation_action_get_request(a)) })
+        emit(Event::NewWindow { page: id_of(data), uri: uri })
+        None
+    }
+
+    fn permission_request(_view: Ptr<Void>, request: Option<Ptr<Void>>, data: Option<Ptr<Void>>) -> i32 {
+        let Some(r) = request else { return 0 }
+        let kind = if unsafe { g::g_type_check_instance_is_a(r, g::webkit_notification_permission_request_get_type()) } != 0 {
+            "notifications"
+        } else if unsafe { g::g_type_check_instance_is_a(r, g::webkit_geolocation_permission_request_get_type()) } != 0 {
+            "location"
+        } else if unsafe { g::g_type_check_instance_is_a(r, g::webkit_user_media_permission_request_get_type()) } != 0 {
+            "camera and microphone"
+        } else {
+            "other"
+        }
+        let id = fresh()
+        PERMISSIONS[id] = unsafe { g::g_object_ref(r) }
+        emit(Event::Permission { page: id_of(data), request: id, kind: kind })
+        1
+    }
+
+    fn download_started(_context: Ptr<Void>, download: Option<Ptr<Void>>, _data: Option<Ptr<Void>>) {
+        let Some(d) = download else { return }
+        let id = fresh()
+        let page = match unsafe { g::webkit_download_get_web_view(d) } { Some(v) => page_of_view(v), None => 0 }
+        let uri = g::text(unsafe { g::webkit_uri_request_get_uri(g::webkit_download_get_request(d)) })
+        let data = id_pointer(id)
+        unsafe {
+            g::connect_pointer_bool(d, c("decide-destination"), decide_destination, data, None, 0)
+            g::connect_plain(d, c("finished"), download_finished, data, None, 0)
+            g::connect_pointer(d, c("failed"), download_failed, data, None, 0)
+        }
+        emit(Event::DownloadStarted { page: page, download: id, uri: uri })
+    }
+
+    fn decide_destination(download: Ptr<Void>, suggested: Option<Ptr<Void>>, data: Option<Ptr<Void>>) -> i32 {
+        let name = g::text(suggested.map(|p| p.cast::<u8>()))
+        let dir = if DOWNLOAD_DIR.is_empty() { env::temp_dir() } else { DOWNLOAD_DIR }
+        let file = path::join(dir, if name.is_empty() { "download" } else { path::file_name(name).unwrap_or("download") })
+        DOWNLOADS[id_of(data)] = file
+        unsafe { g::webkit_download_set_destination(download, c(windowing::instance::file_uri(file))) }
+        1
+    }
+
+    fn download_finished(download: Ptr<Void>, data: Option<Ptr<Void>>) {
+        let id = id_of(data)
+        let file = DOWNLOADS.get(id).unwrap_or("")
+        let bytes = unsafe { g::webkit_download_get_received_data_length(download) } as i64
+        if FAILED_DOWNLOADS.contains(id) {
+            let _ = FAILED_DOWNLOADS.remove(id)
+            return
+        }
+        emit(Event::DownloadFinished { download: id, path: file, bytes: bytes })
+    }
+
+    fn download_failed(_download: Ptr<Void>, error: Option<Ptr<Void>>, data: Option<Ptr<Void>>) {
+        let id = id_of(data)
+        FAILED_DOWNLOADS.insert(id)
+        emit(Event::DownloadFailed { download: id, error: g::message(error.map(|p| p.cast::<g::Error>()), "the download failed") })
+    }
+
+    fn script_done(source: Option<Ptr<Void>>, result: Ptr<Void>, data: Option<Ptr<Void>>) {
+        let request = id_of(data)
+        let page = SCRIPTS.get(request).unwrap_or(0)
+        let _ = SCRIPTS.remove(request)
+        let Some(view) = source else { return }
+        let mut error: Option<Ptr<g::Error>> = None
+        let answer = match unsafe { g::webkit_web_view_evaluate_javascript_finish(view, result, &mut error) } {
+            Some(value) => {
+                let text = unsafe { g::jsc_value_to_string(value) }
+                let s = g::text(text)
+                unsafe { g::g_free(text.map(|p| p.cast::<Void>())) }
+                unsafe { g::g_object_unref(value) }
+                Ok(s)
+            }
+            None => Err(g::message(error, "the script failed"))
+        }
+        emit(Event::Script { page: page, request: request, result: answer })
+    }
+
+    // ---- frames ----
+
+    fn damaged(_widget: Ptr<Void>, _event: Option<Ptr<Void>>, data: Option<Ptr<Void>>) -> i32 {
+        let id = id_of(data)
+        let Some(n) = PAGES.get(id) else { return 0 }
+        if !n.snapshot_pending {
+            let mut next = n
+            next.snapshot_pending = true
+            PAGES[id] = next
+            let _ = unsafe { g::g_idle_add(snapshot, data) }
+        }
+        0
+    }
+
+    // Copies the page's window into a frame, once per burst of damage.
+    fn snapshot(data: Option<Ptr<Void>>) -> i32 {
+        let id = id_of(data)
+        let Some(n) = PAGES.get(id) else { return 0 }
+        let mut next = n
+        next.snapshot_pending = false
+        PAGES[id] = next
+        let Some(pixbuf) = unsafe { g::gtk_offscreen_window_get_pixbuf(n.window) } else { return 0 }
+        let frame = frame_of(pixbuf, n.scale)
+        unsafe { g::g_object_unref(pixbuf) }
+        emit(Event::Painted { page: id, frame: frame })
+        0
+    }
+
+    fn frame_of(pixbuf: Ptr<Void>, scale: f64) -> Frame {
+        let w = unsafe { g::gdk_pixbuf_get_width(pixbuf) } as i64
+        let h = unsafe { g::gdk_pixbuf_get_height(pixbuf) } as i64
+        let stride = unsafe { g::gdk_pixbuf_get_rowstride(pixbuf) } as i64
+        let channels = unsafe { g::gdk_pixbuf_get_n_channels(pixbuf) } as i64
+        let source = unsafe { ffi::View::new(g::gdk_pixbuf_get_pixels(pixbuf), stride * (h - 1) + w * channels) }.to_vec()
+        if channels == 4 && stride == w * 4 {
+            return Frame { width: w, height: h, scale: scale, rgba: source }
+        }
+        let mut rgba = Vec::with_capacity(w * h * 4)
+        for y in 0..h {
+            let row = y * stride
+            for x in 0..w {
+                let at = row + x * channels
+                rgba.push(source[at])
+                rgba.push(source[at + 1])
+                rgba.push(source[at + 2])
+                rgba.push(if channels == 4 { source[at + 3] } else { 255u8 })
+            }
+        }
+        Frame { width: w, height: h, scale: scale, rgba: rgba }
+    }
+
+    // ---- input ----
+
+    fn now() -> u32 {
+        (unsafe { g::g_get_monotonic_time() } / 1000) as u32
+    }
+
+    fn state_of(mods: Mods, buttons: u32) -> u32 {
+        let mut s = buttons
+        if mods.shift { s = s | 1 }
+        if mods.ctrl { s = s | 4 }
+        if mods.alt { s = s | 8 }
+        if mods.gui { s = s | 67_108_864 }
+        s
+    }
+
+    fn button_number(b: MouseButton) -> u32 {
+        match b {
+            MouseButton::Left => 1
+            MouseButton::Middle => 2
+            MouseButton::Right => 3
+            _ => 8
+        }
+    }
+
+    fn button_mask(number: u32) -> u32 {
+        if number >= 1 && number <= 5 { 1 << (7 + number) } else { 0 }
+    }
+
+    fn devices() -> (Option<Ptr<Void>>, Option<Ptr<Void>>) {
+        let Some(display) = unsafe { g::gdk_display_get_default() } else { return (None, None) }
+        let Some(seat) = unsafe { g::gdk_display_get_default_seat(display) } else { return (None, None) }
+        (unsafe { g::gdk_seat_get_pointer(seat) }, unsafe { g::gdk_seat_get_keyboard(seat) })
+    }
+
+    // Hands a filled event straight to `widget`: an offscreen window has no
+    // native window, so GTK's grab and propagation path is not taken. Freeing
+    // the event releases its window reference.
+    fn deliver(widget: Ptr<Void>, event: Ptr<Void>, device: Option<Ptr<Void>>) {
+        if let Some(d) = device { unsafe { g::gdk_event_set_device(event, d) } }
+        let _ = unsafe { g::gtk_widget_event(widget, event) }
+        unsafe { g::gdk_event_free(event) }
+    }
+
+    fn forward(id: i64, input: CustomInput) {
+        let Some(n) = PAGES.get(id) else { return }
+        let Some(window) = unsafe { g::gtk_widget_get_window(n.view) } else { return }
+        let pointer, keyboard = devices()
+        let none = Ptr::null()
+        match input {
+            CustomInput::Press { x, y, button, clicks, mods } => {
+                let number = button_number(button)
+                for kind in if clicks == 2 { #[BUTTON_PRESS, DOUBLE_PRESS] } else { #[BUTTON_PRESS] } {
+                    let e = unsafe { g::gdk_event_new(kind) }
+                    unsafe { ffi::write(e.cast::<g::ButtonEvent>(), g::ButtonEvent { kind: kind, window: g::g_object_ref(window), send_event: 1, time: now(), x: x as f64, y: y as f64, axes: none, state: state_of(mods, n.buttons), button: number, device: pointer.unwrap_or(none), x_root: x as f64, y_root: y as f64 }) }
+                    deliver(n.view, e, pointer)
+                }
+                let mut next = n
+                next.buttons = n.buttons | button_mask(number)
+                PAGES[id] = next
+                unsafe { g::gtk_widget_grab_focus(n.view) }
+            }
+            CustomInput::Release { x, y, button, mods } => {
+                let number = button_number(button)
+                let e = unsafe { g::gdk_event_new(BUTTON_RELEASE) }
+                unsafe { ffi::write(e.cast::<g::ButtonEvent>(), g::ButtonEvent { kind: BUTTON_RELEASE, window: g::g_object_ref(window), send_event: 1, time: now(), x: x as f64, y: y as f64, axes: none, state: state_of(mods, n.buttons), button: number, device: pointer.unwrap_or(none), x_root: x as f64, y_root: y as f64 }) }
+                deliver(n.view, e, pointer)
+                let mut next = n
+                next.buttons = n.buttons & !button_mask(number)
+                PAGES[id] = next
+            }
+            CustomInput::Hover { x, y } | CustomInput::Drag { x, y } => {
+                let e = unsafe { g::gdk_event_new(MOTION) }
+                unsafe { ffi::write(e.cast::<g::MotionEvent>(), g::MotionEvent { kind: MOTION, window: g::g_object_ref(window), send_event: 1, time: now(), x: x as f64, y: y as f64, axes: none, state: n.buttons, is_hint: 0, device: pointer.unwrap_or(none), x_root: x as f64, y_root: y as f64 }) }
+                deliver(n.view, e, pointer)
+            }
+            CustomInput::Leave => {
+                let e = unsafe { g::gdk_event_new(LEAVE) }
+                unsafe { ffi::write(e.cast::<g::CrossingEvent>(), g::CrossingEvent { kind: LEAVE, window: g::g_object_ref(window), send_event: 1, subwindow: none, time: now(), x: -1.0, y: -1.0, x_root: -1.0, y_root: -1.0, mode: 0, detail: 0, focus: 0, state: 0 }) }
+                deliver(n.view, e, pointer)
+            }
+            CustomInput::Wheel { x, y, dx, dy, mods } => {
+                let e = unsafe { g::gdk_event_new(SCROLL) }
+                unsafe { ffi::write(e.cast::<g::ScrollEvent>(), g::ScrollEvent { kind: SCROLL, window: g::g_object_ref(window), send_event: 1, time: now(), x: x as f64, y: y as f64, state: state_of(mods, n.buttons), direction: SCROLL_SMOOTH, device: pointer.unwrap_or(none), x_root: x as f64, y_root: y as f64, delta_x: -dx, delta_y: -dy, is_stop: 0 }) }
+                deliver(n.view, e, pointer)
+            }
+            CustomInput::KeyPress(key, mods) => {
+                // Printable keys arrive again as committed text.
+                if produces_text(key, mods) { return }
+                key_event(n.view, window, keyboard, KEY_PRESS, keyval(key), state_of(mods, n.buttons), "")
+            }
+            CustomInput::KeyRelease(key, mods) => {
+                if produces_text(key, mods) { return }
+                key_event(n.view, window, keyboard, KEY_RELEASE, keyval(key), state_of(mods, n.buttons), "")
+            }
+            CustomInput::Text(text) => {
+                for ch in text {
+                    let v = unsafe { g::gdk_unicode_to_keyval(ch as u32) }
+                    let s = f"{ch}"
+                    key_event(n.view, window, keyboard, KEY_PRESS, v, n.buttons, s)
+                    key_event(n.view, window, keyboard, KEY_RELEASE, v, n.buttons, s)
+                }
+            }
+            CustomInput::Focus(entering) => {
+                if entering { unsafe { g::gtk_widget_grab_focus(n.view) } }
+                let Some(top) = unsafe { g::gtk_widget_get_window(n.window) } else { return }
+                let e = unsafe { g::gdk_event_new(FOCUS) }
+                unsafe { ffi::write(e.cast::<g::FocusEvent>(), g::FocusEvent { kind: FOCUS, window: g::g_object_ref(top), send_event: 1, focus_in: if entering { 1 } else { 0 } }) }
+                deliver(n.window, e, keyboard)
+            }
+        }
+    }
+
+    fn key_event(widget: Ptr<Void>, window: Ptr<Void>, keyboard: Option<Ptr<Void>>, kind: i32, value: u32, state: u32, text: String) {
+        if value == 0 { return }
+        let e = unsafe { g::gdk_event_new(kind) }
+        let bytes = c(text)
+        unsafe { ffi::write(e.cast::<g::KeyEvent>(), g::KeyEvent { kind: kind, window: g::g_object_ref(window), send_event: 1, time: now(), state: state, keyval: value, length: text.byte_len() as i32, string: g::g_strdup(bytes), hardware_keycode: keycode(value), group: 0, is_modifier: 0 }) }
+        deliver(widget, e, keyboard)
+    }
+
+    // The hardware keycode the display's keymap gives `value`, for key bindings.
+    fn keycode(value: u32) -> u16 {
+        let Some(display) = unsafe { g::gdk_display_get_default() } else { return 0 }
+        let Some(keymap) = unsafe { g::gdk_keymap_get_for_display(display) } else { return 0 }
+        let mut keys: Option<Ptr<g::KeymapKey>> = None
+        let mut count: i32 = 0
+        if unsafe { g::gdk_keymap_get_entries_for_keyval(keymap, value, &mut keys, &mut count) } == 0 { return 0 }
+        let Some(k) = keys else { return 0 }
+        let code = if count > 0 { unsafe { ffi::read(k) }.keycode as u16 } else { 0 }
+        unsafe { g::g_free(Some(k.cast::<Void>())) }
+        code
+    }
+
+    fn produces_text(key: Key, mods: Mods) -> bool {
+        if mods.ctrl || mods.alt || mods.gui { return false }
+        let v = keyval(key)
+        (v >= 0x20 && v < 0x7f) || (v >= 0xffb0 && v <= 0xffb9)
+    }
+
+    // The X keysym GDK names `key` by.
+    fn keyval(key: Key) -> u32 {
+        match key {
+            Key::Return => 0xff0d
+            Key::KpEnter => 0xff8d
+            Key::Escape => 0xff1b
+            Key::Backspace => 0xff08
+            Key::Tab => 0xff09
+            Key::Space => 0x20
+            Key::Delete => 0xffff
+            Key::Insert => 0xff63
+            Key::Home => 0xff50
+            Key::End => 0xff57
+            Key::PageUp => 0xff55
+            Key::PageDown => 0xff56
+            Key::Left => 0xff51
+            Key::Up => 0xff52
+            Key::Right => 0xff53
+            Key::Down => 0xff54
+            Key::F1 => 0xffbe
+            Key::F2 => 0xffbf
+            Key::F3 => 0xffc0
+            Key::F4 => 0xffc1
+            Key::F5 => 0xffc2
+            Key::F6 => 0xffc3
+            Key::F7 => 0xffc4
+            Key::F8 => 0xffc5
+            Key::F9 => 0xffc6
+            Key::F10 => 0xffc7
+            Key::F11 => 0xffc8
+            Key::F12 => 0xffc9
+            Key::Num0 => 0x30
+            Key::Num1 => 0x31
+            Key::Num2 => 0x32
+            Key::Num3 => 0x33
+            Key::Num4 => 0x34
+            Key::Num5 => 0x35
+            Key::Num6 => 0x36
+            Key::Num7 => 0x37
+            Key::Num8 => 0x38
+            Key::Num9 => 0x39
+            Key::A => 0x61
+            Key::B => 0x62
+            Key::C => 0x63
+            Key::D => 0x64
+            Key::E => 0x65
+            Key::F => 0x66
+            Key::G => 0x67
+            Key::H => 0x68
+            Key::I => 0x69
+            Key::J => 0x6a
+            Key::K => 0x6b
+            Key::L => 0x6c
+            Key::M => 0x6d
+            Key::N => 0x6e
+            Key::O => 0x6f
+            Key::P => 0x70
+            Key::Q => 0x71
+            Key::R => 0x72
+            Key::S => 0x73
+            Key::T => 0x74
+            Key::U => 0x75
+            Key::V => 0x76
+            Key::W => 0x77
+            Key::X => 0x78
+            Key::Y => 0x79
+            Key::Z => 0x7a
+            _ => 0
+        }
+    }
+}

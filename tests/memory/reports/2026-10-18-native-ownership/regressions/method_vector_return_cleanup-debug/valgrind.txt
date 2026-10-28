@@ -1,0 +1,44 @@
+==2744821== Memcheck, a memory error detector
+==2744821== Copyright (C) 2002-2022, and GNU GPL'd, by Julian Seward et al.
+==2744821== Using Valgrind-3.22.0 and LibVEX; rerun with -h for copyright info
+==2744821== Command: /tmp/gui-leak-repros/final-tiers/method_vector_return_cleanup-debug/method_vector_return_cleanup
+==2744821== Parent PID: 2744718
+==2744821== 
+==2744821== 
+==2744821== HEAP SUMMARY:
+==2744821==     in use at exit: 3,584 bytes in 2 blocks
+==2744821==   total heap usage: 340 allocs, 338 frees, 123,338 bytes allocated
+==2744821== 
+==2744821== 1,024 bytes in 1 blocks are still reachable in loss record 1 of 2
+==2744821==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==2744821==    by 0x1C0942: <std::sync::once::Once>::call_once_force::<<std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::initialize<<std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::get_or_init<std::io::stdio::stdout::{closure#0}>::{closure#0}, !>::{closure#0}>::{closure#0} (in /tmp/gui-leak-repros/final-tiers/method_vector_return_cleanup-debug/method_vector_return_cleanup)
+==2744821==    by 0x1BDDC6: <std::sys::sync::once::futex::Once>::call (in /tmp/gui-leak-repros/final-tiers/method_vector_return_cleanup-debug/method_vector_return_cleanup)
+==2744821==    by 0x1C089E: <std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::initialize::<<std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::get_or_init<std::io::stdio::stdout::{closure#0}>::{closure#0}, !> (in /tmp/gui-leak-repros/final-tiers/method_vector_return_cleanup-debug/method_vector_return_cleanup)
+==2744821==    by 0x148DB0: gossamer_runtime::c_abi::print::write_terminal_direct (in /tmp/gui-leak-repros/final-tiers/method_vector_return_cleanup-debug/method_vector_return_cleanup)
+==2744821==    by 0x14855A: gossamer_runtime::c_abi::print::write_terminal (in /tmp/gui-leak-repros/final-tiers/method_vector_return_cleanup-debug/method_vector_return_cleanup)
+==2744821==    by 0x14845F: gossamer_runtime::c_abi::print::write_stdout (in /tmp/gui-leak-repros/final-tiers/method_vector_return_cleanup-debug/method_vector_return_cleanup)
+==2744821==    by 0x1769E9: gos_rt_println (in /tmp/gui-leak-repros/final-tiers/method_vector_return_cleanup-debug/method_vector_return_cleanup)
+==2744821==    by 0x12CB12: gos_main (in /tmp/gui-leak-repros/final-tiers/method_vector_return_cleanup-debug/method_vector_return_cleanup)
+==2744821==    by 0x12CF08: gos_main_shim (in /tmp/gui-leak-repros/final-tiers/method_vector_return_cleanup-debug/method_vector_return_cleanup)
+==2744821==    by 0x174786: gos_rt_call_main (in /tmp/gui-leak-repros/final-tiers/method_vector_return_cleanup-debug/method_vector_return_cleanup)
+==2744821==    by 0x12CF38: main (in /tmp/gui-leak-repros/final-tiers/method_vector_return_cleanup-debug/method_vector_return_cleanup)
+==2744821== 
+==2744821== 2,560 bytes in 1 blocks are still reachable in loss record 2 of 2
+==2744821==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==2744821==    by 0x15F6D5: std::sync::once::Once::call_once_force::{{closure}} (in /tmp/gui-leak-repros/final-tiers/method_vector_return_cleanup-debug/method_vector_return_cleanup)
+==2744821==    by 0x1BDDC6: <std::sys::sync::once::futex::Once>::call (in /tmp/gui-leak-repros/final-tiers/method_vector_return_cleanup-debug/method_vector_return_cleanup)
+==2744821==    by 0x160EEC: std::sync::once_lock::OnceLock<T>::initialize (in /tmp/gui-leak-repros/final-tiers/method_vector_return_cleanup-debug/method_vector_return_cleanup)
+==2744821==    by 0x14E3B7: gossamer_runtime::c_abi::string::register_heap_string_body (in /tmp/gui-leak-repros/final-tiers/method_vector_return_cleanup-debug/method_vector_return_cleanup)
+==2744821==    by 0x14E0AC: gossamer_runtime::c_abi::string::alloc_growable_forced (in /tmp/gui-leak-repros/final-tiers/method_vector_return_cleanup-debug/method_vector_return_cleanup)
+==2744821==    by 0x176E78: gos_rt_set_args (in /tmp/gui-leak-repros/final-tiers/method_vector_return_cleanup-debug/method_vector_return_cleanup)
+==2744821==    by 0x12CF29: main (in /tmp/gui-leak-repros/final-tiers/method_vector_return_cleanup-debug/method_vector_return_cleanup)
+==2744821== 
+==2744821== LEAK SUMMARY:
+==2744821==    definitely lost: 0 bytes in 0 blocks
+==2744821==    indirectly lost: 0 bytes in 0 blocks
+==2744821==      possibly lost: 0 bytes in 0 blocks
+==2744821==    still reachable: 3,584 bytes in 2 blocks
+==2744821==         suppressed: 0 bytes in 0 blocks
+==2744821== 
+==2744821== For lists of detected and suppressed errors, rerun with: -s
+==2744821== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)

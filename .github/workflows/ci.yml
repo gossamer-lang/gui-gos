@@ -1,0 +1,309 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GOSSAMER_REPO: gossamer-lang/gossamer
+  # The toolchain release CI installs: the one this library requires.
+  GOSSAMER_VERSION: v0.75.5
+  WINDOWING_REPO: gossamer-lang/windowing-gos
+  ENGINE_REPO: gossamer-lang/gui-engine-gos
+  # The releases the manifests depend on. The Rust cores and windowing's own
+  # native tests are checked out at the same tags; set these repository
+  # variables together to check a newer compatibility set.
+  WINDOWING_REF: ${{ vars.WINDOWING_REF || 'v0.1.0' }}
+  ENGINE_REF: ${{ vars.ENGINE_REF || 'v0.1.0' }}
+  RUSTUP_TOOLCHAIN: 1.95.0
+  # Every job that needs no real display draws into SDL's offscreen driver.
+  SDL_VIDEO_DRIVER: offscreen
+  # Settings and caches of the runs stay out of the runner's home.
+  XDG_CONFIG_HOME: ${{ github.workspace }}/.ci-config
+  XDG_CACHE_HOME: ${{ github.workspace }}/.ci-cache
+
+# The Gossamer packages build against the tagged dependencies `gos fetch`
+# prepares (tools/fetch.sh). The Rust cores are checked from the checkouts
+# beside gui-gos, and the binding SDK is the one the installed gos names.
+jobs:
+  linux:
+    name: gate (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: gui-gos
+      - uses: actions/checkout@v6
+        with:
+          repository: ${{ env.WINDOWING_REPO }}
+          path: windowing-gos
+          ref: ${{ env.WINDOWING_REF }}
+      - uses: actions/checkout@v6
+        with:
+          repository: ${{ env.ENGINE_REPO }}
+          path: gui-engine-gos
+          ref: ${{ env.ENGINE_REF }}
+      - name: Install SDL's build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build pkg-config dbus \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
+            libxss-dev libxfixes-dev libxtst-dev libxkbcommon-dev libwayland-dev \
+            wayland-protocols libegl-dev libgl-dev libdecor-0-dev weston xwayland xvfb sway xserver-xephyr x11-utils python3-dbus python3-gi libgl1-mesa-dri
+      - name: Install the Gossamer toolchain
+        run: |
+          curl -fsSL "https://raw.githubusercontent.com/${GOSSAMER_REPO}/main/scripts/install.sh" | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          components: rustfmt, clippy
+      - run: gos --version
+      - name: Combined release host gate
+        working-directory: gui-gos
+        run: tools/release-gate.sh "$GITHUB_WORKSPACE/release-linux"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-linux-evidence
+          path: |
+            release-linux/results.json
+            release-linux/source-sha256.txt
+            release-linux/steps/*.txt
+            release-linux/install-*.json
+            release-linux/dist/*
+
+  # Windows and macOS code type-checks for both architectures of each.
+  cross:
+    name: cross-target check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: gui-gos
+      - uses: actions/checkout@v6
+        with:
+          repository: ${{ env.WINDOWING_REPO }}
+          path: windowing-gos
+          ref: ${{ env.WINDOWING_REF }}
+      - uses: actions/checkout@v6
+        with:
+          repository: ${{ env.ENGINE_REPO }}
+          path: gui-engine-gos
+          ref: ${{ env.ENGINE_REF }}
+      - name: Install the Gossamer toolchain
+        run: |
+          curl -fsSL "https://raw.githubusercontent.com/${GOSSAMER_REPO}/main/scripts/install.sh" | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Fetch the tagged dependencies
+        working-directory: gui-gos
+        run: tools/fetch.sh
+      - name: Check every package for Windows and macOS
+        working-directory: gui-gos
+        run: |
+          for target in x86_64-pc-windows-msvc aarch64-apple-darwin x86_64-apple-darwin; do
+            for dir in . examples/*/; do
+              echo "== $dir for $target"
+              (cd "$dir" && gos check --target "$target" .)
+            done
+          done
+
+  # The examples built and run natively, then packaged the way each platform
+  # installs applications.
+  native:
+    name: examples (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS
+            os: macos-latest
+          - name: Windows
+            os: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: gui-gos
+      - uses: actions/checkout@v6
+        with:
+          repository: ${{ env.WINDOWING_REPO }}
+          path: windowing-gos
+          ref: ${{ env.WINDOWING_REF }}
+      - uses: actions/checkout@v6
+        with:
+          repository: ${{ env.ENGINE_REPO }}
+          path: gui-engine-gos
+          ref: ${{ env.ENGINE_REF }}
+      - name: Install the Gossamer toolchain, LLVM and Ninja (macOS)
+        if: runner.os == 'macOS'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+        run: |
+          curl -fsSL "https://raw.githubusercontent.com/${GOSSAMER_REPO}/main/scripts/install.sh" | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          brew install llvm@22 ninja
+          prefix="$(brew --prefix llvm@22)"
+          echo "GOS_LLVM_OPT=$prefix/bin/opt" >> "$GITHUB_ENV"
+          echo "GOS_LLC=$prefix/bin/llc" >> "$GITHUB_ENV"
+      - name: Install the Gossamer toolchain and LLVM (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          gh release download $env:GOSSAMER_VERSION --repo $env:GOSSAMER_REPO --pattern 'gos-*-windows-x86_64.zip' --dir gos-dist
+          Expand-Archive -Path (Get-ChildItem gos-dist\*.zip).FullName -DestinationPath gos-dist\gos
+          $bin = (Get-ChildItem gos-dist\gos -Recurse -Filter gos.exe | Select-Object -First 1).DirectoryName
+          Add-Content $env:GITHUB_PATH $bin
+          & 'C:\msys64\usr\bin\pacman.exe' -S --noconfirm --needed mingw-w64-x86_64-llvm
+          if ($LASTEXITCODE -ne 0) { throw "pacman failed (exit $LASTEXITCODE)" }
+          Add-Content $env:GITHUB_ENV "GOS_LLVM_OPT=C:\msys64\mingw64\bin\opt.exe"
+          Add-Content $env:GITHUB_ENV "GOS_LLC=C:\msys64\mingw64\bin\llc.exe"
+      - uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          components: rustfmt, clippy
+      - run: gos --version
+      - name: Fetch the tagged dependencies
+        working-directory: gui-gos
+        run: tools/fetch.sh
+      - name: Rust cores and bindings (format, Clippy, tests)
+        working-directory: gui-gos
+        run: tools/check-rust.sh
+      - name: Native display and accessibility provider probes
+        working-directory: windowing-gos
+        env:
+          SDL_VIDEO_DRIVER: ${{ runner.os == 'Windows' && 'windows' || 'cocoa' }}
+        run: |
+          (cd tests/smoke && gos build --release . && ./target/release/windowing-smoke)
+          (cd tests/platform && gos build --release . && ./target/release/windowing-platform)
+          (cd tests/uia && gos build --release .)
+          if [ "$RUNNER_OS" = macOS ]; then (cd tests/uia && ./target/release/windowing-uia --self-check); fi
+      - name: UI Automation client (Windows)
+        if: runner.os == 'Windows'
+        working-directory: windowing-gos/tests/uia
+        shell: pwsh
+        env:
+          SDL_VIDEO_DRIVER: windows
+        run: |
+          & 'C:\msys64\mingw64\bin\gcc.exe' -O1 -o uia-client.exe client.c -lole32 -loleaut32 -luuid -luser32
+          if ($LASTEXITCODE -ne 0) { throw "building UIA client failed" }
+          .\run.ps1
+      - name: Native single-instance foreground handoff
+        working-directory: windowing-gos/rust/gos-windowing
+        env:
+          SDL_VIDEO_DRIVER: ${{ runner.os == 'Windows' && 'windows' || 'cocoa' }}
+        run: |
+          cargo run --release --example instance-check
+          cargo run --release --example platform-check
+      - name: Native document and resource worker journeys
+        working-directory: gui-gos
+        env:
+          SDL_VIDEO_DRIVER: ${{ runner.os == 'Windows' && 'windows' || 'cocoa' }}
+          GUI_TEST_INLINE_WORK: "0"
+          GUI_ACCESSIBILITY: "off"
+        run: |
+          for fixture in resources documents; do
+            gos build --release "tests/$fixture" --out-dir "native-$fixture"
+            "./native-$fixture/gui-$fixture" > "native-$fixture.txt"
+            diff -u "tests/$fixture/expected.txt" "native-$fixture.txt"
+          done
+      - name: Native software rendering remains the default
+        working-directory: gui-engine-gos/rust/gui-engine
+        env:
+          SDL_VIDEO_DRIVER: ${{ runner.os == 'Windows' && 'windows' || 'cocoa' }}
+        run: |
+          unset GUI_RENDERER
+          cargo run --release --example render-check -- --require-software
+      - name: Native GPU compositor readback, resize and recovery
+        working-directory: gui-engine-gos/rust/gui-engine
+        env:
+          SDL_VIDEO_DRIVER: ${{ runner.os == 'Windows' && 'windows' || 'cocoa' }}
+          GUI_RENDERER: gpu
+        run: cargo run --release --example render-check -- --require-gpu
+      - name: Build and run the example journeys (release native)
+        working-directory: gui-gos
+        env:
+          SDL_VIDEO_DRIVER: ${{ runner.os == 'Windows' && 'windows' || 'cocoa' }}
+        run: |
+          (cd examples/hello-world && gos build --release .)
+          for app in widgets-showcase code-editor application-launcher rich-editor; do
+            exe=$(sed -n 's/^id = "[^/]*\/\([^"]*\)"/\1/p' "examples/$app/project.toml")
+            (cd "examples/$app" && gos build --release . && "./target/release/$exe" --fixture > /dev/null)
+            if [ "$app" = code-editor ]; then (cd "examples/$app" && GUI_TEST_INLINE_WORK=0 "./target/release/$exe" --close-fixture); fi
+            echo "PASS: $app"
+          done
+      - name: Package the examples
+        working-directory: gui-gos
+        run: |
+          for app in hello-world widgets-showcase code-editor application-launcher rich-editor; do
+            tools/package.sh "examples/$app" dist
+          done
+      - name: Run the launcher from its application bundle (macOS)
+        if: runner.os == 'macOS'
+        working-directory: gui-gos
+        run: dist/Run.app/Contents/MacOS/app-launcher --fixture > /dev/null
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ runner.os }}
+          path: |
+            gui-gos/dist/*.zip
+
+  real-linux:
+    name: real display (${{ matrix.driver }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        driver: [x11, wayland]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: gui-gos
+      - uses: actions/checkout@v6
+        with:
+          repository: ${{ env.WINDOWING_REPO }}
+          path: windowing-gos
+          ref: ${{ env.WINDOWING_REF }}
+      - uses: actions/checkout@v6
+        with:
+          repository: ${{ env.ENGINE_REPO }}
+          path: gui-engine-gos
+          ref: ${{ env.ENGINE_REF }}
+      - uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          components: rustfmt, clippy
+      - name: Install display and build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build pkg-config dbus-x11 xvfb weston at-spi2-core libglib2.0-bin \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
+            libxss-dev libxfixes-dev libxtst-dev libxkbcommon-dev libwayland-dev \
+            wayland-protocols libegl-dev libgl-dev libdecor-0-dev
+          curl -fsSL "https://raw.githubusercontent.com/${GOSSAMER_REPO}/main/scripts/install.sh" | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Build native journeys
+        working-directory: gui-gos
+        run: |
+          ./tools/check-toolchain.sh
+          tools/fetch.sh
+          for dir in ../windowing-gos/tests/smoke examples/widgets-showcase examples/code-editor; do
+            (cd "$dir" && gos build --release .)
+          done
+          (cd ../gui-engine-gos/rust/gui-engine && cargo build --release --example render-check)
+      - name: Run native journeys on a real display server
+        working-directory: gui-gos
+        env:
+          SDL_VIDEO_DRIVER: ${{ matrix.driver }}
+        run: tools/real-display.sh

@@ -1,0 +1,10 @@
+use std::encoding::json
+
+struct Settings { version: i64, values: Map<String, String> }
+fn main() {
+    let text = "{\"version\":1,\"values\":{\"alpha\":\"one\",\"beta\":\"two\"}}"
+    for _ in 0..3 {
+        let settings = json::decode::<Settings>(text).unwrap()
+        println("{}", settings.values.get("alpha").unwrap())
+    }
+}

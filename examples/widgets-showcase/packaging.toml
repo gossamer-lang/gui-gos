@@ -1,0 +1,5 @@
+# What tools/package.sh needs beyond project.toml.
+name = "Widget Showcase"
+app_id = "dev.gossamer.widgets-showcase"
+comment = "Every gui-gos control, wired to something it changes"
+categories = "Development;"

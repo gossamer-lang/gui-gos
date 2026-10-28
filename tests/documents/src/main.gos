@@ -1,0 +1,133 @@
+use std::{env, errors, fs, path, process, time}
+use gui
+use gui::{Effect, UiMsg, Widget}
+use gui::editing::document::{Document, Affinity, Record}
+use gui::services::work::{Work, Operation, Outcome}
+use windowing::{Key, Mods}
+
+struct Model {
+    document: Document
+    status: String
+}
+fn update(model: Model, message: UiMsg) -> Model {
+    let mut next = model
+    match message {
+        UiMsg::DocumentChanged(_, _, revision) => {
+            next.status = f"revision {revision}"
+            gui::perform(Effect::Work(Work::new("editor", -3, revision, Operation::AnalyzeDocument(next.document.id, "gos"))))
+        }
+        UiMsg::Worked(_, request, revision, outcome) => {
+            if request < 0 && revision != next.document.info().revision { return next }
+            match outcome {
+                Outcome::Search(ranges) => next.status = f"search {ranges.len()}"
+                Outcome::SessionSaved(_) => next.status = "checkpoint saved"
+                Outcome::SessionRestored(records, metadata) => {
+                    if records.len() != 1 || metadata != "view metadata" { panic("invalid checkpoint result") }
+                    next.document.close()
+                    next.document = Document { id: records[0].document }
+                    next.status = "checkpoint restored"
+                }
+                Outcome::Failed(why) => next.status = f"failed: {why}"
+                _ => ()
+            }
+        }
+        _ => ()
+    }
+    next
+}
+fn view(model: Model) -> Widget {
+    let mut input = gui::TextInput::new("editor", "", "Source", gui::InputKind::Area)
+    input.document = model.document.id
+    input.rows = 24
+    input.mono = true
+    input.wrap = false
+    Widget::column(#[Widget::input(input).grow(1), Widget::label(model.status)], 0)
+}
+fn await_status(session: &mut gui::Session, status: String) -> Result<(), errors::Error>{
+    let until = time::monotonic_nanos() + 30_000_000_000
+    loop {
+        let dump = session.semantics(0).dump()
+        if dump.contains(status) { return Ok(()) }
+        if dump.contains("failed:") { return Err(errors::new(dump)) }
+        if time::monotonic_nanos()>until { return Err(errors::new(f"timeout: {status}")) }
+        session.step()?
+    }
+}
+fn diverse_source() -> String {
+    let mut text = String::new()
+    for row in 0..200_000 {
+        let line = match row % 4 {
+            0 => f"fn α_{row%97}() {{ let שלום = {row} }} // é 👩‍💻\n"
+            1 => f"// 日本語 تعليق строка {row} 👩‍💻 é source text\n"
+            2 => f"let vector_{row%113} = #[{row}, {row%17}, {row%31}] // values\n"
+            _ => f"if ready_{row%89} {{ println(\"مرحبا 世界 {row}\") }}\n"
+        }
+        text.push_str(line)
+    }
+    text
+}
+
+fn main() -> Result<(), errors::Error>{
+    gui::services::clipboard::use_memory(true)
+    let file = path::join(env::temp_dir(), f"gui-document-session-{process::id()}.bin")
+    let p95_limit = env::var("GUI_DOCUMENT_P95_MS").unwrap_or("1000").to_i64().unwrap_or(1000) * 1_000_000
+    for kind in #["diverse", "long-line"] {
+        let text = if kind == "diverse" { diverse_source() } else { "x".repeat(1_048_576) }
+        if kind == "diverse" && text.byte_len()<10 * 1024 * 1024 { return Err(errors::new("document fixture is smaller than 10 MiB")) }
+        let mut session = gui::application("Native documents", "dev.gossamer.gui-documents", || Model { document: Document::new(text), status: "ready" }, update, view).size(1000, 700).start()?
+        session.focus("editor")?
+        let mut primary = Mods::default()
+        if gui::input::platform_is_macos() { primary.gui = true } else { primary.ctrl = true }
+        // Exercise insertion and horizontal viewport positioning at the far
+        // end of the document or its 1 MiB line.
+        session.press(Key::End, primary)?
+        let document = session.document(0, "editor")
+        if document.id <= 0 { return Err(errors::new("input did not retain its document handle")) }
+        let before = document.info()
+        let snapshot = document.freeze()
+        let left = document.anchor(before.caret, Affinity::Before)?
+        let right = document.anchor(before.caret, Affinity::After)?
+        let mut samples: Vec<i64 >= #[]
+        for _ in 0..30 {
+            let start = time::monotonic_nanos()
+            session.type_text("a")?
+            samples.push(time::monotonic_nanos() - start)
+        }
+        samples.sort()
+        let p95 = samples[28]
+        if p95>p95_limit { return Err(errors::new(f"{kind} p95 {p95} exceeds {p95_limit} ns")) }
+        if document.info().bytes != before.bytes + 30 || snapshot.info().bytes != before.bytes { return Err(errors::new("edit changed an immutable snapshot")) }
+        if document.resolve(left)?.byte != before.caret || document.resolve(right)?.byte != before.caret + 30 { return Err(errors::new("anchor affinity failed")) }
+        gui::perform(Effect::Work(Work::new("editor", -4, document.info().revision, Operation::SearchDocument(document.id, "aaa", gui::editing::search::SearchOptions { match_case: true, whole_word: false }, 100))))
+        session.flush()?; await_status(&mut session, "search 10")?
+        let usage = session.resource_usage()
+        if usage.total>usage.limit { return Err(errors::new("document exceeded session byte budget")) }
+        println(f"{kind} edits and immutable snapshots: ok")
+        if env::args().contains("--timings") { println(f"timing {kind} p95_ns={p95} max_ns={samples[29]} reserved={usage.total}") }
+        session.press(Key::Z, primary)?
+        if document.info().bytes != before.bytes { return Err(errors::new("grouped undo failed")) }
+        session.press(Key::Y, primary)?
+        if document.info().bytes != before.bytes + 30 { return Err(errors::new("redo failed")) }
+        document.mark_saved(snapshot)
+        if !document.info().dirty { return Err(errors::new("stale save incorrectly cleared dirty state")) }
+        snapshot.close()
+        document.release_anchor(left); document.release_anchor(right)
+        gui::perform(Effect::Work(Work::new("session", 1, 0, Operation::SaveSession(file, #[Record { key: "doc", document: document.id }], "view metadata"))))
+        session.flush()?
+        await_status(&mut session, "checkpoint saved")?
+        // Restoring replaces the native document and preserves its unsaved body,
+        // undo/redo and selection without serializing the file through the shell.
+        gui::perform(Effect::Work(Work::new("session", 2, 0, Operation::RestoreSession(file))))
+        session.flush()?
+        await_status(&mut session, "checkpoint restored")?
+        let restored = session.document(0, "editor")
+        if restored.info().bytes != before.bytes + 30 || !restored.info().dirty { return Err(errors::new("checkpoint lost unsaved edits")) }
+        session.press(Key::Z, primary)?
+        if restored.info().bytes != before.bytes { return Err(errors::new("checkpoint lost undo")) }
+        println(f"{kind} save markers, checkpoint and undo restoration: ok")
+        session.shutdown()
+        if gui::app::host::callback_count() != 0 { return Err(errors::new("document session leaked callbacks")) }
+    }
+    fs::remove_file(file)?
+    Ok(())
+}

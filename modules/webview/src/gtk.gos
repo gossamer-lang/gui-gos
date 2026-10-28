@@ -1,0 +1,258 @@
+// gtk: the GTK 3, GLib and WebKitGTK 4.1 functions the engine calls. One
+// extern block per library; `g_signal_connect_data` has one alias per
+// handler signature.
+
+#[cfg(target_os = "linux")]
+pub mod native {
+    use std::ffi
+    use std::ffi::Ptr
+
+    pub type Void = ffi::c_void
+
+    #[repr(C)]
+    pub struct ButtonEvent {
+        pub kind: i32
+        pub window: Ptr<Void>
+        pub send_event: i8
+        pub time: u32
+        pub x: f64
+        pub y: f64
+        pub axes: Ptr<Void>
+        pub state: u32
+        pub button: u32
+        pub device: Ptr<Void>
+        pub x_root: f64
+        pub y_root: f64
+    }
+
+    #[repr(C)]
+    pub struct MotionEvent {
+        pub kind: i32
+        pub window: Ptr<Void>
+        pub send_event: i8
+        pub time: u32
+        pub x: f64
+        pub y: f64
+        pub axes: Ptr<Void>
+        pub state: u32
+        pub is_hint: i16
+        pub device: Ptr<Void>
+        pub x_root: f64
+        pub y_root: f64
+    }
+
+    #[repr(C)]
+    pub struct ScrollEvent {
+        pub kind: i32
+        pub window: Ptr<Void>
+        pub send_event: i8
+        pub time: u32
+        pub x: f64
+        pub y: f64
+        pub state: u32
+        pub direction: i32
+        pub device: Ptr<Void>
+        pub x_root: f64
+        pub y_root: f64
+        pub delta_x: f64
+        pub delta_y: f64
+        pub is_stop: u32
+    }
+
+    #[repr(C)]
+    pub struct KeyEvent {
+        pub kind: i32
+        pub window: Ptr<Void>
+        pub send_event: i8
+        pub time: u32
+        pub state: u32
+        pub keyval: u32
+        pub length: i32
+        pub string: Ptr<u8>
+        pub hardware_keycode: u16
+        pub group: u8
+        pub is_modifier: u8
+    }
+
+    #[repr(C)]
+    pub struct CrossingEvent {
+        pub kind: i32
+        pub window: Ptr<Void>
+        pub send_event: i8
+        pub subwindow: Ptr<Void>
+        pub time: u32
+        pub x: f64
+        pub y: f64
+        pub x_root: f64
+        pub y_root: f64
+        pub mode: i32
+        pub detail: i32
+        pub focus: i32
+        pub state: u32
+    }
+
+    #[repr(C)]
+    pub struct FocusEvent {
+        pub kind: i32
+        pub window: Ptr<Void>
+        pub send_event: i8
+        pub focus_in: i16
+    }
+
+    #[repr(C)]
+    pub struct KeymapKey {
+        pub keycode: u32
+        pub group: i32
+        pub level: i32
+    }
+
+    #[repr(C)]
+    pub struct Error {
+        pub domain: u32
+        pub code: i32
+        pub message: Ptr<u8>
+    }
+
+    #[link(name = "gtk-3")]
+    unsafe extern "C" {
+        pub fn gtk_init_check(argc: Option<Ptr<Void>>, argv: Option<Ptr<Void>>) -> i32
+        pub fn gtk_main()
+        pub fn gtk_main_quit()
+        pub fn gtk_widget_event(widget: Ptr<Void>, event: Ptr<Void>) -> i32
+        pub fn gtk_offscreen_window_new() -> Ptr<Void>
+        pub fn gtk_offscreen_window_get_pixbuf(window: Ptr<Void>) -> Option<Ptr<Void>>
+        pub fn gtk_window_set_default_size(window: Ptr<Void>, width: i32, height: i32)
+        pub fn gtk_window_resize(window: Ptr<Void>, width: i32, height: i32)
+        pub fn gtk_container_add(container: Ptr<Void>, widget: Ptr<Void>)
+        pub fn gtk_widget_show_all(widget: Ptr<Void>)
+        pub fn gtk_widget_destroy(widget: Ptr<Void>)
+        pub fn gtk_widget_get_window(widget: Ptr<Void>) -> Option<Ptr<Void>>
+        pub fn gtk_widget_grab_focus(widget: Ptr<Void>)
+        pub fn gtk_widget_set_size_request(widget: Ptr<Void>, width: i32, height: i32)
+        pub fn gtk_widget_queue_resize(widget: Ptr<Void>)
+    }
+
+    #[link(name = "gdk-3")]
+    unsafe extern "C" {
+        pub fn gdk_disable_multidevice()
+        pub fn gdk_event_new(kind: i32) -> Ptr<Void>
+        pub fn gdk_event_free(event: Ptr<Void>)
+        pub fn gdk_event_set_device(event: Ptr<Void>, device: Ptr<Void>)
+        pub fn gdk_display_get_default() -> Option<Ptr<Void>>
+        pub fn gdk_display_get_default_seat(display: Ptr<Void>) -> Option<Ptr<Void>>
+        pub fn gdk_seat_get_pointer(seat: Ptr<Void>) -> Option<Ptr<Void>>
+        pub fn gdk_seat_get_keyboard(seat: Ptr<Void>) -> Option<Ptr<Void>>
+        pub fn gdk_keymap_get_for_display(display: Ptr<Void>) -> Option<Ptr<Void>>
+        pub fn gdk_keymap_get_entries_for_keyval(keymap: Ptr<Void>, keyval: u32, keys: &mut Option<Ptr<KeymapKey>>, count: &mut i32) -> i32
+        pub fn gdk_unicode_to_keyval(codepoint: u32) -> u32
+    }
+
+    #[link(name = "gdk_pixbuf-2.0")]
+    unsafe extern "C" {
+        pub fn gdk_pixbuf_get_width(pixbuf: Ptr<Void>) -> i32
+        pub fn gdk_pixbuf_get_height(pixbuf: Ptr<Void>) -> i32
+        pub fn gdk_pixbuf_get_rowstride(pixbuf: Ptr<Void>) -> i32
+        pub fn gdk_pixbuf_get_n_channels(pixbuf: Ptr<Void>) -> i32
+        pub fn gdk_pixbuf_get_pixels(pixbuf: Ptr<Void>) -> Ptr<u8>
+    }
+
+    #[link(name = "glib-2.0")]
+    unsafe extern "C" {
+        pub fn g_idle_add(function: Fn(Option<Ptr<Void>>) -> i32, data: Option<Ptr<Void>>) -> u32
+        pub fn g_free(memory: Option<Ptr<Void>>)
+        pub fn g_strdup(text: [u8]) -> Ptr<u8>
+        pub fn g_bytes_new(data: [u8], size: usize) -> Ptr<Void>
+        pub fn g_bytes_get_data(bytes: Ptr<Void>, size: &mut usize) -> Option<Ptr<u8>>
+        pub fn g_bytes_unref(bytes: Ptr<Void>)
+        pub fn g_get_monotonic_time() -> i64
+    }
+
+    #[link(name = "gobject-2.0")]
+    unsafe extern "C" {
+        pub fn g_object_ref(object: Ptr<Void>) -> Ptr<Void>
+        pub fn g_object_unref(object: Ptr<Void>)
+        pub fn g_type_check_instance_is_a(instance: Ptr<Void>, kind: u64) -> i32
+        #[link_name = "g_signal_connect_data"]
+        pub fn connect_int(instance: Ptr<Void>, signal: [u8], handler: Fn(Ptr<Void>, i32, Option<Ptr<Void>>), data: Option<Ptr<Void>>, destroy: Option<Ptr<Void>>, flags: i32) -> u64
+        #[link_name = "g_signal_connect_data"]
+        pub fn connect_pointer(instance: Ptr<Void>, signal: [u8], handler: Fn(Ptr<Void>, Option<Ptr<Void>>, Option<Ptr<Void>>), data: Option<Ptr<Void>>, destroy: Option<Ptr<Void>>, flags: i32) -> u64
+        #[link_name = "g_signal_connect_data"]
+        pub fn connect_pointer_bool(instance: Ptr<Void>, signal: [u8], handler: Fn(Ptr<Void>, Option<Ptr<Void>>, Option<Ptr<Void>>) -> i32, data: Option<Ptr<Void>>, destroy: Option<Ptr<Void>>, flags: i32) -> u64
+        #[link_name = "g_signal_connect_data"]
+        pub fn connect_pointer_object(instance: Ptr<Void>, signal: [u8], handler: Fn(Ptr<Void>, Option<Ptr<Void>>, Option<Ptr<Void>>) -> Option<Ptr<Void>>, data: Option<Ptr<Void>>, destroy: Option<Ptr<Void>>, flags: i32) -> u64
+        #[link_name = "g_signal_connect_data"]
+        pub fn connect_plain(instance: Ptr<Void>, signal: [u8], handler: Fn(Ptr<Void>, Option<Ptr<Void>>), data: Option<Ptr<Void>>, destroy: Option<Ptr<Void>>, flags: i32) -> u64
+        #[link_name = "g_signal_connect_data"]
+        pub fn connect_load_failed(instance: Ptr<Void>, signal: [u8], handler: Fn(Ptr<Void>, i32, Option<Ptr<u8>>, Option<Ptr<Error>>, Option<Ptr<Void>>) -> i32, data: Option<Ptr<Void>>, destroy: Option<Ptr<Void>>, flags: i32) -> u64
+        #[link_name = "g_signal_connect_data"]
+        pub fn connect_decide_policy(instance: Ptr<Void>, signal: [u8], handler: Fn(Ptr<Void>, Ptr<Void>, i32, Option<Ptr<Void>>) -> i32, data: Option<Ptr<Void>>, destroy: Option<Ptr<Void>>, flags: i32) -> u64
+        #[link_name = "g_signal_connect_data"]
+        pub fn connect_history(instance: Ptr<Void>, signal: [u8], handler: Fn(Ptr<Void>, Option<Ptr<Void>>, Option<Ptr<Void>>, Option<Ptr<Void>>), data: Option<Ptr<Void>>, destroy: Option<Ptr<Void>>, flags: i32) -> u64
+    }
+
+    #[link(name = "javascriptcoregtk-4.1")]
+    unsafe extern "C" {
+        pub fn jsc_value_to_string(value: Ptr<Void>) -> Option<Ptr<u8>>
+    }
+
+    #[link(name = "webkit2gtk-4.1")]
+    unsafe extern "C" {
+        pub fn webkit_web_context_new() -> Ptr<Void>
+        pub fn webkit_web_view_new_with_context(context: Ptr<Void>) -> Ptr<Void>
+        pub fn webkit_web_view_get_settings(view: Ptr<Void>) -> Ptr<Void>
+        pub fn webkit_settings_set_hardware_acceleration_policy(settings: Ptr<Void>, policy: i32)
+        pub fn webkit_web_view_load_uri(view: Ptr<Void>, uri: [u8])
+        pub fn webkit_web_view_load_html(view: Ptr<Void>, html: [u8], base: [u8])
+        pub fn webkit_web_view_reload(view: Ptr<Void>)
+        pub fn webkit_web_view_stop_loading(view: Ptr<Void>)
+        pub fn webkit_web_view_go_back(view: Ptr<Void>)
+        pub fn webkit_web_view_go_forward(view: Ptr<Void>)
+        pub fn webkit_web_view_can_go_back(view: Ptr<Void>) -> i32
+        pub fn webkit_web_view_can_go_forward(view: Ptr<Void>) -> i32
+        pub fn webkit_web_view_get_uri(view: Ptr<Void>) -> Option<Ptr<u8>>
+        pub fn webkit_web_view_get_title(view: Ptr<Void>) -> Option<Ptr<u8>>
+        pub fn webkit_web_view_get_estimated_load_progress(view: Ptr<Void>) -> f64
+        pub fn webkit_web_view_set_zoom_level(view: Ptr<Void>, zoom: f64)
+        pub fn webkit_web_view_terminate_web_process(view: Ptr<Void>)
+        pub fn webkit_web_view_download_uri(view: Ptr<Void>, uri: [u8]) -> Ptr<Void>
+        pub fn webkit_web_view_get_back_forward_list(view: Ptr<Void>) -> Ptr<Void>
+        pub fn webkit_back_forward_list_get_current_item(list: Ptr<Void>) -> Option<Ptr<Void>>
+        pub fn webkit_web_view_go_to_back_forward_list_item(view: Ptr<Void>, item: Ptr<Void>)
+        pub fn webkit_web_view_get_session_state(view: Ptr<Void>) -> Ptr<Void>
+        pub fn webkit_web_view_session_state_serialize(state: Ptr<Void>) -> Ptr<Void>
+        pub fn webkit_web_view_session_state_new(bytes: Ptr<Void>) -> Option<Ptr<Void>>
+        pub fn webkit_web_view_session_state_unref(state: Ptr<Void>)
+        pub fn webkit_web_view_restore_session_state(view: Ptr<Void>, state: Ptr<Void>)
+        pub fn webkit_web_view_evaluate_javascript(view: Ptr<Void>, script: [u8], length: isize, world: Option<Ptr<u8>>, source: Option<Ptr<u8>>, cancellable: Option<Ptr<Void>>, done: Fn(Option<Ptr<Void>>, Ptr<Void>, Option<Ptr<Void>>), data: Option<Ptr<Void>>)
+        pub fn webkit_web_view_evaluate_javascript_finish(view: Ptr<Void>, result: Ptr<Void>, error: &mut Option<Ptr<Error>>) -> Option<Ptr<Void>>
+        pub fn webkit_download_set_destination(download: Ptr<Void>, destination: [u8])
+        pub fn webkit_download_get_request(download: Ptr<Void>) -> Ptr<Void>
+        pub fn webkit_download_get_web_view(download: Ptr<Void>) -> Option<Ptr<Void>>
+        pub fn webkit_download_get_received_data_length(download: Ptr<Void>) -> u64
+        pub fn webkit_uri_request_get_uri(request: Ptr<Void>) -> Option<Ptr<u8>>
+        pub fn webkit_navigation_policy_decision_get_navigation_action(decision: Ptr<Void>) -> Ptr<Void>
+        pub fn webkit_navigation_action_get_request(action: Ptr<Void>) -> Ptr<Void>
+        pub fn webkit_policy_decision_ignore(decision: Ptr<Void>)
+        pub fn webkit_permission_request_allow(request: Ptr<Void>)
+        pub fn webkit_permission_request_deny(request: Ptr<Void>)
+        pub fn webkit_notification_permission_request_get_type() -> u64
+        pub fn webkit_geolocation_permission_request_get_type() -> u64
+        pub fn webkit_user_media_permission_request_get_type() -> u64
+    }
+
+    /// The text at `text`, or "" for NULL.
+    pub fn text(text: Option<Ptr<u8>>) -> String {
+        match text {
+            Some(p) => unsafe { ffi::read_cstr(p) }.unwrap_or("")
+            None => ""
+        }
+    }
+
+    /// The message of the `GError` at `error`, or `fallback`.
+    pub fn message(error: Option<Ptr<Error>>, fallback: String) -> String {
+        match error {
+            Some(e) => text(Some(unsafe { ffi::read(e) }.message))
+            None => fallback
+        }
+    }
+}

@@ -1,0 +1,54 @@
+// Persistent user places, independent of recent-location history. Missing paths
+// remain in the book until the user relinks or removes them.
+use std::{errors, fs, path}
+use std::encoding::json
+
+#[derive(PartialEq)]
+pub struct Place { pub id: String, pub location: String, pub label: String }
+#[derive(PartialEq)]
+pub struct PlaceBook { pub version: i64, pub next: i64, pub entries: Vec<Place> }
+#[cfg(target_os = "windows")]
+fn identity(location: String) -> String { fs::canonicalize(location).unwrap_or(path::normalize(location)).to_lowercase() }
+#[cfg(not(target_os = "windows"))]
+fn identity(location: String) -> String { fs::canonicalize(location).unwrap_or(path::normalize(location)) }
+impl PlaceBook {
+    pub fn new() -> PlaceBook { PlaceBook { version: 1, next: 1, entries: #[] } }
+    pub fn decode(text: String) -> Result<PlaceBook, errors::Error> {
+        let book = json::decode::<PlaceBook>(text)?
+        if book.version != 1 || book.entries.len() > 128 { return Err(errors::new("Unsupported or oversized favorite locations")) }
+        let mut ids = #{}
+        for entry in book.entries { if entry.id.is_empty() || ids.contains(entry.id) { return Err(errors::new("Duplicate favorite identity")) }; ids.insert(entry.id) }
+        Ok(book)
+    }
+    pub fn encode(&self) -> String { json::encode(*self) }
+    pub fn add(&mut self, location: String, label: String) -> Result<String, errors::Error> {
+        if location.is_empty() { return Err(errors::new("Enter a folder location")) }
+        let wanted = identity(location)
+        for entry in self.entries { if identity(entry.location) == wanted { return Ok(entry.id) } }
+        if self.entries.len() >= 128 { return Err(errors::new("The favorite locations limit is 128")) }
+        let mut id = f"place-{self.next}"
+        while self.entries.iter().any(|e| e.id == id) { self.next += 1; id = f"place-{self.next}" }
+        self.next += 1
+        self.entries.push(Place { id: id, location: location, label: if label.trim().is_empty() { path::file_name(location).unwrap_or(location) } else { label.trim() } })
+        Ok(id)
+    }
+    pub fn rename(&mut self, id: String, label: String) -> bool {
+        if label.trim().is_empty() { return false }
+        for i in 0..self.entries.len() { if self.entries[i].id == id { self.entries[i].label = label.trim(); return true } }
+        false
+    }
+    pub fn relink(&mut self, id: String, location: String) -> bool {
+        if location.is_empty() { return false }
+        let wanted = identity(location)
+        for entry in self.entries { if entry.id != id && identity(entry.location) == wanted { return false } }
+        for i in 0..self.entries.len() { if self.entries[i].id == id { self.entries[i].location = location; return true } }
+        false
+    }
+    pub fn remove(&mut self, id: String) { self.entries = self.entries.filter(|e| e.id != id) }
+    pub fn move_to(&mut self, id: String, index: i64) -> bool {
+        let Some(from) = self.entries.iter().position(|e| e.id == id) else { return false }
+        let item = self.entries.remove(from).unwrap()
+        let _ = self.entries.insert(index.max(0).min(self.entries.len()), item)
+        true
+    }
+}

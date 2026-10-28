@@ -1,0 +1,6 @@
+target/
+.gos-cache/
+project.lock
+
+# Release-gate ledgers: the binaries, caches and logs of a local run.
+tests/resources/reports/

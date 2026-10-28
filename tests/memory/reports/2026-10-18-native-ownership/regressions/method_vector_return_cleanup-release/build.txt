@@ -1,0 +1,1 @@
+build: 1012896B native executable at /tmp/gui-leak-repros/final-tiers/method_vector_return_cleanup-release/method_vector_return_cleanup (target x86_64-unknown-linux-gnu)

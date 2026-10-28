@@ -1,0 +1,1 @@
+D-Bus nested decoding: debug/release outputs match and strict memory checks pass

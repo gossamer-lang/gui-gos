@@ -1,0 +1,1 @@
+33 sessions closed; descriptors stable at 12

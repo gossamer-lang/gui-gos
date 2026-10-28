@@ -1,0 +1,77 @@
+// The text settings widgets and drawing operations carry, and grapheme
+// boundaries.
+
+use std::unicode
+
+/// A generic family request; the registry resolves it to faces.
+#[derive(PartialEq, Eq)]
+pub enum Family {
+    Sans
+    Monospace
+    /// A family by name, matched against discovered system faces first.
+    Named(String)
+}
+
+/// How text is set: family, pixel size, and weight/slant.
+#[derive(PartialEq, Eq)]
+pub struct TextStyle {
+    pub family: Family
+    /// Pixel size (the em square), already scaled for the display.
+    pub size: f64
+    pub bold: bool
+    pub italic: bool
+    /// Spaces per tab stop.
+    pub tab_width: i64
+    /// Line height as a multiple of the font's natural height; 0 keeps it.
+    pub line_spacing: f64
+}
+
+/// Horizontal placement of each line within the layout width.
+#[derive(PartialEq, Eq)]
+pub enum TextAlign {
+    /// The paragraph's leading edge (left for LTR, right for RTL).
+    Start
+    End
+    Left
+    Right
+    Center
+}
+
+impl TextStyle {
+    /// Regular sans text at `size` pixels.
+    pub fn sans(size: f64) -> TextStyle {
+        TextStyle { family: Family::Sans, size: size, bold: false, italic: false, tab_width: 4, line_spacing: 0.0 }
+    }
+
+    /// Monospace text at `size` pixels.
+    pub fn mono(size: f64) -> TextStyle {
+        TextStyle { family: Family::Monospace, size: size, bold: false, italic: false, tab_width: 4, line_spacing: 0.0 }
+    }
+
+    /// This style in bold.
+    pub fn with_bold(&self, bold: bool) -> TextStyle {
+        let mut s = *self
+        s.bold = bold
+        s
+    }
+
+    /// This style in italic (synthesised by slanting when the family has
+    /// no italic face).
+    pub fn with_italic(&self, italic: bool) -> TextStyle {
+        let mut s = *self
+        s.italic = italic
+        s
+    }
+}
+
+/// The byte offset of every grapheme cluster boundary of `text`, 0 and the
+/// text's length included.
+pub fn grapheme_boundaries(text: String) -> Vec<i64> {
+    let mut out = #[0]
+    let mut at = 0
+    for g in unicode::graphemes(text) {
+        at += g.byte_len()
+        out.push(at)
+    }
+    out
+}

@@ -1,0 +1,1221 @@
+// A small code editor: documents in tabs, File and Edit menus on the shared
+// command registry, word completion, and file reads and writes on a worker
+// service so the window never waits on the disk. Run with `gos run .`
+// (files named after `--` open in tabs); `gos run . -- --fixture` runs the
+// scripted journey tools/check-examples.sh uses and prints its transcript.
+
+use std::{env, errors, fs, path, process, time}
+use std::encoding::json
+use gui
+
+use gui::{Command, Completion, CompletionItem, Effect, FindBar, FindRequest, MatchMode, Outcome, TabItem, TaskOutcome, UiMsg, Widget}
+use gui::dialogs::request
+use gui::editing::search
+use gui::services::work::{Work, Operation, Outcome as WorkOutcome}
+use gui::text::offsets::{ByteOffset, ByteRange}
+use gui::widgets::menus
+
+struct Doc {
+    window: String
+    key: String
+    path: String
+    document: gui::editing::document::Document
+    saving: gui::editing::document::Document
+    completions: Vec<CompletionItem>
+    revision: i64
+    language: String
+    pending_saves: i64
+    loading: bool
+    pinned: bool
+}
+
+impl Doc {
+    fn set_text(&mut self, text: String) {
+        let info = self.document.info()
+        let updated = self.document.replace(info.revision, 0, info.bytes, text).unwrap_or_else(|why| panic(f"Could not update document: {why}"))
+        self.revision = updated.revision
+        gui::perform(Effect::Work(Work::new(f"editor-{self.key}", -3, self.revision, Operation::AnalyzeDocument(self.document.id, self.language))))
+    }
+
+    fn dirty(&self) -> bool { !self.loading && self.document.info().dirty }
+
+    fn title(&self) -> String {
+        if self.path.is_empty() { "Untitled" } else { path::file_name(self.path).unwrap_or(self.path) }
+    }
+}
+
+struct SessionDocument {
+    key: String
+    path: String
+    window: String
+    pinned: bool
+}
+struct SessionMetadata {
+    version: i64
+    docs: Vec<SessionDocument>
+    active_windows: Map<String, String>
+    next: i64
+}
+fn session_path() -> String { path::join(gui::services::config_dir(APP_ID), "editor-session.gosdoc") }
+fn checkpoint(m: Model) {
+    let records = m.docs.map(|doc| gui::editing::document::Record { key: doc.key, document: doc.document.id })
+    let metadata = SessionMetadata { version: 1, docs: m.docs.map(|doc| SessionDocument { key: doc.key, path: doc.path, window: doc.window, pinned: doc.pinned }), active_windows: m.active_windows, next: m.next }
+    gui::perform(Effect::Work(Work::new("editor-session", -10, 0, Operation::SaveSession(session_path(), records, json::encode(metadata)))))
+}
+fn restore(m: Model, records: Vec<gui::editing::document::Record>, metadata: String) -> Model {
+    let mut n = m
+    let parsed = json::decode::<SessionMetadata>(metadata)
+    let valid = match parsed { Ok(meta) => meta.version == 1 && meta.docs.len() == records.len() && meta.next>0 && meta.next<1_000_000_000, Err(_) => false }
+    if !valid || n.docs.any(|doc| doc.dirty()) {
+        for record in records { gui::editing::document::Document { id: record.document }.close() }
+        n.status = "Session restore rejected; save or close modified tabs first"
+        return n
+    }
+    let meta = parsed.unwrap_or_else(|why| panic(f"{why}"))
+    let mut mapped: Map<String, i64 >= Map::new()
+    for record in records { mapped[record.key] = record.document }
+    let mut seen: Set<String >= #{}
+    for doc in meta.docs {
+        if doc.key.is_empty() || seen.contains(doc.key) || mapped.get(doc.key).is_none() || (doc.window != "main" && !doc.window.starts_with("window-")) {
+            for record in records { gui::editing::document::Document { id: record.document }.close() }
+            n.status = "Invalid session document metadata"
+            return n
+        }
+        seen.insert(doc.key)
+    }
+    let mut old_windows: Set<String >= #{}
+    for doc in n.docs { doc.document.close(); doc.saving.close(); gui::perform(Effect::CancelWork(f"editor-{doc.key}")); if doc.window != "main" { old_windows.insert(doc.window) } }
+    for window in old_windows { gui::perform(Effect::CloseWindow(window)) }
+    n.docs = #[]; n.carets = Map::new(); n.active_windows = meta.active_windows; n.next = meta.next; n.closing = #[]; n.quitting = false
+    let mut windows: Set<String >= #{}
+    for saved in meta.docs {
+        let document = gui::editing::document::Document { id: mapped.get(saved.key).unwrap_or(0) }
+        let info = document.info()
+        n.docs.push(Doc { window: saved.window, key: saved.key, path: saved.path, document: document, saving: gui::editing::document::Document::default(), completions: completion_items(#[]), revision: info.revision, language: gui::text::syntax::language_for(saved.path), pending_saves: 0, loading: false, pinned: saved.pinned })
+        n.carets[saved.key] = (info.anchor, info.caret)
+        if saved.window != "main" { windows.insert(saved.window) }
+    }
+    for window in windows { gui::perform(Effect::OpenWindow { key: window, title: "Code Editor", width: 1000, height: 720 }) }
+    n.window = "main"; n.active = n.active_windows.get("main").unwrap_or("")
+    if index_of(n, n.active)<0 && !n.docs.is_empty() { n.active = n.docs[0].key; n.active_windows["main"] = n.active }
+    if n.docs.is_empty() { n = new_doc(n) }
+    for doc in n.docs { gui::perform(Effect::Work(Work::new(f"editor-{doc.key}", -3, doc.revision, Operation::AnalyzeDocument(doc.document.id, doc.language)))) }
+    n.status = f"Restored {n.docs.len()} documents"
+    n
+}
+
+struct Model {
+    window: String
+    active_windows: Map<String, String>
+    closing_window: String
+    docs: Vec<Doc>
+    active: String
+    next: i64
+    /// Paths of closed documents, most recent last, for Reopen.
+    closed: Vec<String>
+    /// Documents waiting for a Save/Discard/Cancel answer before closing.
+    closing: Vec<String>
+    /// Close the window once `closing` empties.
+    quitting: bool
+    status: String
+    /// The find bar, shown in `find_window`.
+    find: FindBar
+    find_window: String
+    /// Each document's last reported selection (anchor, caret), in bytes.
+    carets: Map<String, (i64, i64)>
+    matches: Vec<ByteRange>
+    pending_find: Option<FindRequest>
+}
+
+const APP_ID: String = "dev.gossamer.gui-code-editor"
+
+const KEYWORDS: [String; 24] = ["break", "comptime", "const", "continue", "defer", "else", "enum", "false", "fn", "for", "if", "impl", "let", "loop", "match", "mod", "mut", "pub", "return", "spawn", "struct", "true", "use", "while"]
+
+fn init(files: Vec<String>) -> Model {
+    let mut m = Model { window: "main", active_windows: Map::new(), closing_window: "", docs: #[], active: "", next: 1, closed: #[], closing: #[], quitting: false, status: "Ready", find: FindBar::new("find"), find_window: "main", carets: Map::new(), matches: #[], pending_find: None }
+    for file in files {
+        m = open_path(m, file)
+    }
+    if m.docs.is_empty() {
+        m = new_doc(m)
+    }
+    m
+}
+
+fn index_of(m: Model, key: String) -> i64 {
+    let mut i = 0
+    while i < m.docs.len() {
+        if m.docs[i].key == key { return i }
+        i += 1
+    }
+    -1
+}
+
+fn new_doc(m: Model) -> Model {
+    let mut n = m
+    let key = f"doc{n.next}"
+    n.next += 1
+    n.docs.push(Doc { window: n.window, key: key, path: "", document: gui::editing::document::Document::new(""), saving: gui::editing::document::Document::default(), completions: completion_items(#[]), revision: 0, language: "gos", pending_saves: 0, loading: false, pinned: false })
+    n.active = key
+    n.active_windows[n.window] = key
+    gui::perform(Effect::FocusIn(n.window, f"editor-{key}"))
+    n
+}
+
+fn open_path(m: Model, file: String) -> Model {
+    let mut n = m
+    for d in n.docs {
+        if d.path == file {
+            n.active = d.key
+            return n
+        }
+    }
+    let key = f"doc{n.next}"
+    n.next += 1
+    n.docs.push(Doc { window: n.window, key: key, path: file, document: gui::editing::document::Document::new(""), saving: gui::editing::document::Document::default(), completions: completion_items(#[]), revision: 0, language: gui::text::syntax::language_for(file), pending_saves: 0, loading: true, pinned: false })
+    n.active = key
+    n.active_windows[n.window] = key
+    gui::perform(Effect::Work(Work::new(f"editor-{key}", -1, 0, Operation::ReadDocument(file))))
+    n.status = f"Opening {path::file_name(file).unwrap_or(file)}"
+    n
+}
+
+fn save(m: Model, key: String, file: String) -> Model {
+    let mut n = m
+    let i = index_of(n, key)
+    if i < 0 { return n }
+    if file.is_empty() {
+        let name = n.docs[i].title()
+        let filters = #[gui::FileFilter { name: "All files", patterns: #["*"] }]
+        gui::perform(Effect::OpenDialogIn(n.docs[i].window, request::toolkit_file(request::save_file(f"save-as:{key}", "Save As", name, filters))))
+        return n
+    }
+    n.docs[i].path = file
+    let language = gui::text::syntax::language_for(file)
+    if language != n.docs[i].language {
+        n.docs[i].language = language
+        gui::perform(Effect::Work(Work::new(f"editor-{key}", -3, n.docs[i].revision, Operation::AnalyzeDocument(n.docs[i].document.id, language))))
+    }
+    n.docs[i].pending_saves = 1
+    n.docs[i].saving.close()
+    n.docs[i].saving = n.docs[i].document.freeze()
+    gui::perform(Effect::Work(Work::new(f"editor-{key}", -2, n.docs[i].saving.id, Operation::WriteDocument(n.docs[i].saving.id, file))))
+    n.status = f"Saving {path::file_name(file).unwrap_or(file)}"
+    n
+}
+
+fn remove(m: Model, key: String) -> Model {
+    let mut n = m
+    let i = index_of(n, key)
+    if i < 0 { return n }
+    if !n.docs[i].path.is_empty() { n.closed.push(n.docs[i].path) }
+    let window = n.docs[i].window
+    gui::perform(Effect::CancelWork(f"editor-{key}"))
+    n.docs[i].saving.close()
+    n.docs[i].document.close()
+    let _ = n.docs.remove(i)
+    let remaining = n.docs.filter(|d| d.window == window)
+    let active = if remaining.is_empty() { "" } else { remaining[(i - 1).max(0).min(remaining.len() - 1)].key }
+    n.active_windows[window] = active
+    if n.window == window { n.active = active }
+
+    n
+}
+
+// Closes the next document in `closing`, asking first when it has unsaved
+// changes; quits once the queue empties during a quit.
+fn continue_closing(m: Model) -> Model {
+    let mut n = m
+    while !n.closing.is_empty() {
+        let key = n.closing[0]
+        let i = index_of(n, key)
+        if i >= 0 && n.docs[i].dirty() {
+            n.active = key
+            n.window = n.docs[i].window
+            n.active_windows[n.window] = key
+            gui::perform(Effect::OpenDialogIn(n.window, request::confirm_unsaved(f"close:{key}", n.docs[i].title())))
+            return n
+        }
+        n.closing.remove(0).unwrap_or(key)
+        n = remove(n, key)
+    }
+    if n.quitting {
+        gui::perform(Effect::Quit)
+    } else if n.closing_window.is_empty() {
+        if n.docs.filter(|d| d.window == n.window).is_empty() { n = new_doc(n) }
+    } else {
+        gui::perform(Effect::CloseWindow(n.closing_window))
+        n.closing_window = ""
+    }
+    n
+}
+
+fn close_keys(m: Model, keys: Vec<String>) -> Model {
+    let mut n = m
+    for key in keys {
+        let i = index_of(n, key)
+        if i >= 0 && !n.docs[i].pinned && !n.closing.contains(key) { n.closing.push(key) }
+    }
+    continue_closing(n)
+}
+
+fn tab_action(m: Model, key: String, action: String) -> Model {
+    let mut n = m
+    let i = index_of(n, key)
+    if i >= 0 { n.window = n.docs[i].window; n.active = key }
+    match action {
+        "new" => n = new_doc(n)
+        "reopen" => {
+            if let Some(file) = n.closed.pop() { n = open_path(n, file) }
+        }
+        "close" => n = close_keys(n, #[key])
+        "close-others" => {
+            let mut keys = #[]
+            for d in n.docs { if d.window == n.window && d.key != key { keys.push(d.key) } }
+            n = close_keys(n, keys)
+        }
+        "close-right" => {
+            let mut keys = #[]
+            let mut k = i + 1
+            while k >= 1 && k < n.docs.len() {
+                if n.docs[k].window == n.window { keys.push(n.docs[k].key) }
+                k += 1
+            }
+            n = close_keys(n, keys)
+        }
+        "pin" | "unpin" => {
+            if i >= 0 {
+                n.docs[i].pinned = action == "pin"
+                // Pinned tabs sit before the others, in pinning order.
+                let d = n.docs.remove(i).unwrap_or_else(|_| n.docs[0])
+                let mut at = 0
+                while at < n.docs.len() && n.docs[at].pinned { at += 1 }
+                n.docs.insert(at, d).unwrap_or(())
+            }
+        }
+        "detach" => {
+            let window = f"window-{key}"
+            n.docs[i].window = window
+            n.active_windows[window] = key
+            let remaining = n.docs.filter(|d| d.window == n.window)
+            n.active_windows[n.window] = if remaining.is_empty() { "" } else { remaining[0].key }
+            gui::perform(Effect::OpenWindow { key: window, title: n.docs[i].title(), width: 900, height: 640 })
+            gui::perform(Effect::FocusIn(window, f"editor-{key}"))
+        }
+        "move-left" | "move-right" => {
+            let group = n.docs.filter(|d| d.window == n.window)
+            let mut local = 0
+            while local < group.len() && group[local].key != key { local += 1 }
+            n = move_doc(n, key, local + if action == "move-left" { -1 } else { 1 })
+        }
+        _ => ()
+    }
+    n
+}
+
+fn move_doc(m: Model, key: String, to: i64) -> Model {
+    let mut n = m
+    let i = index_of(n, key)
+    if i < 0 { return n }
+    let window = n.docs[i].window
+    let mut group = n.docs.filter(|d| d.window == window)
+    let mut from = 0
+    while from < group.len() && group[from].key != key { from += 1 }
+    if to < 0 || to >= group.len() || from == to { return n }
+    if group[from].pinned != group[to].pinned { return n }
+    let d = group.remove(from).unwrap_or(n.docs[i])
+    group.insert(to, d).unwrap_or(())
+    let mut k = 0
+    let mut j = 0
+    while k < n.docs.len() {
+        if n.docs[k].window == window { n.docs[k] = group[j]; j += 1 }
+        k += 1
+    }
+    n
+}
+
+fn dialog(m: Model, id: String, outcome: Outcome) -> Model {
+    let mut n = m
+    if id == "open" {
+        match outcome {
+            Outcome::Paths(paths) => for p in paths { n = open_path(n, p) }
+            Outcome::Unsupported(_) | Outcome::Failed(_) => gui::perform(Effect::OpenDialog(request::prompt("open-path", "Open File", "Path", "")))
+            _ => ()
+        }
+    } else if id == "open-path" {
+        if let Outcome::Text(p) = outcome && p.trim().byte_len() > 0 { n = open_path(n, p.trim()) }
+    } else if id.starts_with("save-as:") {
+        let key = id.substring(8, id.byte_len())
+        match outcome {
+            Outcome::Paths(paths) => if !paths.is_empty() { n = save(n, key, paths[0]) }
+            Outcome::Unsupported(_) | Outcome::Failed(_) => gui::perform(Effect::OpenDialog(request::prompt(f"save-path:{key}", "Save As", "Path", "")))
+            _ => n = abandon_close(n)
+        }
+    } else if id.starts_with("save-path:") {
+        let key = id.substring(10, id.byte_len())
+        match outcome {
+            Outcome::Text(p) => if p.trim().is_empty() { n = abandon_close(n) } else { n = save(n, key, p.trim()) }
+            _ => n = abandon_close(n)
+        }
+    } else if id == "goto" {
+        if let Outcome::Text(answer) = outcome && let Some((line, column)) = request::parse_location(answer) {
+            n = go_to(n, line, column)
+        }
+    } else if id.starts_with("close:") {
+        let key = id.substring(6, id.byte_len())
+        match outcome {
+            Outcome::Action(a) => {
+                if a == "discard" {
+                    n.closing.remove(0).unwrap_or(key)
+                    n = remove(n, key)
+                    n = continue_closing(n)
+                } else if a == "save" {
+                    let i = index_of(n, key)
+                    if i >= 0 { n = save(n, key, n.docs[i].path) }
+                } else {
+                    n = abandon_close(n)
+                }
+            }
+            _ => n = abandon_close(n)
+        }
+    }
+    n
+}
+
+// A cancelled answer stops the whole close (and a quit) with every
+// document left as it was.
+fn abandon_close(m: Model) -> Model {
+    let mut n = m
+    n.closing = #[]
+    n.quitting = false
+    n.closing_window = ""
+    n
+}
+
+fn task(m: Model, id: String, outcome: TaskOutcome) -> Model {
+    let mut n = m
+    let sep = id.find(":").unwrap_or(0)
+    let kind = id.substring(0, sep)
+    let key = id.substring(sep + 1, id.byte_len())
+    let i = index_of(n, key)
+    if i < 0 { return n }
+    match outcome {
+        TaskOutcome::Done(text) => {
+            if kind == "load" {
+                n.docs[i].set_text(text)
+                let snapshot = n.docs[i].document.freeze()
+                n.docs[i].document.mark_saved(snapshot)
+                snapshot.close()
+                n.docs[i].loading = false
+                n.status = f"Opened {n.docs[i].title()}"
+                gui::perform(Effect::FocusIn(n.window, f"editor-{key}"))
+            } else {
+                n.docs[i].pending_saves = (n.docs[i].pending_saves - 1).max(0)
+                n.status = f"Saved {n.docs[i].title()}"
+                gui::perform(Effect::Announce(n.status))
+                if n.docs[i].pending_saves == 0 && !n.closing.is_empty() && n.closing[0] == key {
+                    n = continue_closing(n)
+                }
+            }
+        }
+        TaskOutcome::Failed(message) => {
+            let file = n.docs[i].path
+            if kind == "load" {
+                n = remove(n, key)
+                if n.docs.is_empty() { n = new_doc(n) }
+                n.status = f"Could not open {file}"
+                gui::perform(Effect::OpenDialog(request::error("load-failed", "Could not open the file", file, message, false)))
+            } else {
+                n.docs[i].pending_saves = (n.docs[i].pending_saves - 1).max(0)
+                n.status = f"Could not save {file}"
+                n = abandon_close(n)
+                gui::perform(Effect::OpenDialog(request::error("save-failed", "Could not save the file", file, message, false)))
+            }
+        }
+        TaskOutcome::Cancelled => ()
+    }
+    n
+}
+
+fn update(m: Model, msg: UiMsg) -> Model {
+    let mut n = m
+    let request = n.find.update(msg)
+    if request != FindRequest::Nothing {
+        n.window = n.find_window
+        n.active = n.active_windows.get(n.window).unwrap_or("")
+        return run_find(n, request)
+    }
+    match msg {
+        UiMsg::Worked(owner, request, revision, outcome) => {
+            if owner == "editor-session" {
+                match outcome {
+                    WorkOutcome::SessionSaved(_) => n.status = "Session checkpoint saved"
+                    WorkOutcome::SessionRestored(records, metadata) => n = restore(n, records, metadata)
+                    WorkOutcome::Failed(why) => if request == -10 { n.status = f"Could not save session: {why}" }
+                    _ => ()
+                }
+                return n
+            }
+            if !owner.starts_with("editor-") { return n }
+            let key = owner.substring(7, owner.byte_len())
+            let i = index_of(n, key)
+            if i < 0 { if let WorkOutcome::DocumentLoaded(record, _) = outcome { gui::editing::document::Document { id: record.document }.close() }; return n }
+            let current = n.docs[i].document.info().revision
+            if (request == -3 || request == -4 || request >= 0) && revision != current {
+                n.docs[i].revision = current
+                return recount(n)
+            }
+            match outcome {
+                WorkOutcome::DocumentLoaded(record, _) => {
+                    if !n.docs[i].loading { gui::editing::document::Document { id: record.document }.close(); return n }
+                    n.docs[i].document.close()
+                    n.docs[i].document = gui::editing::document::Document { id: record.document }
+                    n.docs[i].revision = n.docs[i].document.info().revision
+                    n.docs[i].loading = false
+                    n.status = f"Opened {n.docs[i].title()}"
+                    gui::perform(Effect::Work(Work::new(owner, -3, n.docs[i].revision, Operation::AnalyzeDocument(record.document, n.docs[i].language))))
+                    gui::perform(Effect::FocusIn(n.docs[i].window, owner))
+                }
+                WorkOutcome::Text(_, text) => n = task(n, f"load:{key}", TaskOutcome::Done(text))
+                WorkOutcome::Saved(_, text) => n = task(n, f"save:{key}", TaskOutcome::Done(text))
+                WorkOutcome::DocumentSaved(snapshot, _) => {
+                    if n.docs[i].saving.id == snapshot {
+                        n.docs[i].document.mark_saved(n.docs[i].saving)
+                        n.docs[i].saving.close()
+                        n.docs[i].saving = gui::editing::document::Document::default()
+                        n = task(n, f"save:{key}", TaskOutcome::Done(""))
+                    }
+                }
+                WorkOutcome::Analyzed(_, _) => ()
+                WorkOutcome::Search(ranges) => {
+                    if n.find.open && n.docs[i].revision == revision && n.docs[i].key == n.active {
+                        n.matches = ranges
+                        let from, to = selection(n, n.docs[i])
+                        n.find.found(ranges.len(), search::selected(ranges, from, to))
+                        if let Some(action) = n.pending_find { n.pending_find = None; n = run_find_ready(n, action) }
+                    }
+                }
+                WorkOutcome::Replaced(_, updated, count) => {
+                    n.docs[i].revision = current
+                    if updated != current { return recount(n) }
+                    gui::perform(Effect::Work(Work::new(owner, -3, updated, Operation::AnalyzeDocument(n.docs[i].document.id, n.docs[i].language))))
+                    n.status = if count == 1 { "Replaced 1 match" } else { f"Replaced {count} matches" }
+                    if count == 1 { n.pending_find = Some(FindRequest::Next) }
+                    n = recount(n)
+                }
+                WorkOutcome::Completions(items) => gui::perform(Effect::Complete(owner, request, items, ""))
+                WorkOutcome::Failed(why) => {
+                    if request == -1 { n = task(n, f"load:{key}", TaskOutcome::Failed(why)) }
+                    else if request == -2 && n.docs[i].saving.id == revision { n = task(n, f"save:{key}", TaskOutcome::Failed(why)) }
+                    else if request >= 0 { gui::perform(Effect::Complete(owner, request, #[], why)) }
+                    else if request != -5 || revision == current { n.status = why }
+                }
+                _ => ()
+            }
+            if request != -4 { n = recount(n) }
+        }
+        UiMsg::CompletionRequest(owner, request, query, revision) => {
+            if owner.starts_with("editor-") {
+                let key = owner.substring(7, owner.byte_len())
+                let i = index_of(n, key)
+                if i >= 0 {
+                    gui::perform(Effect::Work(Work::new(owner, request, revision, Operation::CompleteDocument(n.docs[i].document.id, n.docs[i].completions, query, MatchMode::Prefix, 200))))
+                }
+            }
+        }
+        UiMsg::DocumentChanged(id, _, revision) => {
+            if id.starts_with("editor-") {
+                let i = index_of(n, id.substring(7, id.byte_len()))
+                if i >= 0 {
+                    n.docs[i].revision = revision
+                    n.window = n.docs[i].window
+                    n.active = n.docs[i].key
+                    n.active_windows[n.window] = n.active
+                    gui::perform(Effect::Work(Work::new(id, -3, revision, Operation::AnalyzeDocument(n.docs[i].document.id, n.docs[i].language))))
+                }
+                n = recount(n)
+            }
+        }
+        UiMsg::Text(id, text) => {
+            if id.starts_with("editor-") {
+                let i = index_of(n, id.substring(7, id.byte_len()))
+                if i >= 0 { n.docs[i].set_text(text); n.window = n.docs[i].window; n.active = n.docs[i].key; n.active_windows[n.window] = n.active }
+                n = recount(n)
+            }
+        }
+        UiMsg::Caret(id, anchor, caret) => {
+            if id.starts_with("editor-") {
+                n.carets[id.substring(7, id.byte_len())] = (anchor, caret)
+                n = recount(n)
+            }
+        }
+        UiMsg::Tab(_, key) => {
+            let i = index_of(n, key)
+            if i >= 0 { n.window = n.docs[i].window }
+            n.active = key
+            n.active_windows[n.window] = key
+            gui::perform(Effect::FocusIn(n.window, f"editor-{key}"))
+            n = recount(n)
+        }
+        UiMsg::Reorder(_, key, to) => n = move_doc(n, key, to)
+        UiMsg::TabMove(_, key, strip, at) => {
+            let destination = strip.substring(5, strip.byte_len())
+            let i = index_of(n, key)
+            if i >= 0 {
+                let source = n.docs[i].window
+                n.docs[i].window = destination
+                n.active_windows[destination] = key
+                n.window = destination
+                n.active = key
+                n = move_doc(n, key, at.min(n.docs.filter(|d| d.window == destination).len() - 1))
+                let remaining = n.docs.filter(|d| d.window == source)
+                n.active_windows[source] = if remaining.is_empty() { "" } else { remaining[0].key }
+                if source != "main" && remaining.is_empty() { gui::perform(Effect::CloseWindow(source)) }
+                gui::perform(Effect::FocusIn(destination, f"editor-{key}"))
+            }
+        }
+        UiMsg::TabDetach(_, key, x, y) => {
+            n = tab_action(n, key, "detach")
+            gui::perform(Effect::SetWindowPosition(f"window-{key}", x, y))
+        }
+        UiMsg::TabAction(id, key, action) => {
+            n.window = id.substring(5, id.byte_len())
+            n.active = n.active_windows.get(n.window).unwrap_or("")
+            n = tab_action(n, key, action)
+        }
+        UiMsg::Command(id) => { n.window = "main"; n.active = n.active_windows.get("main").unwrap_or(""); n = command(n, id) }
+        UiMsg::WindowCommand(window, id) => { n.window = window; n.active = n.active_windows.get(window).unwrap_or(""); n = command(n, id) }
+        UiMsg::Dialog(id, outcome) => n = dialog(n, id, outcome)
+        UiMsg::Task(id, outcome) => n = task(n, id, outcome)
+        UiMsg::Dropped(_, paths) => for p in paths { n = open_path(n, p) }
+        UiMsg::Open(path) => n = open_path(n, path)
+        UiMsg::QuitRequested => {
+            n.quitting = true
+            n.closing_window = ""
+            n.closing = n.docs.map(|d| d.key)
+            n = continue_closing(n)
+        }
+        UiMsg::CloseRequested(window) => {
+            n.window = window
+            n.closing_window = window
+            n.closing = n.docs.filter(|d| d.window == window).map(|d| d.key)
+            n = continue_closing(n)
+        }
+        _ => ()
+    }
+    n
+}
+
+fn command(m: Model, id: String) -> Model {
+    let mut n = m
+    match id {
+        "file.new" => n = new_doc(n)
+        "file.merge" => {
+            let destination = n.window
+            let mut old_windows: Set<String> = #{}
+            let mut k = 0
+            while k < n.docs.len() {
+                if n.docs[k].window != destination { old_windows.insert(n.docs[k].window); n.docs[k].window = destination }
+                k += 1
+            }
+            for old in old_windows { gui::perform(Effect::CloseWindow(old)) }
+        }
+        "file.session-save" => { checkpoint(n); n.status = "Saving session checkpoint" }
+        "file.session-restore" => {
+            if n.docs.any(|doc| doc.dirty()) { n.status = "Save or close modified tabs before restoring a session" }
+            else { gui::perform(Effect::Work(Work::new("editor-session", -11, 0, Operation::RestoreSession(session_path())))) }
+        }
+        "file.open" => gui::perform(Effect::OpenDialogIn(n.window, request::toolkit_file(request::open_file("open", "Open File", #[]))))
+        "file.save" => {
+            let i = index_of(n, n.active)
+            if i >= 0 { n = save(n, n.active, n.docs[i].path) }
+        }
+        "file.save-as" => n = save(n, n.active, "")
+        "file.close" => n = close_keys(n, #[n.active])
+        "edit.find" | "edit.replace" => {
+            let i = index_of(n, n.active)
+            if i >= 0 {
+                let a, c = selection(n, n.docs[i])
+                let picked = n.docs[i].document.read(a.0, c.0)
+                if !picked.is_empty() && !picked.contains("\n") { n.find.query = picked }
+            }
+            n.find.show(id == "edit.replace")
+            n.find_window = n.window
+            gui::perform(Effect::FocusIn(n.window, n.find.query_id()))
+            n = run_find(n, FindRequest::Search)
+        }
+        "edit.find-next" => n = run_find(n, FindRequest::Next)
+        "edit.find-previous" => n = run_find(n, FindRequest::Previous)
+        "edit.goto" => {
+            let i = index_of(n, n.active)
+            if i >= 0 {
+                let line, column = position(n, n.docs[i])
+                gui::perform(Effect::OpenDialogIn(n.window, request::go_to_line("goto", n.docs[i].document.info().lines, f"{line}:{column}")))
+            }
+        }
+        "help.about" => gui::perform(Effect::OpenDialog(request::about("about", "Code Editor", gui::VERSION, "A small editor built with gui-gos.")))
+        _ => ()
+    }
+    n
+}
+
+fn commands(m: Model) -> Vec<Command> {
+    let available = !m.docs.is_empty()
+    let mut out = #[
+        Command::new("file.merge", "Merge All Windows").category("Window")
+        Command::new("file.new", "New").key("Primary+N").category("File")
+        Command::new("file.open", "Open...").key("Primary+O").category("File")
+        Command::new("file.session-save", "Save Session").category("File")
+        Command::new("file.session-restore", "Restore Session").category("File").enabled(!m.docs.any(|doc| doc.dirty()))
+        Command::new("file.save", "Save").key("Primary+S").category("File").enabled(available)
+        Command::new("file.save-as", "Save As...").key("Primary+Shift+S").category("File").enabled(available)
+        Command::new("file.close", "Close").category("File").enabled(available)
+        Command::new("edit.find", "Find...").key("Primary+F").category("Edit").enabled(available)
+        Command::new("edit.replace", "Replace...").key("Primary+H").category("Edit").enabled(available)
+        Command::new("edit.find-next", "Find Next").key("F3").category("Edit").enabled(available && !m.find.query.is_empty())
+        Command::new("edit.find-previous", "Find Previous").key("Shift+F3").category("Edit").enabled(available && !m.find.query.is_empty())
+        Command::new("edit.goto", "Go to Line...").key("Primary+G").category("Edit").enabled(available)
+        Command::new("help.about", "About Code Editor").category("Help")
+    ]
+    for c in gui::tab_commands() { out.push(c) }
+    out
+}
+
+// The document's selection, ordered, from its last reported caret.
+fn selection(m: Model, d: Doc) -> (ByteOffset, ByteOffset) {
+    let info = d.document.info()
+    let end = info.bytes
+    let anchor, caret = m.carets.get(d.key).unwrap_or((info.anchor, info.caret))
+    (ByteOffset(anchor.min(caret).min(end)), ByteOffset(anchor.max(caret).min(end)))
+}
+
+// The caret's 1-based line and column; columns count graphemes.
+fn position(m: Model, d: Doc) -> (i64, i64) {
+    let _, caret = selection(m, d)
+    d.document.position(caret.0)
+}
+
+// Moves the caret to `line` and grapheme `column` (both from 1), clamped
+// to the line, and gives the editor focus.
+fn go_to(m: Model, line: i64, column: i64) -> Model {
+    let i = index_of(m, m.active)
+    if i < 0 { return m }
+    let d = m.docs[i]
+    let start, end = d.document.line(line - 1)
+    let text = d.document.read(start, end)
+    let column_at = gui::text::offsets::byte_of_grapheme(text, gui::text::offsets::GraphemeIndex(column - 1)).unwrap_or(ByteOffset(text.byte_len()))
+    let at = start + column_at.0
+    gui::perform(Effect::SelectText { window: d.window, id: f"editor-{d.key}", anchor: at, caret: at })
+    gui::perform(Effect::FocusIn(d.window, f"editor-{d.key}"))
+    m
+}
+
+// Recounts the open find bar's matches after the text or selection moved.
+fn recount(m: Model) -> Model {
+    let mut n = m
+    if !n.find.open { return n }
+    let i = index_of(n, n.active)
+    if i < 0 { n.find.found(0, -1); return n }
+    n.docs[i].revision = n.docs[i].document.info().revision
+    gui::perform(Effect::Work(Work::new(f"editor-{n.docs[i].key}", -4, n.docs[i].revision, Operation::SearchDocument(n.docs[i].document.id, n.find.query, n.find.options, 100_000))))
+    n
+}
+
+fn select_match(m: Model, d: Doc, r: ByteRange) {
+    gui::perform(Effect::SelectText { window: d.window, id: f"editor-{d.key}", anchor: r.start.0, caret: r.end.0 })
+}
+
+// Carries out a find bar request against the active document.
+fn run_find(m: Model, request: FindRequest) -> Model {
+    let mut n = m
+    if request == FindRequest::Close { n.pending_find = None; n.matches = #[]; return run_find_ready(n, request) }
+    n.pending_find = Some(request)
+    recount(n)
+}
+
+fn run_find_ready(m: Model, request: FindRequest) -> Model {
+    let mut n = m
+    let i = index_of(n, n.active)
+    if i < 0 { return n }
+    let d = n.docs[i]
+    if request == FindRequest::Close {
+        gui::perform(Effect::FocusIn(n.window, f"editor-{d.key}"))
+        return n
+    }
+    let found = n.matches
+    let from, to = selection(n, d)
+    match request {
+        FindRequest::Replace | FindRequest::ReplaceAll => {
+            if d.loading {
+                n.status = "The document is still loading"
+                return n
+            }
+            let k = search::selected(found, from, to)
+            if request == FindRequest::ReplaceAll && !found.is_empty() {
+                gui::perform(Effect::Work(Work::new(f"editor-{d.key}", -5, d.revision, Operation::ReplaceDocument(d.document.id, found, n.find.replacement))))
+                n.status = "Replacing matches"
+            } else if request == FindRequest::Replace && k >= 0 {
+                let range = found[k]
+                gui::perform(Effect::Work(Work::new(f"editor-{d.key}", -5, d.revision, Operation::ReplaceDocument(d.document.id, #[range], n.find.replacement))))
+                n.status = "Replacing match"
+            } else if request == FindRequest::Replace {
+                let j = search::step(found, from, to, true)
+                if j >= 0 { select_match(n, d, found[j]) }
+                n.find.found(found.len(), j)
+            }
+        }
+        _ => {
+            let j = match request {
+                FindRequest::Previous => search::step(found, from, to, false)
+                FindRequest::Next => search::step(found, from, to, true)
+                _ => search::step(found, from, from, true)
+            }
+            if j >= 0 { select_match(n, d, found[j]) }
+            n.find.found(found.len(), j)
+        }
+    }
+    n
+}
+
+// Completion consumes the lexical index shared with syntax painting.
+fn completion_items(words: Vec<String>) -> Vec<CompletionItem> {
+    let mut seen: Set<String> = #{}
+    let mut out = #[]
+    for k in KEYWORDS {
+        seen.insert(k)
+        out.push(CompletionItem::new(k, k).with_detail("keyword"))
+    }
+    for word in words {
+        if !seen.contains(word) { seen.insert(word); out.push(CompletionItem::new(word, word)) }
+    }
+    out
+}
+
+fn editor(d: Doc) -> Widget {
+    let mut t = gui::TextInput::new(f"editor-{d.key}", "", if d.loading { "Loading..." } else { "" }, gui::InputKind::Area)
+    t.document = d.document.id
+    t.wrap = false
+    t.rows = 20
+    t.mono = true
+    t.tab_inserts = true
+    t.read_only = d.loading
+    t.label = d.title()
+    let mut c = Completion::asynchronous(0)
+    c.word = true
+    c.min_chars = 2
+    t.completion = Some(c)
+    Widget::input(t).grow(1)
+}
+
+fn status(m: Model) -> Widget {
+    let i = index_of(m, m.active)
+    let detail = if i >= 0 {
+        let d = m.docs[i]
+        let lines = d.document.info().lines
+        let line, column = position(m, d)
+        f"Ln {line}, Col {column} | {lines} lines | UTF-8 | LF"
+    } else { "" }
+    Widget::row(#[Widget::muted(m.status).grow(1), Widget::muted(detail)], 12).padding_xy(12, 4)
+}
+
+fn view(m: Model) -> Widget { view_window(m, "main") }
+
+fn view_window(model: Model, window: String) -> Widget {
+    let mut m = model
+    m.window = window
+    m.active = m.active_windows.get(window).unwrap_or("")
+    let bar = Widget::menu_bar("menu", #[
+        menus::Menu::new("&File", #[menus::item("file.new"), menus::item("file.open"), menus::item("gui.tab.reopen"), menus::MenuItem::Separator, menus::item("file.session-save"), menus::item("file.session-restore"), menus::MenuItem::Separator
+            menus::item("file.save"), menus::item("file.save-as"), menus::MenuItem::Separator
+            menus::item("gui.tab.close"), menus::item("gui.quit")])
+        menus::Menu::new("&Edit", #[menus::item("edit.undo"), menus::item("edit.redo"), menus::MenuItem::Separator
+            menus::item("edit.cut"), menus::item("edit.copy"), menus::item("edit.paste"), menus::MenuItem::Separator
+            menus::item("edit.select-all"), menus::MenuItem::Separator
+            menus::item("edit.find"), menus::item("edit.replace"), menus::item("edit.find-next"), menus::item("edit.find-previous"), menus::item("edit.goto")])
+        menus::Menu::new("&View", #[menus::item("gui.tab.next"), menus::item("gui.tab.previous"), menus::MenuItem::Separator
+            menus::item("file.merge"), menus::item("gui.command-palette"), menus::item("gui.toggle-theme")])
+        menus::Menu::new("&Help", #[menus::item("help.about")])
+    ])
+    let mut items = #[]
+    let mut pages: Map<String, Widget> = Map::new()
+    for d in m.docs {
+        if d.window != window { continue }
+        items.push(TabItem::new(d.key, d.title()).dirty(d.dirty()).busy(d.loading || d.pending_saves > 0).pinned(d.pinned).tooltip(d.path))
+        pages[d.key] = Widget::flex(gui::Axis::Vertical, #[editor(d)], 0, gui::MainAlign::Start, gui::CrossAlign::Stretch).padding(4)
+    }
+    let tabs = Widget::tab_pages(f"docs:{window}", "code-editor", items, m.active, pages).grow(1)
+    let find = if m.find_window == window { m.find.view() } else { Widget::Empty }
+    Widget::column(#[bar, tabs, find, Widget::separator(), status(m)], 0).drop_target(f"drop:{window}")
+}
+
+fn app(files: Vec<String>) -> gui::App<Model> {
+    gui::application("Code Editor", APP_ID, || init(files), update, view)
+        .size(900, 640)
+        .min_size(420, 300)
+        .commands(commands)
+        .windows(view_window)
+        .ask_before_close()
+        .icon(gui::AppIcon::drawn(gui::Icon::Code, 64, gui::Color::rgb(46, 52, 64), gui::Color::white()))
+}
+
+fn file_args() -> Vec<String> {
+    files_in(env::args())
+}
+
+// The file arguments among `args` (which exclude the program name): every
+// argument that is not an option, nor the value of `--screenshot`.
+fn files_in(args: Vec<String>) -> Vec<String> {
+    let mut out = #[]
+    let mut i = 0
+    while i < args.len() {
+        let a = args[i]
+        if a == "--screenshot" {
+            i += 1
+        } else if !a.starts_with("--") {
+            out.push(a)
+        }
+        i += 1
+    }
+    out
+}
+
+// Steps the session until its accessibility tree mentions `text`. The file
+// worker answers every request with exactly one message, so each step
+// either delivers that message or the event that reported it.
+fn wait_for(s: &mut gui::Session, text: String) -> Result<(), errors::Error> {
+    while !s.semantics(0).dump().contains(text) {
+        if !s.dialog_ids().is_empty() || !s.step()? {
+            return Err(errors::new(f"never showed {text:?}:\n{s.semantics(0).dump()}\nrecent: {s.log()}"))
+        }
+    }
+    Ok(())
+}
+
+// The scripted journey: open a file given on the command line, edit it,
+// save it, open a second tab, switch tabs by shortcut, and quit.
+fn journey(s: &mut gui::Session, file: String) -> Result<(), errors::Error> {
+    let mut primary = windowing::Mods::default()
+    if gui::input::platform_is_macos() { primary.gui = true } else { primary.ctrl = true }
+    let mut ctrl = windowing::Mods::default()
+    ctrl.ctrl = true
+    wait_for(s, "hello")?
+    println("opened from the command line: ok")
+    s.press(windowing::Key::End, primary)?
+    s.type_text(" world")?
+    s.press(windowing::Key::S, primary)?
+    wait_for(s, "Saved")?
+    let written = fs::read_to_string(file)?
+    println(f"saved text: {written}")
+    if written != "hello world" {
+        return Err(errors::new(f"saved {written:?}, expected \"hello world\""))
+    }
+    s.press(windowing::Key::T, primary)?
+    s.type_text("draft")?
+    let tree = s.semantics(0).dump()
+    println(f"two tabs: {tree.contains("Untitled, modified")}")
+    s.press(windowing::Key::S, primary)?
+    if s.dialog_ids() != #["save-as:doc2"] { return Err(errors::new("Save As did not open the toolkit browser")) }
+    if s.focused() != "dlg:save-as:doc2:filename" { return Err(errors::new(f"Save As focus: {s.focused()}")) }
+    s.press(windowing::Key::Escape, windowing::Mods::default())?
+    if !s.dialog_ids().is_empty() || s.focused() != "editor-doc2" { return Err(errors::new("Escape did not dismiss Save As and restore editor focus")) }
+    println("save dialog cancellation restores focus: ok")
+    s.press(windowing::Key::S, primary)?
+    let target = f"{file}.new.gos"
+    s.press(windowing::Key::A, primary)?
+    s.type_text(target)?
+    let name_rect = s.rect_of("dlg:save-as:doc2:filename").ok_or(errors::new("missing file name field"))?
+    let save_rect = s.rect_of("dlg:save-as:doc2:action:choose").ok_or(errors::new("missing Save button"))?
+    if name_rect.height < 20 || save_rect.height < 20 || name_rect.intersects(save_rect) { return Err(errors::new("Save As controls overlap or collapse")) }
+    s.screenshot("/tmp/gui-editor-save-dialog.png")?
+    if !s.click("dlg:save-as:doc2:action:choose")? { return Err(errors::new("Save button is not clickable")) }
+    wait_for(s, f"Saved {path::file_name(target).unwrap_or(target)}")?
+    if fs::read_to_string(target)? != "draft" { return Err(errors::new("Save As wrote different text")) }
+    println("save dialog accepts typed path and click: ok")
+    s.press(windowing::Key::A, primary)?
+    s.type_text("fn main() {\n    let count = 42\n    println(\"Hello\") // syntax colors\n}\n")?
+    s.screenshot("/tmp/gui-editor-syntax.png")?
+    find_journey(s, primary)?
+    let before = s.edit_state(0, "editor-doc2")
+    let Some(tab) = s.part_rect(0, "docs:main", 2) else { return Err(errors::new("the document tab strip is not shown")) }
+    s.drag(tab.center_x(), tab.center_y(), tab.center_x(), s.window_size(0).height + 80)?
+    if s.window_count() != 2 { return Err(errors::new("vertical tab tear-off did not create a window")) }
+    let moved = s.edit_state(1, "editor-doc2")
+    if moved.caret != before.caret || moved.undo != before.undo || moved.text != before.text { return Err(errors::new("tear-off changed editing state")) }
+    s.emit(UiMsg::TabMove("docs:window-doc2", "doc2", "docs:main", 1))
+    s.flush()?
+    if s.window_count() != 1 { return Err(errors::new("merging the tab did not close its empty window")) }
+    let merged = s.edit_state(0, "editor-doc2")
+    if merged.undo != before.undo || merged.caret != before.caret { return Err(errors::new("merging the tab changed editing state")) }
+    println("tab tear-off and merge preserve editing state: ok")
+    fs::remove_file(target)?
+    s.press(windowing::Key::Tab, ctrl)?
+    println(f"focus after Ctrl+Tab: {s.focused()}")
+    let args = env::args()
+    let mut i = 0
+    while i + 1 < args.len() {
+        if args[i] == "--screenshot" { s.screenshot(args[i + 1])? }
+        i += 1
+    }
+    s.press(windowing::Key::Q, primary)?
+    let asked = s.dialog_ids()
+    println(f"quit asks about the draft: {asked}")
+    if asked.is_empty() {
+        return Err(errors::new("quitting with a modified draft did not ask"))
+    }
+    if !s.click(f"dlg:{asked[0]}:action:cancel")? { return Err(errors::new("Save changes Cancel button is missing")) }
+    if !s.dialog_ids().is_empty() { return Err(errors::new(f"Save changes Cancel click was ignored: {s.log()}")) }
+    s.press(windowing::Key::Q, primary)?
+    let again = s.dialog_ids()
+    if again.is_empty() { return Err(errors::new("Cancel did not stop quitting")) }
+    if !s.click(f"dlg:{again[0]}:action:discard")? { return Err(errors::new("Save changes Don't Save button is missing")) }
+    if !s.dialog_ids().is_empty() { return Err(errors::new(f"Save changes Don't Save click was ignored: {s.log()}")) }
+    let ended = !s.step()?
+    println(f"quit after discarding: {ended}")
+    if !ended {
+        return Err(errors::new("the session did not end"))
+    }
+    Ok(())
+}
+
+fn editor_text(s: &mut gui::Session) -> String {
+    s.edit_state(0, "editor-doc2").text
+}
+
+// Find, replace one, undo it, replace all as one undoable edit, close the
+// bar back to the editor, and go to a line and column.
+fn find_journey(s: &mut gui::Session, primary: windowing::Mods) -> Result<(), errors::Error> {
+    let plain = windowing::Mods::default()
+    s.press(windowing::Key::F, primary)?
+    if s.focused() != "find:query" { return Err(errors::new(f"Find focus: {s.focused()}")) }
+    s.type_text("count")?
+    wait_for(s, "1 of 1")?
+    let picked = s.edit_state(0, "editor-doc2")
+    println(f"find selects the match: {picked.anchor}..{picked.caret}")
+    s.press(windowing::Key::H, primary)?
+    s.focus("find:replacement")?
+    s.type_text("total")?
+    s.click("find:replace")?
+    wait_for(s, "No matches")?
+    println(f"replace one: {editor_text(s).contains("let total = 42")}")
+    s.focus("editor-doc2")?
+    s.press(windowing::Key::Z, primary)?
+    println(f"undo restores it: {editor_text(s).contains("let count = 42")}")
+    s.focus("find:query")?
+    s.press(windowing::Key::A, primary)?
+    s.type_text("n")?
+    wait_for(s, "3 of 6")?
+    s.focus("find:replacement")?
+    s.press(windowing::Key::A, primary)?
+    s.type_text("N")?
+    s.click("find:replace-all")?
+    wait_for(s, "Replaced 6 matches")?
+    println(f"replace all: {editor_text(s).contains("fN maiN() {")}")
+    s.focus("editor-doc2")?
+    s.press(windowing::Key::Z, primary)?
+    println(f"one undo restores every match: {editor_text(s).contains("fn main() {")}")
+    s.click("find:close")?
+    println(f"closing the bar focuses: {s.focused()}")
+    s.press(windowing::Key::G, primary)?
+    if s.dialog_ids() != #["goto"] { return Err(errors::new("Go to Line did not open")) }
+    s.press(windowing::Key::A, primary)?
+    s.type_text("3:5")?
+    s.press(windowing::Key::Return, plain)?
+    wait_for(s, "Ln 3, Col 5")?
+    let at = s.edit_state(0, "editor-doc2")
+    println(f"go to 3:5: caret {at.caret}, focus {s.focused()}")
+    Ok(())
+}
+
+fn fixture() -> Result<(), errors::Error> {
+    gui::services::clipboard::use_memory(true)
+    let file = path::join(env::temp_dir(), f"gui-code-editor-{process::id()}.txt")
+    fs::write(file, "hello".bytes())?
+    let mut s = app(#[file]).start()?
+    let outcome = journey(&mut s, file)
+    s.shutdown()
+    fs::remove_file(file).unwrap_or(())
+    outcome?
+    session_fixture()
+}
+
+// Save and restore the application's document order, pinning, window ownership,
+// active tabs and native undo roots across a complete session shutdown.
+fn session_fixture() -> Result<(), errors::Error> {
+    let root = path::join(env::temp_dir(), f"gui-editor-checkpoint-{process::id()}")
+    fs::remove_dir_all(root).unwrap_or(())
+    gui::services::set_config_root(root)
+    let mut primary = windowing::Mods::default()
+    if gui::input::platform_is_macos() { primary.gui = true } else { primary.ctrl = true }
+    let first = "first שלום é 👩‍💻"
+    let second = "second 日本語 مرحبا"
+    let mut s = app(#[]).start()?
+    s.focus("editor-doc1")?
+    s.type_text(first)?
+    s.emit(UiMsg::TabAction("docs:main", "doc1", "pin")); s.flush()?
+    s.press(windowing::Key::T, primary)?
+    s.type_text(second)?
+    s.emit(UiMsg::TabDetach("docs:main", "doc2", 40, 40)); s.flush()?
+    if s.window_count() != 2 { return Err(errors::new("checkpoint setup did not detach a window")) }
+    s.emit(UiMsg::Command("file.session-save")); s.flush()?
+    wait_for(&mut s, "Session checkpoint saved")?
+    s.shutdown()
+    let mut restored = app(#[]).start()?
+    restored.emit(UiMsg::Command("file.session-restore")); restored.flush()?
+    wait_for(&mut restored, "Restored 2 documents")?
+    if restored.window_count() != 2 { return Err(errors::new("checkpoint lost a detached window")) }
+    let one = restored.document(0, "editor-doc1")
+    let two = restored.document(1, "editor-doc2")
+    if one.text() != first || two.text() != second || !one.info().dirty || !two.info().dirty { return Err(errors::new("checkpoint lost document bodies or dirty markers")) }
+    // A pinned tab does not close through Close Tab. Its active selection is
+    // restored independently of the detached window's active tab.
+    restored.emit(UiMsg::Command("gui.tab.close")); restored.flush()?
+    if !restored.dialog_ids().is_empty() || restored.document(0, "editor-doc1").id != one.id { return Err(errors::new("checkpoint lost pinning or active tab")) }
+    restored.emit(UiMsg::TabMove("docs:window-doc2", "doc2", "docs:main", 1)); restored.flush()?
+    if restored.window_count() != 1 { return Err(errors::new("restored tab did not merge")) }
+    restored.focus("editor-doc2")?
+    restored.press(windowing::Key::Z, primary)?
+    if !two.text().is_empty() || one.text() != first { return Err(errors::new("restored native undo roots were lost or crossed documents")) }
+    restored.shutdown()
+    gui::services::set_config_root("")
+    fs::remove_dir_all(root)?
+    println("session checkpoint restores windows, pinned tabs, Unicode edits and undo: ok")
+    Ok(())
+}
+
+// Exercises the actual confirmation buttons and asynchronous Save completion.
+fn close_fixture() -> Result<(), errors::Error> {
+    gui::services::clipboard::use_memory(true)
+    let mut primary = windowing::Mods::default()
+    if gui::input::platform_is_macos() { primary.gui = true } else { primary.ctrl = true }
+    for action in #["cancel", "discard", "save"] {
+        let file = path::join(env::temp_dir(), f"gui-close-{process::id()}-{action}.txt")
+        fs::write(file, "close-saved-body".bytes())?
+        let mut s = app(#[file]).start()?
+        let outcome = close_case(&mut s, action, primary)
+        s.shutdown()
+        outcome?
+        let expected = if action == "save" { "close-saved-body edited" } else { "close-saved-body" }
+        if fs::read_to_string(file)? != expected { return Err(errors::new(f"{action} changed the wrong file contents")) }
+        fs::remove_file(file)?
+        println(f"Save changes {action}: ok")
+    }
+    Ok(())
+}
+
+fn close_case(s: &mut gui::Session, action: String, primary: windowing::Mods) -> Result<(), errors::Error> {
+    wait_for(s, "close-saved-body")?
+    s.press(windowing::Key::End, primary)?
+    s.type_text(" edited")?
+    s.press(windowing::Key::Q, primary)?
+    if s.dialog_ids() != #["close:doc1"] { return Err(errors::new("missing Save changes confirmation")) }
+    if !s.click(f"dlg:close:doc1:action:{action}")? || !s.dialog_ids().is_empty() { return Err(errors::new(f"{action} button did not work")) }
+    if action == "cancel" {
+        if s.window_count() == 0 { return Err(errors::new("Cancel closed the editor")) }
+        s.press(windowing::Key::Q, primary)?
+        if !s.click("dlg:close:doc1:action:discard")? { return Err(errors::new("Discard after Cancel did not work")) }
+    }
+    while s.step()? {}
+    Ok(())
+}
+
+// Timings include dispatch, model updates, layout and software presentation.
+// Keep timing output separate from the deterministic acceptance transcript.
+fn benchmark() -> Result<(), errors::Error> {
+    let args = env::args()
+    let lines = if args.contains("--large") { 2048 } else { 32 }
+    let samples = env::var("GUI_BENCHMARK_SAMPLES").unwrap_or("12").to_i64().unwrap_or(12).max(1)
+    let mut text = String::new()
+    for _ in 0..lines { text.push_str("fn sample() { let count = 42 } // source\n") }
+    let begin = time::monotonic_nanos()
+    let mut s = app(#[]).start()?
+    s.emit(UiMsg::Text("editor-doc1", text))
+    s.flush()?
+    println(f"startup,{lines},{time::monotonic_nanos() - begin}")
+    let mut primary = windowing::Mods::default()
+    if gui::input::platform_is_macos() { primary.gui = true } else { primary.ctrl = true }
+    s.press(windowing::Key::End, primary)?
+    for operation in #["typing", "cursor", "scroll", "completion"] {
+        // An odd cursor sample count must not change the completion query.
+        if operation == "completion" { s.press(windowing::Key::End, primary)? }
+        for sample in 0..samples {
+            let begin = time::monotonic_nanos()
+            match operation {
+                "typing" => s.type_text("x ")?
+                "cursor" => s.press(if sample % 2 == 0 { windowing::Key::Left } else { windowing::Key::Right }, windowing::Mods::default())?
+                "scroll" => {
+                    let r = s.rect_of("editor-doc1").ok_or(errors::new("missing benchmark editor"))?
+                    s.inject(windowing::Event::Wheel { window: s.window_id(0), x: r.center_x() as f64, y: r.center_y() as f64, dx: 0.0, dy: if sample % 2 == 0 { 3.0 } else { -3.0 } })?
+                }
+                _ => {
+                    s.type_text("sam")?
+                    if s.popup_owners().is_empty() { return Err(errors::new("benchmark completion did not open")) }
+                    s.press(windowing::Key::Escape, windowing::Mods::default())?
+                    for _ in 0..3 { s.press(windowing::Key::Backspace, windowing::Mods::default())? }
+                }
+            }
+            println(f"{operation},{lines},{time::monotonic_nanos() - begin}")
+        }
+    }
+    if !s.edit_state(0, "editor-doc1").text.starts_with("fn sample()") { return Err(errors::new("benchmark changed the document prefix")) }
+    s.shutdown()
+    Ok(())
+}
+
+fn main() -> Result<(), errors::Error> {
+    if env::var("GUI_EXPORT_ICON").is_some() { return app(#[]).run() }
+    if env::args().contains("--close-fixture") { return close_fixture() }
+    if env::args().contains("--benchmark") { return benchmark() }
+    if env::args().contains("--fixture") { return fixture() }
+    interactive()
+}
+
+// The session owns file, analysis and completion work and joins it on shutdown.
+fn interactive() -> Result<(), errors::Error> {
+    let files = file_args()
+    let claim = gui::launch(APP_ID, files)
+    if let gui::Launch::Forwarded = claim { return Ok(()) }
+    if let gui::Launch::Failed(error) = claim { return Err(errors::new(error)) }
+    let mut s = app(files).start()?
+    if files.is_empty() { s.emit(UiMsg::Command("file.session-restore")); s.flush()? }
+    if let gui::Launch::Primary(listener) = claim { s.serve_instance(listener)? }
+    let result = s.run()
+    if let gui::Launch::Primary(listener) = claim { listener.close() }
+    result
+}
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    fn every_non_option_argument_is_a_file() {
+        assert_eq(super::files_in(#["one.txt", "--fixture", "--screenshot", "shot.png", "two.txt"]), #["one.txt", "two.txt"])
+        assert_eq(super::files_in(#[]), #[])
+    }
+
+    #[test]
+    fn save_completion_records_its_own_snapshot() {
+        let doc = gui::editing::document::Document::new("first")
+        let first = doc.freeze()
+        let _ = doc.replace(doc.info().revision, 0, doc.info().bytes, "second")
+        doc.mark_saved(first)
+        assert(doc.info().dirty)
+        let second = doc.freeze()
+        doc.mark_saved(second)
+        assert(!doc.info().dirty)
+        first.close(); second.close(); doc.close()
+    }
+
+    #[test]
+    fn edits_during_save_keep_the_closing_tab_open() {
+        let mut m = super::init(#[])
+        let key = m.active
+        m.docs[0].set_text("new edits")
+        m.closing = #[key]
+        m.quitting = true
+        m = super::task(m, f"save:{key}", gui::TaskOutcome::Done("saved snapshot"))
+        assert_eq(m.docs.len(), 1)
+        assert_eq(m.closing, #[key])
+        assert(m.docs[0].dirty())
+        let _ = gui::app::effects::take()
+    }
+}

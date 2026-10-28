@@ -1,0 +1,161 @@
+// display: widgets that present without taking values: labels (plain,
+// wrapping, selectable, links), spacers, separators, images, and icons.
+
+use crate::text::layout::TextAlign
+
+use crate::accessibility::{AccessNode, Role}
+use crate::editing::EditState
+use crate::style::TextRole
+use crate::style::color::Color
+use crate::text::layout::{TextAlign}
+use crate::widgets::Tone
+use crate::widgets::state::StateStore
+
+/// Text in a typographic role.
+#[derive(PartialEq)]
+pub struct Label {
+    pub id: String
+    pub text: String
+    pub spans: Vec<crate::rich::Span>
+    pub rich_document: i64
+    pub heading_level: i64
+    pub role: TextRole
+    pub tone: Tone
+    pub wrap: bool
+    pub align: TextAlign
+    /// Lines kept before eliding with an ellipsis (0 keeps all).
+    pub max_lines: i64
+    pub selectable: bool
+    pub link: bool
+}
+
+impl Label {
+    pub fn new(text: String, role: TextRole) -> Label {
+        Label { id: String::new(), text: text, spans: #[], rich_document: 0, heading_level: 0, role: role, tone: Tone::Normal, wrap: false, align: TextAlign::Start, max_lines: 0, selectable: false, link: false }
+    }
+}
+
+
+pub fn label_semantics(l: Label) -> Option<AccessNode> {
+    let role = if l.link {
+        Role::Link
+    } else if l.role == TextRole::Heading || l.role == TextRole::Title || l.role == TextRole::Hero {
+        Role::Heading
+    } else if l.wrap {
+        Role::Paragraph
+    } else {
+        Role::Label
+    }
+    let mut n = AccessNode::new(role, l.text)
+    n.id = l.id
+    n.focusable = l.link || l.selectable
+    n.read_only = true
+    if l.link { n.actions.push("press") }
+    if role == Role::Heading {
+        n.level = match l.role {
+            TextRole::Hero | TextRole::Title => 1
+            _ => 2
+        }
+    }
+    Some(n)
+}
+
+/// Empty space.
+#[derive(PartialEq)]
+pub struct Spacer {
+    pub units: i64
+    /// Takes free space in a flex container.
+    pub flexible: bool
+}
+
+
+/// A thin rule between groups.
+#[derive(PartialEq)]
+pub struct Separator {
+    pub vertical: bool
+}
+
+
+/// How an image fits the space it is given.
+#[derive(PartialEq, Eq)]
+pub enum Fit {
+    /// Whole image visible, aspect kept.
+    Contain
+    /// Space filled, aspect kept, overflow clipped.
+    Cover
+    /// Natural size.
+    Natural
+}
+
+/// An RGBA image.
+#[derive(PartialEq)]
+pub struct Image {
+    pub rgba: Vec<u8>
+    pub width: i64
+    pub height: i64
+    /// Alternative text; empty marks the image decorative.
+    pub alt: String
+    pub fit: Fit
+    /// Shown instead of the image when it failed to load.
+    pub error: String
+}
+
+
+pub fn image_semantics(i: Image) -> Option<AccessNode> {
+    if i.alt.is_empty() && i.error.is_empty() {
+        return None
+    }
+    Some(AccessNode::new(Role::Image, if i.error.is_empty() { i.alt } else { crate::localization::message("image", "{image} (failed to load: {error})", 1, { "image": i.alt, "error": i.error }) }))
+}
+
+/// A built-in vector icon.
+#[derive(PartialEq)]
+pub struct Icon {
+    pub icon: crate::render::icons::Icon
+    pub units: i64
+    pub tone: Tone
+    /// Accessible name; empty marks the icon decorative.
+    pub label: String
+}
+
+
+pub fn icon_semantics(i: Icon) -> Option<AccessNode> {
+    if i.label.is_empty() {
+        return None
+    }
+    Some(AccessNode::new(Role::Image, i.label))
+}
+
+/// A count or status pill.
+#[derive(PartialEq)]
+pub struct Badge {
+    pub text: String
+    pub tone: Tone
+    /// Accessible name; empty reads `text`.
+    pub label: String
+}
+
+
+// The fill and text colors. The text is the theme's text or background
+// color, whichever reads better, when that reaches 4.5:1 (WCAG AA) on the
+// fill; otherwise white or black, one of which always does.
+fn badge_colors(theme: crate::style::Theme, tone: Tone, disabled: bool) -> (Color, Color) {
+    let fill = if disabled { theme.text_disabled } else { tone.resolve(theme) }
+    let themed = if theme.text.contrast(fill) >= theme.background.contrast(fill) { theme.text } else { theme.background }
+    if themed.contrast(fill) >= 4.5 {
+        return (fill, themed)
+    }
+    let plain = if Color::white().contrast(fill) >= Color::black().contrast(fill) { Color::white() } else { Color::black() }
+    (fill, plain)
+}
+
+pub fn badge_semantics(b: Badge) -> Option<AccessNode> {
+    Some(AccessNode::new(Role::Label, if b.label.is_empty() { b.text } else { b.label }))
+}
+
+/// The text layout cache is shared; this exposes edit state syncing for
+/// tests of selectable labels.
+pub fn selection_of(st: StateStore, id: String) -> (i64, i64) {
+    let s: EditState = st.edit(id)
+    s.selection()
+}

@@ -1,0 +1,21 @@
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+[New Thread 0x7ffff76636c0 (LWP 185669)]
+[Thread 0x7ffff76636c0 (LWP 185669) exited]
+
+Thread 1 "gui-code-editor" received signal SIGSEGV, Segmentation fault.
+0x0000555555af3862 in _mi_theap_malloc_zero ()
+
+Thread 1 (Thread 0x7ffff7e1bd80 (LWP 185661) "gui-code-editor"):
+#0  0x0000555555af3862 in _mi_theap_malloc_zero ()
+#1  0x000055555597764a in <gossamer_runtime::c_abi::map_table::Table<K,V> as core::clone::Clone>::clone ()
+#2  0x00005555558d1ed4 in gossamer_runtime::c_abi::map::clone_map_storage ()
+#3  0x000055555599061e in gos_rt_map_clone ()
+#4  0x0000555555991dec in gos_rt_map_field_clone ()
+#5  0x0000555555724cb0 in gui::text::font::Face::parse ()
+#6  0x000055555572dc44 in gui::text::fonts::ensure_bundled ()
+#7  0x000055555572e8b2 in gui::text::fonts::primary ()
+#8  0x0000555555734d93 in gui::text::layout::metrics ()
+#9  0x000055555576bd77 in gui::widgets::Widget::layout ()
+#10 0x0000555555774c36 in gui::widgets::Widget::layout ()
+#11 0x0000555555815a55 in gui::widgets::containers::layout_decorated ()

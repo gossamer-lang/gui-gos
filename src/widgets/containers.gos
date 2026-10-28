@@ -1,0 +1,251 @@
+// containers: widgets that arrange other widgets. Flex rows and columns
+// (with grow weights, main and cross alignment, baselines, and mirroring
+// in right-to-left layouts), grids and forms, stacks, wrapping flows,
+// scroll areas, split panes, and the modifier box every builder modifier
+// produces (padding, margins, size limits, alignment, backgrounds,
+// borders, tooltips, visibility, disabled subtrees, theme overrides).
+
+use windowing
+
+use crate::accessibility::{AccessNode, Role}
+use crate::geometry::{Constraints, Insets, Rect, Size}
+use crate::widgets::{Axis, CrossAlign, MainAlign, Modifiers, Widget}
+use crate::widgets::cx::Node
+use crate::widgets::state::{ScrollState, StateStore, WState}
+
+// ---- flex ----
+
+/// A row or column of children.
+#[derive(PartialEq)]
+pub struct Flex {
+    pub axis: Axis
+    pub children: Vec<Widget>
+    /// Gap between children, interface units.
+    pub spacing: i64
+    pub main: MainAlign
+    pub cross: CrossAlign
+}
+
+impl Flex {
+    pub fn new(axis: Axis, children: Vec<Widget>, spacing: i64) -> Flex {
+        let cross = if axis == Axis::Vertical { CrossAlign::Start } else { CrossAlign::Center }
+        Flex { axis: axis, children: children, spacing: spacing, main: MainAlign::Start, cross: cross }
+    }
+}
+
+fn main_of(axis: Axis, s: Size) -> i64 {
+    if axis == Axis::Horizontal { s.width } else { s.height }
+}
+
+fn cross_of(axis: Axis, s: Size) -> i64 {
+    if axis == Axis::Horizontal { s.height } else { s.width }
+}
+
+fn make_constraints(axis: Axis, main_min: i64, main_max: i64, cross_min: i64, cross_max: i64) -> Constraints {
+    if axis == Axis::Horizontal {
+        Constraints::new(main_min, main_max, cross_min, cross_max)
+    } else {
+        Constraints::new(cross_min, cross_max, main_min, main_max)
+    }
+}
+
+
+// ---- grid ----
+
+/// Cells in columns, row-major.
+#[derive(PartialEq)]
+pub struct Grid {
+    pub children: Vec<Widget>
+    pub columns: i64
+    pub column_gap: i64
+    pub row_gap: i64
+    /// The last column takes the remaining width.
+    pub stretch_last: bool
+}
+
+
+// ---- stack ----
+
+/// Layers painted bottom to top, sharing one area.
+#[derive(PartialEq)]
+pub struct Stack {
+    pub layers: Vec<Widget>
+}
+
+
+// ---- flow ----
+
+/// Children that wrap into lines.
+#[derive(PartialEq)]
+pub struct Flow {
+    pub children: Vec<Widget>
+    pub spacing: i64
+    pub line_spacing: i64
+}
+
+// How cells sharing a line align: those with a baseline on their tallest
+// ascent, as one group centered in the line, and the rest each centered.
+// Answers the line's height, its baseline (-1 without one), and each
+// member's offset from the line's top.
+fn align_line(nodes: Vec<Node>, members: Vec<i64>) -> (i64, i64, Vec<i64>) {
+    let mut ascent = -1
+    for i in members { ascent = ascent.max(nodes[i].baseline) }
+    let mut group = 0
+    let mut height = 0
+    for i in members {
+        let n = nodes[i]
+        if n.baseline >= 0 { group = group.max(ascent - n.baseline + n.rect.height) } else { height = height.max(n.rect.height) }
+    }
+    height = height.max(group)
+    let lead = (height - group) / 2
+    let offsets = members.map(|i| if nodes[i].baseline >= 0 { lead + ascent - nodes[i].baseline } else { (height - nodes[i].rect.height) / 2 })
+    (height, if ascent >= 0 { lead + ascent } else { -1 }, offsets)
+}
+
+
+// ---- scroll ----
+
+/// A clipped viewport that scrolls its child.
+#[derive(PartialEq)]
+pub struct Scroll {
+    pub id: String
+    pub child: Widget
+    pub horizontal: bool
+    pub vertical: bool
+    /// As tall as the content, up to the height offered, instead of filling it.
+    pub fit: bool
+}
+
+/// Scrollbar thickness, pixels.
+fn bar(cx_theme: crate::style::Theme) -> i64 {
+    cx_theme.px(10)
+}
+
+
+/// A scroll state with offsets clamped to the content.
+pub fn clamp_scroll(st: ScrollState, content: Size, viewport: Size) -> ScrollState {
+    let mut s = st
+    s.x = s.x.max(0).min((content.width - viewport.width).max(0))
+    s.y = s.y.max(0).min((content.height - viewport.height).max(0))
+    s
+}
+
+// The vertical thumb's rectangle (local), or an empty one.
+fn v_thumb(node: Node, st: ScrollState, b: i64) -> Rect {
+    let vh = node.rect.height
+    let ch = node.content.height
+    if ch <= vh || vh <= 0 {
+        return Rect::new(0, 0, 0, 0)
+    }
+    let thumb = (vh * vh / ch).max(b * 2)
+    let max_off = ch - vh
+    let ty = st.y * (vh - thumb) / max_off.max(1)
+    Rect::new(node.rect.width - b, ty, b, thumb)
+}
+
+fn h_thumb(node: Node, st: ScrollState, b: i64) -> Rect {
+    let vw = node.rect.width
+    let cw = node.content.width
+    if cw <= vw || vw <= 0 {
+        return Rect::new(0, 0, 0, 0)
+    }
+    let thumb = (vw * vw / cw).max(b * 2)
+    let max_off = cw - vw
+    let tx = st.x * (vw - thumb) / max_off.max(1)
+    Rect::new(tx, node.rect.height - b, thumb, b)
+}
+
+
+pub fn scroll_semantics(s: Scroll, node: Node, st: StateStore) -> Option<AccessNode> {
+    let mut n = AccessNode::new(Role::ScrollArea, String::new())
+    n.id = s.id
+    let state = clamp_scroll(st.scroll(s.id), node.content, node.size())
+    let max = (node.content.height - node.rect.height).max(0)
+    if max > 0 {
+        n.range(0.0, max as f64, state.y as f64)
+    }
+    n.actions.push("scroll")
+    Some(n)
+}
+
+/// Adjusts every scroll state on `path` so `target` (window pixels) shows.
+pub fn reveal_in(st: &mut StateStore, scroll_id: String, viewport: Rect, content: Size, target: Rect) {
+    let mut s = st.scroll(scroll_id)
+    if target.y < viewport.y {
+        s.y -= viewport.y - target.y
+    } else if target.bottom() > viewport.bottom() {
+        s.y += (target.bottom() - viewport.bottom()).min(target.y - viewport.y)
+    }
+    if target.x < viewport.x {
+        s.x -= viewport.x - target.x
+    } else if target.right() > viewport.right() {
+        s.x += (target.right() - viewport.right()).min(target.x - viewport.x)
+    }
+    st.set(scroll_id, WState::Scroll(clamp_scroll(s, content, viewport.size())))
+}
+
+// ---- split ----
+
+/// Two panes with a draggable divider.
+#[derive(PartialEq)]
+pub struct Split {
+    pub id: String
+    pub first: Widget
+    pub second: Widget
+    pub axis: Axis
+    pub ratio: f64
+    /// Minimum pane sizes, interface units.
+    pub min_first: i64
+    pub min_second: i64
+}
+
+fn split_ratio(s: Split, st: StateStore) -> f64 {
+    let d = st.drag(s.id)
+    if d.active { d.start_value } else { s.ratio }
+}
+
+
+pub fn split_semantics(s: Split, node: Node) -> Option<AccessNode> {
+    let mut n = AccessNode::control(Role::Splitter, s.id, String::new(), "")
+    n.range(0.0, 100.0, (s.ratio * 100.0).round())
+    n.actions.push("increment")
+    n.actions.push("decrement")
+    if !node.parts.is_empty() {
+        n.bounds = node.parts[0]
+    }
+    Some(n)
+}
+
+// ---- modifier box ----
+
+/// A widget plus modifiers (see `Modifiers`).
+#[derive(PartialEq)]
+/// What a drag source offers when the pointer drags it away.
+#[derive(Debug, PartialEq)]
+pub struct DragSource {
+    pub items: Vec<windowing::DragItem>
+    pub operation: windowing::DragOperation
+}
+
+pub struct DecoratedBox {
+    pub child: Widget
+    pub mods: Modifiers
+}
+
+fn units_insets(theme: crate::style::Theme, i: Insets) -> Insets {
+    let r = Insets::new(theme.px(i.left), theme.px(i.top), theme.px(i.right), theme.px(i.bottom))
+    if theme.rtl { r.mirrored() } else { r }
+}
+
+
+pub fn decorated_semantics(d: DecoratedBox) -> Option<AccessNode> {
+    let m = d.mods
+    // Without a role the modifiers describe the child; the tree builder
+    // merges them into the child node instead.
+    let Some(role) = m.role else { return None }
+    let mut n = AccessNode::new(role, m.label)
+    n.id = m.key
+    n.description = if m.description.is_empty() { m.tooltip } else { m.description }
+    n.disabled = m.disabled
+    Some(n)
+}

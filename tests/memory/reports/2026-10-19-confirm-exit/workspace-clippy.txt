@@ -1,0 +1,6 @@
+   Compiling gossamer-codegen-llvm v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-codegen-llvm)
+   Compiling gossamer-cli v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-cli)
+    Checking gossamer-driver v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-driver)
+    Checking gossamer-lsp v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-lsp)
+    Checking xtask v0.74.0 (/home/daniel/dev/gossamer/xtask)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 46.88s

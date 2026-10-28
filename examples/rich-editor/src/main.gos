@@ -1,0 +1,155 @@
+// A structured editor with a selectable accessible preview. Import/export runs
+// on the shared worker; editing and formatting use one native document history.
+use std::{env, errors, time, fs, path, process}
+use gui
+use gui::{CrossAlign, Effect, MainAlign, UiMsg, Widget}
+use gui::dialogs::request
+use gui::rich::{Document, Format, Kind, Mark, Edit, Selection, Position}
+use gui::services::work::{Work, Operation, Outcome}
+
+const SAMPLE: String = "# Notes\n\nChoose a paragraph to edit. **Bold**, *emphasis* and [links](https://example.org) retain their styles.\n\n- First item\n- Second item\n\n> A quotation\n\n![Sample image](asset:sample)\n"
+struct Model { document: Document, block: i64, source: String, status: String, page: i64, asset: String, file: String, generation: i64 }
+fn init(document: Document) -> Model { let document = if document.id == 0 { Document::import(Format::Markdown, SAMPLE).unwrap() } else { document }; Model { document: document, block: document.outline(0, 1).unwrap()[0].block, source: SAMPLE, status: "Ready", page: 0, asset: "asset:sample", file: "", generation: 0 } }
+fn choose_image(toolkit: bool) {
+    let req = request::open_file("load-image", "Choose PNG", #[request::FileFilter { name: "PNG images", patterns: #["*.png"] }])
+    gui::perform(Effect::OpenDialog(if toolkit { request::toolkit_file(req) } else { req }))
+}
+fn apply(document: Document, edits: Vec<Edit>) -> Result<gui::rich::Info, errors::Error>{ document.transact(document.info().revision, edits) }
+fn refresh(m: Model) -> Model { let mut n = m; n.block = n.document.info().selection.caret.block; n.generation += 1; n }
+fn update(m: Model, msg: UiMsg) -> Model {
+    let mut n = m
+    match msg {
+        UiMsg::RichChanged(_, id, _) => if id == n.document.id { n = refresh(n) }
+        UiMsg::RichLink(_, url) => n.status = f"Link: {url}"
+        UiMsg::Text(id, text) => match id { "source" => n.source = text, "asset" => n.asset = text, "file" => n.file = text, _ => () }
+        UiMsg::Click(id) => {
+            let info = n.document.info()
+            let selection = info.selection
+            let start = selection.anchor.byte.min(selection.caret.byte)
+            let end = selection.anchor.byte.max(selection.caret.byte)
+            let mut result: Result<gui::rich::Info, errors::Error >= Ok(info)
+            match id {
+                "bold" | "italic" | "underline" | "strike" => {
+                    let mark = match id { "bold" => Mark::Strong, "italic" => Mark::Emphasis, "underline" => Mark::Underline, _ => Mark::Strike }
+                    let enabled = !match id { "bold" => info.marks.strong, "italic" => info.marks.emphasis, "underline" => info.marks.underline, _ => info.marks.strike }
+                    result = apply(n.document, #[Edit::SetMark { block: n.block, start: start, end: end, mark: mark, enabled: enabled }])
+                }
+                "heading" | "paragraph" => result = apply(n.document, #[Edit::SetKind { block: n.block, kind: if id == "heading" { Kind::Heading(2) } else { Kind::Paragraph } }])
+                "list" => result = n.document.wrap(Kind::List(None))
+                "quote" => result = n.document.wrap(Kind::Quote)
+                "split" => result = n.document.enter()
+                "indent" | "outdent" => result = n.document.indent(id == "outdent")
+                "undo" => result = n.document.undo()
+                "redo" => result = n.document.redo()
+                "previous" => n.page = (n.page - 16).max(0)
+                "next" => if n.document.outline(n.page + 16, 1).unwrap().len()>0 { n.page += 16 }
+                "import-md" | "import-html" => {
+                    gui::perform(Effect::Work(Work::new("rich-import", 1, info.revision, Operation::ImportRich(if id == "import-md" { Format::Markdown } else { Format::Html }, n.source))))
+                    n.status = "Importing"
+                }
+                "export-md" | "export-html" => {
+                    gui::perform(Effect::Work(Work::new("rich-export", 2, info.revision, Operation::ExportRich(n.document.id, if id == "export-md" { Format::Markdown } else { Format::Html }))))
+                    n.status = "Exporting"
+                }
+                "load-image" => choose_image(false)
+                _ => for row in n.document.outline(n.page, 16).unwrap() { if id == f"block:{row.block}" { n.document.select(Selection { anchor: Position { block: row.block, byte: 0 }, caret: Position { block: row.block, byte: 0 } }).unwrap(); n.block = row.block; gui::perform(Effect::Focus("editor")) } }
+            }
+            if let Err(why) = result { n.status = f"Could not edit: {why}" }
+            n.generation += 1
+        }
+        UiMsg::Dialog(id, outcome) if id == "load-image" => match outcome {
+            gui::Outcome::Paths(paths) => if !paths.is_empty() {
+                n.file = paths[0]
+                gui::perform(Effect::Work(Work::new("rich-image", 3, n.document.info().revision, Operation::ReadRichImage(n.document.id, n.asset, n.file))))
+                n.status = "Loading image"
+            }
+            // Without a native chooser the toolkit's own file browser asks.
+            gui::Outcome::Unsupported(_) | gui::Outcome::Failed(_) => choose_image(true)
+            _ => ()
+        }
+        UiMsg::Worked(owner, _, revision, outcome) => match outcome {
+            Outcome::RichImported(record) => {
+                let imported = Document { id: record.document }
+                if revision != n.document.info().revision { imported.close(); n.status = "Import discarded because the document changed" } else {
+                    gui::perform(Effect::CancelWork("rich-export")); gui::perform(Effect::CancelWork("rich-image")); n.document.close(); n = init(imported); n.status = "Imported"
+                }
+            }
+            Outcome::RichExported(id, text) => if id == n.document.id && revision == n.document.info().revision { n.source = text; n.status = "Exported" } else { n.status = "Export discarded because the document changed" }
+            Outcome::RichImageLoaded(id, _) => if id == n.document.id { n.status = "Image loaded"; n.generation += 1 }
+            Outcome::Failed(why) => n.status = f"Failed: {why}"
+            Outcome::Cancelled => n.status = f"Cancelled {owner}"
+            _ => ()
+        }
+        _ => ()
+    }
+    n
+}
+fn view(m: Model) -> Widget {
+    let mut outline = #[]
+    for row in m.document.outline(m.page, 16).unwrap() { outline.push(Widget::button(f"block:{row.block}", if row.label.is_empty() { "Empty paragraph" } else { row.label })) }
+    let mut field = m.document.input(m.block, "editor").unwrap()
+    field.label = "Edit selected block"
+    let preview = m.document.preview("preview", m.page, 16).unwrap()
+    Widget::flex(gui::Axis::Vertical, #[
+        Widget::flow(#[Widget::button("bold", "Bold"), Widget::button("italic", "Italic"), Widget::button("underline", "Underline"), Widget::button("strike", "Strike"), Widget::button("heading", "Heading"), Widget::button("paragraph", "Paragraph"), Widget::button("list", "List"), Widget::button("quote", "Quote"), Widget::button("split", "Split"), Widget::button("indent", "Indent"), Widget::button("outdent", "Outdent"), Widget::button("undo", "Undo").disabled(!m.document.info().can_undo), Widget::button("redo", "Redo").disabled(!m.document.info().can_redo)], 6)
+        Widget::row(#[Widget::scroll("outline", Widget::column(outline, 4)).width(220), Widget::flex(gui::Axis::Vertical, #[Widget::input(field).height(160), Widget::scroll("preview-scroll", preview).grow(1)], 8, MainAlign::Start, CrossAlign::Stretch).grow(1)], 8).grow(1)
+        Widget::row(#[Widget::button("previous", "Previous blocks"), Widget::button("next", "Next blocks"), Widget::label(m.status)], 8)
+        Widget::input(gui::TextInput::new("source", m.source, "Markdown or supported HTML", gui::InputKind::Area)).height(140)
+        Widget::row(#[Widget::button("import-md", "Replace from Markdown"), Widget::button("import-html", "Replace from HTML"), Widget::button("export-md", "Export Markdown"), Widget::button("export-html", "Export HTML")], 8)
+        Widget::row(#[Widget::label("Image source"), Widget::input(gui::TextInput::new("asset", m.asset, "Image source in the document", gui::InputKind::Line)).grow(1), Widget::button("load-image", "Choose PNG...")], 8)
+    ], 8, MainAlign::Start, CrossAlign::Stretch).padding(12)
+}
+fn app(document: Document) -> gui::App<Model>{ gui::application("Rich Editor", "dev.gossamer.gui-rich-editor", || init(document), update, view).size(1180, 820).focus("editor") }
+fn require(value: bool, why: String) -> Result<(), errors::Error>{ if value { Ok(()) } else { Err(errors::new(why)) } }
+fn await_status(s: &mut gui::Session, status: String) -> Result<(), errors::Error>{
+    let deadline = time::monotonic_nanos() + 30_000_000_000
+    loop { let dump = s.semantics(0).dump(); if dump.contains(status) { return Ok(()) } if dump.contains("Failed:") || time::monotonic_nanos()>deadline { return Err(errors::new(dump)) }s.step()? }
+}
+fn main() -> Result<(), errors::Error>{
+    if !env::args().contains("--fixture") { return app(Document::default()).run() }
+    let document = Document::import(Format::Markdown, SAMPLE)?
+    let mut s = app(document).start()?
+    let block = document.info().selection.caret.block
+    let mut primary = windowing::Mods::default()
+    if gui::input::platform_is_macos() { primary.gui = true } else { primary.ctrl = true }
+    s.type_text("👩‍💻é ")?
+    require(document.block(block).text.starts_with("👩‍💻é "), "Unicode typing failed")?
+    s.press(windowing::Key::Z, primary)?
+    require(document.block(block).text == "Notes", "Undo did not restore heading")?
+    s.press(windowing::Key::Y, primary)?
+    s.press(windowing::Key::A, primary)?
+    s.click("bold")?
+    require(document.block(block).spans[0].marks.strong, "Toolbar formatting lost selection")?
+    s.focus("editor")?
+    s.press(windowing::Key::End, windowing::Mods::default())?
+    s.press(windowing::Key::Return, windowing::Mods::default())?
+    let right = document.info().selection.caret.block
+    require(right != block && document.block(right).text.is_empty(), f"Enter did not split block={block} right={right} text={document.block(right).text} root={document.outline(0,10)}")?
+    s.type_text("New paragraph")?
+    require(document.block(right).text == "New paragraph", "Typing after split used the wrong block")?
+    s.click("list")?
+    s.click("split")?
+    require(document.block(document.info().selection.caret.block).text.is_empty(), "List split did not create a new item")?
+    s.click("outdent")?
+    let snap = document.freeze()
+    let source = snap.export(Format::Html)?
+    let copied = Document::import(Format::Html, source)?
+    require(copied.text() == document.text(), "HTML round trip lost text")?
+    copied.close(); snap.close()
+    let bad = Document::import(Format::Html, "<p onclick=\"alert(1)\">unsafe</p>")
+    require(bad.is_err(), "Unsafe HTML accepted")?
+    require(s.semantics(0).dump().contains("document"), "Accessible preview missing")?
+    let image_file = path::join(env::temp_dir(), f"gui-rich-image-{process::id()}.png")
+    fs::write(image_file, gui::AppIcon::drawn(gui::Icon::Search, 16, gui::Color::white(), gui::Color::rgb(20, 40, 60)).to_png())?
+    s.emit(UiMsg::Text("asset", "asset:sample")); s.click("load-image")?; s.answer_file_dialog("load-image", image_file)?; s.flush()?
+    await_status(&mut s, "Image loaded")?
+    fs::remove_file(image_file)?
+    s.click("export-md")?
+    await_status(&mut s, "Exported")?
+    s.click("import-md")?
+    await_status(&mut s, "Imported")?
+    println("rich editor: Unicode typing, formatting, undo, split/list/outdent, snapshots, HTML round trip, safe import, accessible preview and worker import/export/image")
+    s.shutdown(); document.close()
+    require(gui::app::host::callback_count() == 0, "Rich editor leaked callbacks")?
+    Ok(())
+}

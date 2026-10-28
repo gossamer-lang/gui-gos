@@ -1,0 +1,234 @@
+// numeric: spin boxes, sliders, range sliders, and dials. Every pointer
+// gesture has a keyboard equivalent (arrows step, Page Up/Down page,
+// Home/End jump to the bounds). Spin boxes keep a draft separate from the
+// committed value: intermediate text such as "-" or "1." stays editable,
+// invalid text is marked and never committed, and the value commits on
+// Enter, on a step, or when focus leaves.
+
+use std::math::floor
+use windowing::Key
+
+use crate::accessibility::{AccessNode, Role}
+use crate::editing::EditState
+use crate::geometry::Size
+use crate::style::Theme
+use crate::widgets::state::StateStore
+
+/// A spin box: a number field with step buttons.
+#[derive(PartialEq)]
+pub struct SpinBox {
+    pub id: String
+    pub value: f64
+    pub min: f64
+    pub max: f64
+    pub step: f64
+    pub page: f64
+    /// Digits after the decimal point (0 for integers).
+    pub decimals: i64
+    /// A unit shown after the number ("px", "%").
+    pub suffix: String
+    pub label: String
+}
+
+/// A slider along one axis.
+#[derive(PartialEq)]
+pub struct Slider {
+    pub id: String
+    pub value: f64
+    pub min: f64
+    pub max: f64
+    pub step: f64
+    pub page: f64
+    pub vertical: bool
+    /// Tick marks drawn under the track (0 for none).
+    pub ticks: i64
+    pub label: String
+}
+
+/// A slider with a low and a high thumb.
+#[derive(PartialEq)]
+pub struct RangeSlider {
+    pub id: String
+    pub low: f64
+    pub high: f64
+    pub min: f64
+    pub max: f64
+    pub step: f64
+    pub label: String
+}
+
+/// A rotary knob.
+#[derive(PartialEq)]
+pub struct Dial {
+    pub id: String
+    pub value: f64
+    pub min: f64
+    pub max: f64
+    pub step: f64
+    /// Turning past the maximum wraps to the minimum (an angle).
+    pub wraps: bool
+    pub label: String
+}
+
+/// The numeric controls.
+#[derive(PartialEq)]
+pub enum Numeric {
+    Spin(SpinBox)
+    Slide(Slider)
+    Range(RangeSlider)
+    Knob(Dial)
+}
+
+impl Numeric {
+    pub fn id(&self) -> String {
+        match self {
+            Numeric::Spin(s) => s.id
+            Numeric::Slide(s) => s.id
+            Numeric::Range(r) => r.id
+            Numeric::Knob(d) => d.id
+        }
+    }
+}
+
+/// `v` clamped to the bounds and snapped to `step` from `min`.
+pub fn snap(v: f64, min: f64, max: f64, step: f64) -> f64 {
+    let lo = min.min(max)
+    let hi = min.max(max)
+    let c = v.max(lo).min(hi)
+    if step <= 0.0 {
+        return c
+    }
+    let n = ((c - lo) / step + 0.5).floor()
+    (lo + n * step).min(hi)
+}
+
+/// Text for a value with `decimals` digits.
+pub fn format_number(v: f64, decimals: i64) -> String {
+    if decimals <= 0 {
+        return f"{(v + if v >= 0.0 { 0.5 } else { -0.5 }) as i64}"
+    }
+    let mut scale = 1.0
+    let mut k = 0
+    while k < decimals {
+        scale *= 10.0
+        k += 1
+    }
+    let rounded = floor(v.abs() * scale + 0.5)
+    let whole = (rounded / scale) as i64
+    let frac = (rounded - whole as f64 * scale) as i64
+    let mut digits = f"{frac}"
+    while digits.byte_len() < decimals { digits = "0" + digits }
+    let sign = if v < 0.0 && rounded > 0.0 { "-" } else { "" }
+    f"{sign}{whole}.{digits}"
+}
+
+/// How spin-box text parses: a value, intermediate text, or invalid.
+#[derive(PartialEq)]
+pub enum Parsed {
+    Number(f64)
+    Partial
+    Invalid(String)
+}
+
+/// Parses spin-box text as the installed locale writes numbers
+/// (`localization::parse_number`); a separator still being typed is partial.
+pub fn parse_number(text: String, suffix: String) -> Parsed {
+    let mut t = text.trim()
+    if !suffix.is_empty() && t.ends_with(suffix) {
+        t = t.substring(0, t.byte_len() - suffix.byte_len()).trim()
+    }
+    let decimal = crate::localization::conventions(crate::localization::locale()).decimal
+    if t.is_empty() || t == "-" || t == "+" || t == "-." {
+        return Parsed::Partial
+    }
+    if t.ends_with(".") || t.ends_with(",") || t.ends_with(decimal) {
+        return Parsed::Partial
+    }
+    match crate::localization::parse_number(t) {
+        Some(v) => Parsed::Number(v)
+        None => Parsed::Invalid(crate::localization::message("number", "\u{201C}{text}\u{201D} is not a number", 1, { "text": text }))
+    }
+}
+
+fn spin_text(s: SpinBox) -> String {
+    let n = crate::localization::format_number(s.value, s.decimals)
+    if s.suffix.is_empty() { n } else { f"{n} {s.suffix}" }
+}
+
+
+fn spin_state(s: SpinBox, st: StateStore) -> EditState {
+    let mut e = st.edit(s.id)
+    e.sync(spin_text(s))
+    e
+}
+
+
+// Track geometry (local): start, length, and cross position.
+fn track(vertical: bool, size: Size, theme: Theme) -> (i64, i64, i64) {
+    let inset = theme.px(12)
+    if vertical {
+        (inset, size.height - inset * 2, size.width / 2)
+    } else {
+        (inset, size.width - inset * 2, theme.px(16))
+    }
+}
+
+fn fraction(v: f64, min: f64, max: f64) -> f64 {
+    if max == min { 0.0 } else { ((v - min) / (max - min)).max(0.0).min(1.0) }
+}
+
+
+fn step_value(v: f64, min: f64, max: f64, step: f64, page: f64, key: Key, rtl: bool, vertical: bool) -> Option<f64> {
+    let s = if step > 0.0 { step } else { (max - min) / 100.0 }
+    let p = if page > 0.0 { page } else { s * 10.0 }
+    let inc = if vertical { Key::Up } else if rtl { Key::Left } else { Key::Right }
+    let dec = if vertical { Key::Down } else if rtl { Key::Right } else { Key::Left }
+    if key == inc || key == Key::Up { return Some(snap(v + s, min, max, step)) }
+    if key == dec || key == Key::Down { return Some(snap(v - s, min, max, step)) }
+    if key == Key::PageUp { return Some(snap(v + p, min, max, step)) }
+    if key == Key::PageDown { return Some(snap(v - p, min, max, step)) }
+    if key == Key::Home { return Some(min) }
+    if key == Key::End { return Some(max) }
+    None
+}
+
+
+pub fn numeric_semantics(n: Numeric, st: StateStore) -> Option<AccessNode> {
+    match n {
+        Numeric::Spin(s) => {
+            let mut node = AccessNode::control(Role::SpinButton, s.id, s.label, "increment")
+            node.actions.push("decrement")
+            node.range(s.min, s.max, s.value)
+            node.value = spin_text(s)
+            let why = st.field(s.id, "invalid", "")
+            node.invalid = !why.is_empty()
+            node.description = why
+            Some(node)
+        }
+        Numeric::Slide(s) => {
+            let mut node = AccessNode::control(Role::Slider, s.id, s.label, "increment")
+            node.actions.push("decrement")
+            node.range(s.min, s.max, s.value)
+            Some(node)
+        }
+        Numeric::Range(r) => {
+            let mut g = AccessNode::new(Role::Group, r.label)
+            g.id = r.id
+            let mut lo = AccessNode::control(Role::Slider, f"{r.id}#low", crate::localization::message("range", "{control} minimum", 1, { "control": r.label }), "increment")
+            lo.range(r.min, r.high, r.low)
+            lo.focusable = false
+            let mut hi = AccessNode::control(Role::Slider, f"{r.id}#high", crate::localization::message("range", "{control} maximum", 1, { "control": r.label }), "increment")
+            hi.range(r.low, r.max, r.high)
+            hi.focusable = false
+            g.children = #[lo, hi]
+            g.focusable = true
+            Some(g)
+        }
+        Numeric::Knob(d) => {
+            let mut node = AccessNode::control(Role::Slider, d.id, d.label, "increment")
+            node.actions.push("decrement")
+            node.range(d.min, d.max, d.value)
+            Some(node)
+        }
+    }
+}

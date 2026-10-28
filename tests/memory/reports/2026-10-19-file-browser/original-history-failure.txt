@@ -1,0 +1,1 @@
+File browser expected: assert_eq(session.windows[0].dialogs[0].values.get("directory"), Some(folder)); focus=dlg:files:entries directory=Some("/tmp/gui-toolkit-files-880656/created")

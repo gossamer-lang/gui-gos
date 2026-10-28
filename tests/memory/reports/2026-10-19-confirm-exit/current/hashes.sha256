@@ -1,0 +1,8 @@
+b4f3e4d0aab3119f6db26f94b9d42607777bfecd533c998a4801d10e5984b33b  src/dialogs/host.gos
+b53718cd6428fe0bf70b94fee511443443a60a24a130d6d4932c2056058a7e1a  src/dialogs/files.gos
+761b7172a8ab561c9717a4b322125197b0916c1d8d0cba79ec7e89d793a927b4  src/app/mod.gos
+6a0380126b6f91e03cd9bec10b56cc878471de067005516168217fcfcfd83c80  examples/code-editor/src/main.gos
+600f18b3ee09c8aed4c975802b4a1998076ffbe188c5ce262c0177173d04ddaf  examples/code-editor/target/release/gui-code-editor
+1d252449550aad299929a5931a9b0c37df53ed51c250b222c1bde41a88311529  /home/daniel/dev/gossamer/target/release/gos
+c81bd06fdd273a3e09b09774979e537daeaaca8c8d3090bee0f19e0fce6055ee  /home/daniel/dev/gossamer/target/release/libgossamer_runtime.a
+b2fc67ec2115649c7c84198419f51e4bc6853f2bfc9050507f4226a15b56e94b  /home/daniel/dev/gossamer/target-prof/release/libgossamer_runtime.a

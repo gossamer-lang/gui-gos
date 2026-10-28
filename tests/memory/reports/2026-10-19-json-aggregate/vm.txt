@@ -1,0 +1,28 @@
+{"kept":true} {"kept":true} [1,2]
+nested {"kept":true}
+escaped {"escaped":true}
+vec {"kept":true} {"kept":true}
+map {"kept":true} {"kept":true}
+array {"kept":true}
+enum {"kept":true} {"kept":true}
+{"kept":true} {"kept":true} [1,2]
+nested {"kept":true}
+escaped {"escaped":true}
+vec {"kept":true} {"kept":true}
+map {"kept":true} {"kept":true}
+array {"kept":true}
+enum {"kept":true} {"kept":true}
+{"kept":true} {"kept":true} [1,2]
+nested {"kept":true}
+escaped {"escaped":true}
+vec {"kept":true} {"kept":true}
+map {"kept":true} {"kept":true}
+array {"kept":true}
+enum {"kept":true} {"kept":true}
+{"kept":true} {"kept":true} [1,2]
+nested {"kept":true}
+escaped {"escaped":true}
+vec {"kept":true} {"kept":true}
+map {"kept":true} {"kept":true}
+array {"kept":true}
+enum {"kept":true} {"kept":true}

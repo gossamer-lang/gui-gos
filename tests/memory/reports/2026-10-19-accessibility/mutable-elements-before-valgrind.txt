@@ -1,0 +1,318 @@
+==1469468== Memcheck, a memory error detector
+==1469468== Copyright (C) 2002-2022, and GNU GPL'd, by Julian Seward et al.
+==1469468== Using Valgrind-3.22.0 and LibVEX; rerun with -h for copyright info
+==1469468== Command: /tmp/gui-mut-ref-current/mut_ref_element_loops
+==1469468== Parent PID: 1469383
+==1469468== 
+==1469468== Invalid read of size 8
+==1469468==    at 0x148B59: gossamer_runtime::c_abi::btmap::write_elems (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1491FB: gossamer_runtime::c_abi::btmap::gos_rt_vec_format_vec_i64::{{closure}} (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x17AFF0: gos_rt_vec_format_vec_i64 (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF92: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==  Address 0x4bc01c0 is 0 bytes inside a block of size 112 free'd
+==1469468==    at 0x484988F: free (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1469468==    by 0x17B344: gos_rt_vec_free (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF78: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==  Block was alloc'd at
+==1469468==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1469468==    by 0x146AAC: gossamer_runtime::c_abi::vec::alloc_box_vec (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x17C062: gos_rt_vec_with_capacity (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF21: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468== 
+==1469468== Invalid read of size 8
+==1469468==    at 0x148689: gossamer_runtime::c_abi::vec::VecView::word (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x148B79: gossamer_runtime::c_abi::btmap::write_elems (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1491FB: gossamer_runtime::c_abi::btmap::gos_rt_vec_format_vec_i64::{{closure}} (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x17AFF0: gos_rt_vec_format_vec_i64 (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF92: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==  Address 0x4bc01c0 is 0 bytes inside a block of size 112 free'd
+==1469468==    at 0x484988F: free (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1469468==    by 0x17B344: gos_rt_vec_free (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF78: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==  Block was alloc'd at
+==1469468==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1469468==    by 0x146AAC: gossamer_runtime::c_abi::vec::alloc_box_vec (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x17C062: gos_rt_vec_with_capacity (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF21: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468== 
+==1469468== Invalid read of size 4
+==1469468==    at 0x1486A2: gossamer_runtime::c_abi::vec::VecView::word (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x148B79: gossamer_runtime::c_abi::btmap::write_elems (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1491FB: gossamer_runtime::c_abi::btmap::gos_rt_vec_format_vec_i64::{{closure}} (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x17AFF0: gos_rt_vec_format_vec_i64 (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF92: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==  Address 0x4bc01d0 is 16 bytes inside a block of size 112 free'd
+==1469468==    at 0x484988F: free (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1469468==    by 0x17B344: gos_rt_vec_free (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF78: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==  Block was alloc'd at
+==1469468==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1469468==    by 0x146AAC: gossamer_runtime::c_abi::vec::alloc_box_vec (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x17C062: gos_rt_vec_with_capacity (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF21: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468== 
+==1469468== Invalid read of size 8
+==1469468==    at 0x1486AE: gossamer_runtime::c_abi::vec::VecView::word (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x148B79: gossamer_runtime::c_abi::btmap::write_elems (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1491FB: gossamer_runtime::c_abi::btmap::gos_rt_vec_format_vec_i64::{{closure}} (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x17AFF0: gos_rt_vec_format_vec_i64 (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF92: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==  Address 0x4bc01d8 is 24 bytes inside a block of size 112 free'd
+==1469468==    at 0x484988F: free (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1469468==    by 0x17B344: gos_rt_vec_free (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF78: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==  Block was alloc'd at
+==1469468==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1469468==    by 0x146AAC: gossamer_runtime::c_abi::vec::alloc_box_vec (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x17C062: gos_rt_vec_with_capacity (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF21: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468== 
+==1469468== Invalid read of size 8
+==1469468==    at 0x148709: gossamer_runtime::c_abi::vec::VecView::word (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x148B79: gossamer_runtime::c_abi::btmap::write_elems (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1491FB: gossamer_runtime::c_abi::btmap::gos_rt_vec_format_vec_i64::{{closure}} (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x17AFF0: gos_rt_vec_format_vec_i64 (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF92: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==  Address 0x4bc0200 is 64 bytes inside a block of size 112 free'd
+==1469468==    at 0x484988F: free (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1469468==    by 0x17B344: gos_rt_vec_free (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF78: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==  Block was alloc'd at
+==1469468==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1469468==    by 0x146AAC: gossamer_runtime::c_abi::vec::alloc_box_vec (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x17C062: gos_rt_vec_with_capacity (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF21: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468== 
+==1469468== Invalid read of size 8
+==1469468==    at 0x148B59: gossamer_runtime::c_abi::btmap::write_elems (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x14930E: gossamer_runtime::c_abi::btmap::gos_rt_vec_format_vec_i64::{{closure}} (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x17AFF0: gos_rt_vec_format_vec_i64 (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF92: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==  Address 0x4bc0270 is 0 bytes inside a block of size 112 free'd
+==1469468==    at 0x484988F: free (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1469468==    by 0x17B344: gos_rt_vec_free (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF78: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==  Block was alloc'd at
+==1469468==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1469468==    by 0x146AAC: gossamer_runtime::c_abi::vec::alloc_box_vec (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x17C062: gos_rt_vec_with_capacity (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF21: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468== 
+==1469468== Invalid read of size 8
+==1469468==    at 0x148689: gossamer_runtime::c_abi::vec::VecView::word (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x148B79: gossamer_runtime::c_abi::btmap::write_elems (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x14930E: gossamer_runtime::c_abi::btmap::gos_rt_vec_format_vec_i64::{{closure}} (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x17AFF0: gos_rt_vec_format_vec_i64 (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF92: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==  Address 0x4bc0270 is 0 bytes inside a block of size 112 free'd
+==1469468==    at 0x484988F: free (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1469468==    by 0x17B344: gos_rt_vec_free (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF78: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==  Block was alloc'd at
+==1469468==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1469468==    by 0x146AAC: gossamer_runtime::c_abi::vec::alloc_box_vec (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x17C062: gos_rt_vec_with_capacity (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF21: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468== 
+==1469468== Invalid read of size 4
+==1469468==    at 0x1486A2: gossamer_runtime::c_abi::vec::VecView::word (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x148B79: gossamer_runtime::c_abi::btmap::write_elems (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x14930E: gossamer_runtime::c_abi::btmap::gos_rt_vec_format_vec_i64::{{closure}} (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x17AFF0: gos_rt_vec_format_vec_i64 (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF92: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==  Address 0x4bc0280 is 16 bytes inside a block of size 112 free'd
+==1469468==    at 0x484988F: free (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1469468==    by 0x17B344: gos_rt_vec_free (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF78: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==  Block was alloc'd at
+==1469468==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1469468==    by 0x146AAC: gossamer_runtime::c_abi::vec::alloc_box_vec (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x17C062: gos_rt_vec_with_capacity (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF21: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468== 
+==1469468== Invalid read of size 8
+==1469468==    at 0x1486AE: gossamer_runtime::c_abi::vec::VecView::word (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x148B79: gossamer_runtime::c_abi::btmap::write_elems (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x14930E: gossamer_runtime::c_abi::btmap::gos_rt_vec_format_vec_i64::{{closure}} (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x17AFF0: gos_rt_vec_format_vec_i64 (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF92: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==  Address 0x4bc0288 is 24 bytes inside a block of size 112 free'd
+==1469468==    at 0x484988F: free (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1469468==    by 0x17B344: gos_rt_vec_free (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF78: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==  Block was alloc'd at
+==1469468==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1469468==    by 0x146AAC: gossamer_runtime::c_abi::vec::alloc_box_vec (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x17C062: gos_rt_vec_with_capacity (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF21: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468== 
+==1469468== Invalid read of size 8
+==1469468==    at 0x148709: gossamer_runtime::c_abi::vec::VecView::word (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x148B79: gossamer_runtime::c_abi::btmap::write_elems (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x14930E: gossamer_runtime::c_abi::btmap::gos_rt_vec_format_vec_i64::{{closure}} (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x17AFF0: gos_rt_vec_format_vec_i64 (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF92: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==  Address 0x4bc02b0 is 64 bytes inside a block of size 112 free'd
+==1469468==    at 0x484988F: free (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1469468==    by 0x17B344: gos_rt_vec_free (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF78: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==  Block was alloc'd at
+==1469468==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1469468==    by 0x146AAC: gossamer_runtime::c_abi::vec::alloc_box_vec (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x17C062: gos_rt_vec_with_capacity (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF21: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468== 
+==1469468== Invalid read of size 1
+==1469468==    at 0x17B151: gos_rt_vec_free (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x17B3AD: gos_rt_vec_free (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x13067A: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==  Address 0x4bc01d5 is 21 bytes inside a block of size 112 free'd
+==1469468==    at 0x484988F: free (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1469468==    by 0x17B344: gos_rt_vec_free (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF78: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==  Block was alloc'd at
+==1469468==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1469468==    by 0x146AAC: gossamer_runtime::c_abi::vec::alloc_box_vec (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x17C062: gos_rt_vec_with_capacity (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF21: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468== 
+==1469468== Invalid read of size 2
+==1469468==    at 0x17B16D: gos_rt_vec_free (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x17B3AD: gos_rt_vec_free (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x13067A: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==  Address 0x4bc01d6 is 22 bytes inside a block of size 112 free'd
+==1469468==    at 0x484988F: free (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1469468==    by 0x17B344: gos_rt_vec_free (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF78: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==  Block was alloc'd at
+==1469468==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1469468==    by 0x146AAC: gossamer_runtime::c_abi::vec::alloc_box_vec (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x17C062: gos_rt_vec_with_capacity (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FF21: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468== 
+==1469468== 
+==1469468== HEAP SUMMARY:
+==1469468==     in use at exit: 3,808 bytes in 4 blocks
+==1469468==   total heap usage: 109 allocs, 105 frees, 77,225 bytes allocated
+==1469468== 
+==1469468== 112 bytes in 1 blocks are definitely lost in loss record 1 of 4
+==1469468==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1469468==    by 0x146AAC: gossamer_runtime::c_abi::vec::alloc_box_vec (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x17C062: gos_rt_vec_with_capacity (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FDBF: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468== 
+==1469468== 112 bytes in 1 blocks are definitely lost in loss record 2 of 4
+==1469468==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1469468==    by 0x146AAC: gossamer_runtime::c_abi::vec::alloc_box_vec (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x17C062: gos_rt_vec_with_capacity (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FE37: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468== 
+==1469468== 1,024 bytes in 1 blocks are still reachable in loss record 3 of 4
+==1469468==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1469468==    by 0x19840D: <std::sync::once::Once>::call_once_force::<<std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::initialize<<std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::get_or_init<std::io::stdio::stdout::{closure#0}>::{closure#0}, !>::{closure#0}>::{closure#0} (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x19CF06: <std::sys::sync::once::futex::Once>::call (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1869A1: <std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::initialize::<<std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::get_or_init<std::io::stdio::stdout::{closure#0}>::{closure#0}, !> (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1ABD9A: std::io::stdio::stdout (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x14B3EB: gossamer_runtime::c_abi::print::write_terminal_direct (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x14AE88: gossamer_runtime::c_abi::print::write_terminal (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x14ADB3: gossamer_runtime::c_abi::print::write_stdout (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1797BA: gos_rt_println (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x12FBBA: gos_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1776E9: gos_rt_call_main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130828: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468== 
+==1469468== 2,560 bytes in 1 blocks are still reachable in loss record 4 of 4
+==1469468==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1469468==    by 0x162B70: std::sync::once::Once::call_once_force::{{closure}} (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x19CF06: <std::sys::sync::once::futex::Once>::call (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x164465: std::sync::once_lock::OnceLock<T>::initialize (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x150D15: gossamer_runtime::c_abi::string::register_heap_string_body (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x1509E7: gossamer_runtime::c_abi::string::alloc_growable_forced (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x179DB2: gos_rt_set_args (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468==    by 0x130819: main (in /tmp/gui-mut-ref-current/mut_ref_element_loops)
+==1469468== 
+==1469468== LEAK SUMMARY:
+==1469468==    definitely lost: 224 bytes in 2 blocks
+==1469468==    indirectly lost: 0 bytes in 0 blocks
+==1469468==      possibly lost: 0 bytes in 0 blocks
+==1469468==    still reachable: 3,584 bytes in 2 blocks
+==1469468==         suppressed: 0 bytes in 0 blocks
+==1469468== 
+==1469468== For lists of detected and suppressed errors, rerun with: -s
+==1469468== ERROR SUMMARY: 22 errors from 14 contexts (suppressed: 0 from 0)

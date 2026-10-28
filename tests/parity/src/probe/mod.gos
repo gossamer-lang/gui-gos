@@ -1,0 +1,16 @@
+// probe: a module compiled only with the `probe` feature, the default.
+
+use std::os
+
+/// The OS family this build was compiled for.
+#[cfg(target_os = "windows")]
+pub fn family() -> String { "windows" }
+
+/// The OS family this build was compiled for.
+#[cfg(not(target_os = "windows"))]
+pub fn family() -> String { "unix" }
+
+/// What the feature-gated module reports.
+pub fn report() -> String {
+    if family() == os::family() { "probe module matches the running OS family" } else { f"probe module built for {family()}, running on {os::family()}" }
+}

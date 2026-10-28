@@ -1,0 +1,187 @@
+// A media player: open a file from a chooser or type a path or URI and press
+// Enter, then play, pause, seek, set the volume and mute,
+// from the controls or the keyboard on the video (Space, Left and Right,
+// Up and Down, M). Playback needs GStreamer 1.x; without it the player says
+// so. `media-player FILE` opens a file at start.
+
+use std::{env, errors, fs, path}
+use std::encoding::base64
+
+use gui
+use gui::{Axis, CrossAlign, Effect, MainAlign, Outcome, UiMsg, Widget}
+use gui::dialogs::request
+use gui::media::{AudioOutput, Player, State, Status}
+
+struct Model {
+    player: Player
+    file: String
+    status: String
+}
+
+// What the player is doing; nothing while it has nothing loaded, which the
+// video area already says.
+fn describe(status: Status) -> String {
+    let at = f"{gui::media::clock(status.position_ms)} of {gui::media::clock(status.duration_ms)}"
+    match status.state {
+        State::Unavailable(why) => f"Unavailable: {why}"
+        State::Idle => ""
+        State::Loading => "Loading"
+        State::Paused => f"Paused at {at}"
+        State::Playing => f"Playing, {at}"
+        State::Ended => "Ended"
+        State::Failed(why) => f"Cannot play: {why}"
+    }
+}
+
+fn output() -> AudioOutput {
+    if env::args().contains("--fixture") { AudioOutput::Discard } else { AudioOutput::System }
+}
+
+fn init() -> Model {
+    let player = Player::open(output()).unwrap()
+    let args = env::args()
+    let file = args.iter().find(|a| !a.starts_with("--")).unwrap_or("")
+    let mut m = Model { player: player, file: file, status: describe(player.status().unwrap()) }
+    if !file.is_empty() {
+        m = load(m, file)
+    }
+    m
+}
+
+fn load(m: Model, file: String) -> Model {
+    let mut n = m
+    n.file = file
+    n.status = match n.player.load(file) {
+        Ok(_) => "Loading"
+        Err(why) => f"Cannot play {file}: {why}"
+    }
+    n
+}
+
+fn media_filters() -> Vec<request::FileFilter> {
+    #[
+        request::FileFilter { name: "Media files", patterns: #["*.webm", "*.mkv", "*.mp4", "*.m4v", "*.mov", "*.avi", "*.ogv", "*.ogg", "*.opus", "*.mp3", "*.flac", "*.wav", "*.m4a"] }
+        request::FileFilter { name: "All files", patterns: #["*"] }
+    ]
+}
+
+fn choose(toolkit: bool) {
+    let req = request::open_file("open", "Open Media", media_filters())
+    gui::perform(Effect::OpenDialog(if toolkit { request::toolkit_file(req) } else { req }))
+}
+
+fn update(m: Model, msg: UiMsg) -> Model {
+    let mut n = m
+    if n.player.handle("player", msg) {
+        n.status = describe(n.player.status().unwrap())
+        return n
+    }
+    match msg {
+        UiMsg::Text(id, text) if id == "file" => n.file = text
+        UiMsg::Submit(id, text) if id == "file" && !text.trim().is_empty() => n = load(n, text.trim())
+        UiMsg::Click(id) if id == "open" => choose(false)
+        UiMsg::Dialog(id, outcome) if id == "open" => match outcome {
+            Outcome::Paths(paths) => if !paths.is_empty() { n = load(n, paths[0]) }
+            // Without a native chooser the toolkit's own file browser asks.
+            Outcome::Unsupported(_) | Outcome::Failed(_) => choose(true)
+            _ => ()
+        }
+        UiMsg::Media(_, status) => n.status = describe(status)
+        _ => ()
+    }
+    n
+}
+
+fn view(m: Model) -> Widget {
+    let mut rows = #[
+        Widget::row(#[
+            Widget::button("open", "Open...")
+            Widget::text_field("file", m.file, "Or type a path or URI and press Enter").grow(1)
+        ], 8)
+    ]
+    if !m.status.is_empty() {
+        rows.push(Widget::label(m.status))
+    }
+    rows.push(m.player.view("video", "Video", 640, 360).grow(1))
+    rows.push(m.player.controls("player"))
+    Widget::flex(Axis::Vertical, rows, 8, MainAlign::Start, CrossAlign::Stretch).padding(12)
+}
+
+fn app() -> gui::App<Model> {
+    gui::application("Media Player", "dev.gossamer.gui-media-player", init, update, view).size(820, 600).focus("video")
+}
+
+fn require(value: bool, why: String) -> Result<(), errors::Error> {
+    if value { Ok(()) } else { Err(errors::new(why)) }
+}
+
+fn await_status(s: &mut gui::Session, text: String) -> Result<String, errors::Error> {
+    loop {
+        let dump = s.semantics(0).dump()
+        if dump.contains(text) {
+            return Ok(dump)
+        }
+        if dump.contains("Cannot play") && !text.contains("Cannot play") {
+            return Err(errors::new(dump))
+        }
+        s.step()?
+    }
+}
+
+// The fixture's clip travels inside the binary, so a packaged build runs its
+// journey from any directory. A compile-time result is text, so the bytes
+// cross as base64.
+comptime fn clip_webm() -> String {
+    match fs::read("fixtures/clip.webm") {
+        Ok(bytes) => base64::encode(bytes)
+        Err(e) => panic("src/fixtures/clip.webm is unreadable: {}", e)
+    }
+}
+
+fn fixture() -> Result<(), errors::Error> {
+    let mut s = app().start()?
+    let first = s.semantics(0).dump()
+    if first.contains("Unavailable:") {
+        require(first.contains("button \"Play\""), "controls without GStreamer")?
+        println("unavailable: without GStreamer the player says so and its controls stay inert")
+        s.shutdown()
+        return Ok(())
+    }
+    let dir = fs::temp_dir("gui-media-player-")?
+    defer fs::remove_dir_all(dir)
+    let clip = path::join(dir, "clip.webm")
+    fs::write(clip, base64::decode(clip_webm())?)?
+    s.click("open")?
+    s.answer_file_dialog("open", clip)?
+    await_status(&mut s, "Paused at 0:00 of 0:02")?
+    println("load: the clip prerolls paused at its start, two seconds long")
+    s.click("player:play")?
+    await_status(&mut s, "Ended")?
+    println("play: it plays to the end, reporting progress")
+    s.emit(UiMsg::Value("player:seek", 1.0))
+    s.flush()?
+    await_status(&mut s, "Paused at 0:01 of 0:02")?
+    s.emit(UiMsg::Value("player:volume", 0.5))
+    s.emit(UiMsg::Toggle("player:mute", true))
+    s.flush()?
+    s.focus("video")?
+    s.press(windowing::Key::Space, windowing::Mods::default())?
+    await_status(&mut s, "Playing")?
+    s.press(windowing::Key::Space, windowing::Mods::default())?
+    await_status(&mut s, "Paused")?
+    println("controls: seeking, volume, mute and Space on the video")
+    s.emit(UiMsg::Submit("file", "/nonexistent/clip.webm"))
+    await_status(&mut s, "Cannot play")?
+    println("errors: a missing file says it cannot play")
+    s.shutdown()
+    Ok(())
+}
+
+fn main() -> Result<(), errors::Error> {
+    if env::args().contains("--fixture") {
+        fixture()?
+        require(gui::app::host::callback_count() == 0, "the media player leaked callbacks")?
+        return Ok(())
+    }
+    app().run()
+}

@@ -1,0 +1,379 @@
+// gui: a desktop GUI toolkit for Gossamer on windowing-gos.
+//
+// An application is a model, an update function folding messages into
+// it, and a view function building the widget tree from it:
+//
+//     use gui
+//     use gui::{UiMsg, Widget}
+//
+//     fn update(count: i64, msg: UiMsg) -> i64 {
+//         match msg {
+//             UiMsg::Click(id) => if id == "more" { count + 1 } else { count }
+//             _ => count
+//         }
+//     }
+//
+//     fn view(count: i64) -> Widget {
+//         Widget::column(#[Widget::label(f"Clicked {count} times"), Widget::button("more", "Click")], 8).padding(16)
+//     }
+//
+//     fn main() -> Result<(), errors::Error> {
+//         gui::application("Counter", "dev.example.counter", || 0, update, view).run()
+//     }
+//
+// Everything that would need a session handle in `update` (dialogs,
+// background tasks, timers, focus, clipboard) is requested with
+// `gui::perform(Effect::...)`.
+
+use std::{env, errors, fs}
+
+use crate::{accessibility, commands, dialogs, editing, geometry, input, services, style, text, widgets}
+
+pub type Session = app::Session
+pub type ClosePolicy = app::ClosePolicy
+pub type WindowStyle = app::WindowStyle
+pub type Effect = app::effects::Effect
+pub type Mailbox = app::Mailbox
+pub type Launch = app::Launch
+pub type Listener = app::Listener
+pub type Widget = widgets::Widget
+pub type Tone = widgets::Tone
+pub type Axis = widgets::Axis
+pub type MainAlign = widgets::MainAlign
+pub type CrossAlign = widgets::CrossAlign
+pub type Visibility = widgets::Visibility
+pub type Modifiers = widgets::Modifiers
+pub type ThemeOverride = widgets::ThemeOverride
+pub type Custom = widgets::Custom
+pub type CustomInput = widgets::CustomInput
+pub type UiMsg = widgets::cx::UiMsg
+pub type CheckState = widgets::cx::CheckState
+pub type TaskOutcome = widgets::cx::TaskOutcome
+pub type WidgetEvent = widgets::cx::Event
+pub type Node = widgets::cx::Node
+pub type StateStore = widgets::state::StateStore
+pub type WidgetId = widgets::state::WidgetId
+pub type TextInput = widgets::textinput::TextInput
+pub type InputKind = widgets::textinput::InputKind
+pub type Completion = widgets::completion::Completion
+pub type FindBar = widgets::find::FindBar
+pub type FindRequest = widgets::find::FindRequest
+pub type SearchOptions = editing::search::SearchOptions
+pub type CompletionItem = widgets::completion::CompletionItem
+pub type MatchMode = widgets::completion::MatchMode
+pub type Level = widgets::feedback::Level
+pub type Menu = widgets::menus::Menu
+pub type MenuItem = widgets::menus::MenuItem
+pub type ColorPicker = widgets::colorpicker::ColorPicker
+pub type Calendar = widgets::temporal::Calendar
+pub type Date = widgets::temporal::Date
+pub type TemporalEditor = widgets::temporal::TemporalEditor
+pub type TemporalKind = widgets::temporal::TemporalKind
+pub type ClockTime = widgets::temporal::ClockTime
+pub type Collection = widgets::collections::Collection
+pub type CollectionRow = widgets::collections::Row
+pub type CollectionColumn = widgets::collections::Column
+pub type CollectionMode = widgets::collections::ViewMode
+pub type TabItem = widgets::tabs::TabItem
+pub type Theme = style::Theme
+pub type ThemeKind = style::ThemeKind
+pub type Density = style::Density
+pub type ThemeTokens = style::ThemeTokens
+pub type TextRole = style::TextRole
+pub type Color = style::color::Color
+pub type Rect = geometry::Rect
+pub type Size = geometry::Size
+pub type Insets = geometry::Insets
+pub type Constraints = geometry::Constraints
+pub type Path = render::vector::Path
+pub type Icon = render::icons::Icon
+pub type DrawOp = render::display::DrawOp
+pub type Command = commands::Command
+pub type Shortcut = input::Shortcut
+pub type KeyStroke = input::KeyStroke
+pub type DialogRequest = dialogs::request::DialogRequest
+pub type DialogAction = dialogs::request::DialogAction
+pub type ButtonRole = dialogs::request::ButtonRole
+pub type Severity = dialogs::request::Severity
+pub type Modality = dialogs::request::Modality
+pub type FileFilter = dialogs::request::FileFilter
+pub type FileBackend = dialogs::request::FileBackend
+pub type FileMode = dialogs::request::FileMode
+pub type InputSpec = dialogs::request::InputSpec
+pub type Outcome = dialogs::Outcome
+pub type Validity = editing::Validity
+pub type EditState = editing::EditState
+pub type TextStyle = text::layout::TextStyle
+pub type AccessNode = accessibility::AccessNode
+pub type Role = accessibility::Role
+pub type Settings = services::Settings
+/// An application icon's RGBA pixels (`App::icon`, `Session::set_icon`).
+pub type AppIcon = services::apps::AppIcon
+
+/// The toolkit version.
+pub const VERSION: String = "0.1.0"
+
+
+/// The `gui.tab.*` commands a tabbed window offers, with their shortcuts.
+pub fn tab_commands() -> Vec<Command> {
+    widgets::tabs::tab_commands()
+}
+
+
+/// An application: model, update, and view, plus window settings.
+pub struct App<M> {
+    pub name: String
+    pub app_id: String
+    pub title: String
+    pub width: i64
+    pub height: i64
+    pub min_width: i64
+    pub min_height: i64
+    pub init: Fn() -> M
+    pub update: Fn(M, UiMsg) -> M
+    pub view: Fn(M) -> Widget
+    pub commands: Fn(M) -> Vec<Command>
+    /// Builds windows opened with `Effect::OpenWindow`, by key.
+    pub window_view: Fn(M, String) -> Widget
+    pub close_policy: ClosePolicy
+    /// The widget focused when the first window opens.
+    pub initial_focus: String
+    /// Whether the first window grows downward to show popups below their
+    /// anchors (`grows_for_popups`).
+    pub grows_for_popups: bool
+    /// How the first window looks and where it opens.
+    pub style: WindowStyle
+    /// Files a later launch hands to the running instance, when the
+    /// application keeps one instance.
+    pub instance_files: Option<Vec<String>>
+    /// The icon every window of the application shows.
+    pub icon: Option<services::apps::AppIcon>
+}
+
+/// An application with default settings: an 800 by 600 window titled
+/// `name`, no extra commands, and windows that close when asked.
+pub fn application<M>(name: String, app_id: String, init: Fn() -> M, update: Fn(M, UiMsg) -> M, view: Fn(M) -> Widget) -> App<M> {
+    App {
+        name: name
+        app_id: app_id
+        title: name
+        width: 800
+        height: 600
+        min_width: 0
+        min_height: 0
+        init: init
+        update: update
+        view: view
+        commands: |_m| #[]
+        window_view: |_m, _k| Widget::Empty
+        close_policy: ClosePolicy::Close
+        initial_focus: String::new()
+        grows_for_popups: false
+        style: WindowStyle::default()
+        instance_files: None
+        icon: None
+    }
+}
+
+impl<M> App<M> {
+    pub fn title(self, title: String) -> App<M> {
+        let mut a = self
+        a.title = title
+        a
+    }
+
+    /// The first window's size in interface units.
+    pub fn size(self, width: i64, height: i64) -> App<M> {
+        let mut a = self
+        a.width = width
+        a.height = height
+        a
+    }
+
+    pub fn min_size(self, width: i64, height: i64) -> App<M> {
+        let mut a = self
+        a.min_width = width
+        a.min_height = height
+        a
+    }
+
+    /// Makes the first window as tall as `size` says and lets it grow
+    /// downward while a popup below its anchor needs the room, as a run box
+    /// shows its suggestions, back once the popup closes.
+    pub fn grows_for_popups(self) -> App<M> {
+        let mut a = self
+        a.grows_for_popups = true
+        a
+    }
+
+    /// The icon every window shows (taskbar, title bar, Dock).
+    pub fn icon(self, icon: services::apps::AppIcon) -> App<M> {
+        let mut a = self
+        a.icon = Some(icon)
+        a
+    }
+
+    /// The first window without title bar or border.
+    pub fn frameless(self) -> App<M> {
+        let mut a = self
+        a.style.frameless = true
+        a
+    }
+
+    /// Opens the first window centered along the top of the primary
+    /// display's usable area, rather than where it last was.
+    pub fn at_top_center(self) -> App<M> {
+        let mut a = self
+        a.style.top_center = true
+        a
+    }
+
+    /// Closes the first window on Escape, ahead of any popup, and when it
+    /// stops being the active window, as a run box does.
+    pub fn dismissible(self) -> App<M> {
+        let mut a = self
+        a.style.dismissible = true
+        a
+    }
+
+    /// The commands (with shortcuts and enabled state) the model offers.
+    pub fn commands(self, commands: Fn(M) -> Vec<Command>) -> App<M> {
+        let mut a = self
+        a.commands = commands
+        a
+    }
+
+    pub fn windows(self, view: Fn(M, String) -> Widget) -> App<M> {
+        let mut a = self
+        a.window_view = view
+        a
+    }
+
+    /// Reports window close requests as `UiMsg::CloseRequested` instead of
+    /// closing, so documents can ask to save first.
+    pub fn ask_before_close(self) -> App<M> {
+        let mut a = self
+        a.close_policy = ClosePolicy::Ask
+        a
+    }
+
+    /// Focuses the widget `id` when the first window opens.
+    pub fn focus(self, id: String) -> App<M> {
+        let mut a = self
+        a.initial_focus = id
+        a
+    }
+
+
+    /// Keeps one running instance: a later launch hands `files` (its own
+    /// file arguments) to the first, which receives each as `UiMsg::Open`,
+    /// and exits. Where the platform cannot claim an instance, every launch
+    /// runs on its own.
+    pub fn single_instance(self, files: Vec<String>) -> App<M> {
+        let mut a = self
+        a.instance_files = Some(files)
+        a
+    }
+
+    /// Opens the first window and answers the session without running the
+    /// loop (tests and embedding drive `step`).
+    pub fn start(self) -> Result<Session, errors::Error> {
+        self.begin(false)
+    }
+
+    // Opens the session; one that will `run` holds its jobs for the worker.
+    fn begin(self, for_run: bool) -> Result<Session, errors::Error> {
+        let mut session = app::start(self.name, self.app_id)?
+        if for_run { session.hold_jobs_for_run() }
+        let mut cell = #[(self.init)()]
+        let update = self.update
+        let view = self.view
+        let cmds = self.commands
+        let window_view = self.window_view
+        session.set_shell(
+            |m: UiMsg| { cell[0] = update(cell[0], m) }
+            |key: String| if key == "main" { view(cell[0]) } else { window_view(cell[0], key) }
+            || cmds(cell[0]))
+        if let Some(icon) = self.icon {
+            if let Err(e) = session.set_icon(icon) { session.shutdown(); return Err(e) }
+        }
+        if let Err(e) = session.prepare_window_with("main", self.title, self.width, self.height, self.style) { session.shutdown(); return Err(e) }
+        session.set_close_policy("main", self.close_policy)
+        if self.grows_for_popups {
+            if let Err(e) = session.grow_for_popups("main", self.height) { session.shutdown(); return Err(e) }
+        }
+        if self.min_width > 0 || self.min_height > 0 {
+            if let Err(e) = session.set_min_size("main", self.min_width, self.min_height) { session.shutdown(); return Err(e) }
+        }
+        if !self.initial_focus.is_empty() {
+            if let Err(e) = session.focus(self.initial_focus) { session.shutdown(); return Err(e) }
+        }
+        if let Err(e) = session.show_window("main") { session.shutdown(); return Err(e) }
+        Ok(session)
+    }
+
+    /// Runs the application until its last window closes. With
+    /// `GUI_EXPORT_ICON` set to a path, it instead writes its icon there as a
+    /// PNG file and returns: packaging uses that for the desktop entry and
+    /// the application bundle.
+    pub fn run(self) -> Result<(), errors::Error> {
+        if let Some(path) = env::var("GUI_EXPORT_ICON") {
+            let Some(icon) = self.icon else {
+                return Err(errors::new("this application sets no icon to export"))
+            }
+            return fs::write(path, icon.to_png()).map_err(|e| errors::wrap(e, f"writing the icon to {path}"))
+        }
+        let Some(files) = self.instance_files else {
+            let mut session = self.begin(true)?
+            return session.run()
+        }
+        let listener = match launch(self.app_id, files) {
+            Launch::Forwarded => return Ok(())
+            Launch::Failed(error) => return Err(errors::new(error))
+            Launch::Alone => {
+                let mut session = self.begin(true)?
+                return session.run()
+            }
+            Launch::Primary(l) => l
+        }
+        let mut session = match self.begin(true) {
+            Ok(s) => s
+            Err(e) => {
+                listener.close()
+                return Err(e)
+            }
+        }
+        session.serve_instance(listener)?
+        session.run()
+    }
+
+}
+
+/// Queues an effect for the session to apply after the current update.
+pub fn perform(effect: Effect) {
+    app::effects::perform(effect)
+}
+
+/// Starts a bare session (applications usually use `application`).
+pub fn start(name: String, app_id: String) -> Result<Session, errors::Error> {
+    app::start(name, app_id)
+}
+
+/// Claims the application's single instance, handing `files` (relative
+/// paths resolved against the working directory) to it when another
+/// process already runs.
+pub fn launch(app_id: String, files: Vec<String>) -> Launch {
+    app::launch(app_id, files)
+}
+
+impl<M> Display for App<M> {
+    fn fmt(&self) -> String {
+        f"App({self.app_id})"
+    }
+}
+
+impl<M> Debug for App<M> {
+    fn fmt(&self) -> String {
+        f"App {{ name: {self.name:?}, app_id: {self.app_id:?} }}"
+    }
+}

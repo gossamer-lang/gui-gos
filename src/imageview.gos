@@ -1,0 +1,118 @@
+// Image viewers: PNG, JPEG (with its EXIF orientation), GIF (first frame)
+// and SVG decoded in the background, shown fitted or at any zoom, panned
+// and turned. Loading a new image supersedes one in flight; each load's
+// outcome arrives as `UiMsg::Image(viewer, status)`. Decoded images share a
+// bounded cache keyed by file identity, so a replaced file decodes afresh.
+
+use std::errors
+use std::encoding::json
+
+#[derive(PartialEq, Eq)]
+pub enum Format { Png, Jpeg, Gif, Svg }
+
+/// What a viewer shows.
+#[derive(PartialEq)]
+pub enum State {
+    Empty
+    Loading(String)
+    Ready { width: i64, height: i64, format: Format }
+    Failed(String)
+    Cancelled
+}
+
+/// How the image is scaled into the view.
+#[derive(PartialEq)]
+pub enum Zoom {
+    /// Shrunk to fit the view, never enlarged.
+    Fit
+    /// Image pixels per device pixel.
+    Scale(f64)
+}
+
+/// A viewer's state.
+#[derive(PartialEq)]
+pub struct Status {
+    pub state: State
+    pub path: String
+    pub zoom: Zoom
+    /// Quarter turns clockwise the user added.
+    pub turns: i64
+}
+
+/// The widget showing viewer `viewer`.
+pub struct View {
+    pub id: String
+    pub viewer: i64
+    pub label: String
+    pub width: i64
+    pub height: i64
+}
+
+enum Answer {
+    Id(i64)
+    Status(Status)
+    Reloaded(bool)
+    Done
+}
+
+/// An image viewer handle; it closes with its session.
+#[derive(Default, PartialEq, Eq)]
+pub struct Viewer {
+    pub id: i64
+}
+
+fn call(method: String, id: i64, args: String) -> Result<Answer, errors::Error> {
+    let answer = gui_engine::image_viewer(method, id, args).map_err(|why| errors::new(why))?
+    json::decode::<Answer>(answer)
+}
+
+impl Viewer {
+    pub fn open() -> Result<Viewer, errors::Error> {
+        match call("open", 0, "null")? {
+            Answer::Id(id) => Ok(Viewer { id: id })
+            _ => Err(errors::new("invalid image viewer answer"))
+        }
+    }
+
+    /// Starts decoding the file at `path`; answers at once.
+    pub fn load(&self, path: String) -> Result<(), errors::Error> {
+        call("load", self.id, json::encode(path)).map(|_| ())
+    }
+
+    /// Loads the shown file again, answering whether there was one.
+    pub fn reload(&self) -> Result<bool, errors::Error> {
+        match call("reload", self.id, "null")? {
+            Answer::Reloaded(again) => Ok(again)
+            _ => Err(errors::new("invalid image viewer answer"))
+        }
+    }
+
+    /// Stops a load in flight.
+    pub fn cancel(&self) -> Result<(), errors::Error> {
+        call("cancel", self.id, "null").map(|_| ())
+    }
+
+    pub fn set_zoom(&self, zoom: Zoom) -> Result<(), errors::Error> {
+        call("zoom", self.id, json::encode(zoom)).map(|_| ())
+    }
+
+    /// Turns the image clockwise by `turns` quarter turns.
+    pub fn turn(&self, turns: i64 = 1) -> Result<(), errors::Error> {
+        call("turn", self.id, json::encode(turns)).map(|_| ())
+    }
+
+    pub fn status(&self) -> Result<Status, errors::Error> {
+        match call("status", self.id, "null")? {
+            Answer::Status(status) => Ok(status)
+            _ => Err(errors::new("invalid image viewer answer"))
+        }
+    }
+
+    pub fn view(&self, id: String, label: String, width: i64 = 600, height: i64 = 400) -> crate::Widget {
+        crate::Widget::ImageView(View { id: id, viewer: self.id, label: label, width: width, height: height })
+    }
+
+    pub fn close(&self) {
+        let _ = call("close", self.id, "null")
+    }
+}

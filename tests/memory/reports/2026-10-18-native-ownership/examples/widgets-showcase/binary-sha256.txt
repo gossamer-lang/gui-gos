@@ -1,0 +1,1 @@
+b042c348c5704f0137b06f074e251d94fb565f1f8b54bfc563a7837d7a75b066  /tmp/gui-memory-widgets-showcase/bin/gui-widgets-showcase

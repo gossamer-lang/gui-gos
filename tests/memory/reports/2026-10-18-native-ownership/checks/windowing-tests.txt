@@ -1,0 +1,7 @@
+  PASS a_poll_after_a_wait_reaches_the_events_queued_since (6 assertions, 898ms)
+  PASS every_declared_layout_matches_the_c_headers (182 assertions, 874ms)
+  PASS a_choice_survives_the_crossing_to_the_event_loop (4 assertions, 900ms)
+  PASS fill_paints_every_pixel_and_leaves_row_padding_alone (8 assertions, 889ms)
+  PASS set_pixel_writes_one_pixel_in_the_frame_byte_order (2 assertions, 869ms)
+  PASS rgb_offsets_follow_the_format_byte_order (4 assertions, 857ms)
+test: 6 passed, 0 failed, 206 assertion(s), 0 ignored, 0 skipped, 0 doc-test(s), across 1 file(s), 0 with no tests

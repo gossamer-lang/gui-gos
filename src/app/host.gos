@@ -1,0 +1,149 @@
+// Closures in widget descriptions cross to the toolkit as registered ids.
+// A closure a window's view hands a builder stays registered for two of
+// that window's views, so the tree one view old can still call back while
+// the next is built; one registered outside a view stays registered.
+
+use std::errors
+use std::encoding::json
+
+use gui_engine
+
+use crate::app::wire
+
+use crate::editing::Validity
+use crate::geometry::{Constraints, Size}
+use crate::render::display::DrawOp
+use crate::style::Theme
+use crate::widgets::CustomInput
+use crate::widgets::collections::Row
+use crate::widgets::completion::CompletionItem
+use crate::widgets::cx::UiMsg
+use crate::widgets::Widget
+
+// Registrations by window key and that window's view count.
+static mut VIEWS: Map<String, Vec<i64>> = {}
+static mut COUNTS: Map<String, i64> = {}
+// The window whose view is being built; "" outside any view.
+static mut BUILDING: Vec<String> = #[]
+
+fn slot(key: String, count: i64) -> String {
+    f"{key}#{count}"
+}
+
+/// Starts building window `key`'s view: releases what its view before last
+/// registered.
+pub fn begin_view(key: String) {
+    let count = COUNTS.get(key).unwrap_or(0) + 1
+    COUNTS[key] = count
+    if let Some(old) = VIEWS.remove(slot(key, count - 2)) {
+        for id in old {
+            gui_engine::release(id)
+        }
+    }
+    BUILDING.push(key)
+}
+
+/// Ends the view `begin_view` started.
+pub fn end_view() {
+    let _ = BUILDING.pop()
+}
+
+/// Registers `f`, which takes and answers JSON text, for the view being
+/// built, or for good outside a view.
+pub fn keep(f: Fn(String) -> String) -> i64 {
+    let id = gui_engine::register(f)
+    if let Some(key) = BUILDING.last() {
+        let at = slot(key, COUNTS.get(key).unwrap_or(0))
+        let mut ids = VIEWS.remove(at).unwrap_or(#[])
+        ids.push(id)
+        VIEWS[at] = ids
+    }
+    id
+}
+
+// A JSON argument the toolkit sent; a mismatch is a toolkit bug.
+fn arg<T>(decoded: Result<T, errors::Error>) -> T {
+    match decoded {
+        Ok(v) => v
+        Err(e) => panic(f"gui: a toolkit callback argument did not decode: {e}")
+    }
+}
+
+/// `f` as a text validator the toolkit can call.
+pub fn validator(f: Fn(String) -> Validity) -> i64 {
+    keep(|a: String| json::encode(f(wire::text(a))))
+}
+
+/// `f` as a collection's row source.
+pub fn rows(f: Fn(i64) -> Row) -> i64 {
+    keep(|a: String| json::encode(f(wire::int(a))))
+}
+
+/// `f` as a collection's row heights.
+pub fn heights(f: Fn(i64) -> i64) -> i64 {
+    keep(|a: String| json::encode(f(wire::int(a))))
+}
+
+/// `f` as a collection's drag offer for the selected keys.
+pub fn drag_offer(f: Fn(Vec<String>) -> Vec<windowing::DragItem>) -> i64 {
+    keep(|a: String| json::encode(f(wire::texts(a))))
+}
+
+/// `f` as a collection's row content.
+pub fn row_delegate(f: Fn(Row) -> Widget) -> i64 {
+    keep(|a: String| json::encode(f(arg(json::decode::<Row>(a)))))
+}
+
+/// `f` as a completion provider.
+pub fn completions(f: Fn(String) -> Vec<CompletionItem>) -> i64 {
+    keep(|a: String| json::encode(f(wire::text(a))))
+}
+
+/// `f` as a custom widget's measure.
+pub fn measure(f: Fn(Constraints, Theme) -> Size) -> i64 {
+    keep(|a: String| {
+        let both = wire::items(a)
+        let c = arg(json::decode::<Constraints>(both[0]))
+        let t = arg(json::decode::<Theme>(both[1]))
+        json::encode(f(c, t))
+    })
+}
+
+/// `f` as a custom widget's drawing.
+pub fn draw(f: Fn(Size, Theme) -> Vec<DrawOp>) -> i64 {
+    keep(|a: String| {
+        let both = wire::items(a)
+        let s = arg(json::decode::<Size>(both[0]))
+        let t = arg(json::decode::<Theme>(both[1]))
+        json::encode(f(s, t))
+    })
+}
+
+/// `f` as a custom widget's input handler.
+pub fn custom_input(f: Fn(CustomInput) -> Vec<UiMsg>) -> i64 {
+    keep(|a: String| json::encode(f(arg(json::decode::<CustomInput>(a)))))
+}
+
+/// Releases both retained generations when a window is disposed.
+pub fn close_view(key: String) {
+    if let Some(count) = COUNTS.remove(key) {
+        for generation in #[count - 1, count] {
+            if let Some(ids) = VIEWS.remove(slot(key, generation)) {
+                for id in ids { gui_engine::release(id) }
+            }
+        }
+    }
+}
+
+pub fn callback_count() -> i64 { gui_engine::callback_count() }
+
+/// Also clears bookkeeping left by an interrupted view construction.
+pub fn close_all_views() {
+    let keys = VIEWS.keys()
+    for key in keys {
+        if let Some(ids) = VIEWS.remove(key) { for id in ids { gui_engine::release(id) } }
+    }
+    VIEWS.clear()
+    COUNTS.clear()
+    BUILDING.clear()
+}

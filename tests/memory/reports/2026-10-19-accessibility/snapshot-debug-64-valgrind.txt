@@ -1,0 +1,44 @@
+==1333229== Memcheck, a memory error detector
+==1333229== Copyright (C) 2002-2022, and GNU GPL'd, by Julian Seward et al.
+==1333229== Using Valgrind-3.22.0 and LibVEX; rerun with -h for copyright info
+==1333229== Command: /tmp/gui-a11y-budgets-debug/gui-accessibility-memory
+==1333229== Parent PID: 1332971
+==1333229== 
+==1333229== 
+==1333229== HEAP SUMMARY:
+==1333229==     in use at exit: 3,584 bytes in 2 blocks
+==1333229==   total heap usage: 175,918 allocs, 175,916 frees, 15,716,467 bytes allocated
+==1333229== 
+==1333229== 1,024 bytes in 1 blocks are still reachable in loss record 1 of 2
+==1333229==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1333229==    by 0x34D7AD: <std::sync::once::Once>::call_once_force::<<std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::initialize<<std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::get_or_init<std::io::stdio::stdout::{closure#0}>::{closure#0}, !>::{closure#0}>::{closure#0} (in /tmp/gui-a11y-budgets-debug/gui-accessibility-memory)
+==1333229==    by 0x118E86: <std::sys::sync::once::futex::Once>::call (in /tmp/gui-a11y-budgets-debug/gui-accessibility-memory)
+==1333229==    by 0x1180A1: <std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::initialize::<<std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::get_or_init<std::io::stdio::stdout::{closure#0}>::{closure#0}, !> (in /tmp/gui-a11y-budgets-debug/gui-accessibility-memory)
+==1333229==    by 0x35FEBA: std::io::stdio::stdout (in /tmp/gui-a11y-budgets-debug/gui-accessibility-memory)
+==1333229==    by 0x1FEA1B: gossamer_runtime::c_abi::print::write_terminal_direct (in /tmp/gui-a11y-budgets-debug/gui-accessibility-memory)
+==1333229==    by 0x1FE4B8: gossamer_runtime::c_abi::print::write_terminal (in /tmp/gui-a11y-budgets-debug/gui-accessibility-memory)
+==1333229==    by 0x1FE3E3: gossamer_runtime::c_abi::print::write_stdout (in /tmp/gui-a11y-budgets-debug/gui-accessibility-memory)
+==1333229==    by 0x25BE1A: gos_rt_println (in /tmp/gui-a11y-budgets-debug/gui-accessibility-memory)
+==1333229==    by 0x1A20D5: linux::run (in /tmp/gui-a11y-budgets-debug/gui-accessibility-memory)
+==1333229==    by 0x11AAFB: gos_main (in /tmp/gui-a11y-budgets-debug/gui-accessibility-memory)
+==1333229==    by 0x11B4CD: gos_main_shim (in /tmp/gui-a11y-budgets-debug/gui-accessibility-memory)
+==1333229== 
+==1333229== 2,560 bytes in 1 blocks are still reachable in loss record 2 of 2
+==1333229==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1333229==    by 0x221F00: std::sync::once::Once::call_once_force::{{closure}} (in /tmp/gui-a11y-budgets-debug/gui-accessibility-memory)
+==1333229==    by 0x118E86: <std::sys::sync::once::futex::Once>::call (in /tmp/gui-a11y-budgets-debug/gui-accessibility-memory)
+==1333229==    by 0x10DC1B: std::sync::once_lock::OnceLock<T>::initialize (in /tmp/gui-a11y-budgets-debug/gui-accessibility-memory)
+==1333229==    by 0x204C75: gossamer_runtime::c_abi::string::register_heap_string_body (in /tmp/gui-a11y-budgets-debug/gui-accessibility-memory)
+==1333229==    by 0x204947: gossamer_runtime::c_abi::string::alloc_growable_forced (in /tmp/gui-a11y-budgets-debug/gui-accessibility-memory)
+==1333229==    by 0x25CCD2: gos_rt_set_args (in /tmp/gui-a11y-budgets-debug/gui-accessibility-memory)
+==1333229==    by 0x11B4F9: main (in /tmp/gui-a11y-budgets-debug/gui-accessibility-memory)
+==1333229== 
+==1333229== LEAK SUMMARY:
+==1333229==    definitely lost: 0 bytes in 0 blocks
+==1333229==    indirectly lost: 0 bytes in 0 blocks
+==1333229==      possibly lost: 0 bytes in 0 blocks
+==1333229==    still reachable: 3,584 bytes in 2 blocks
+==1333229==         suppressed: 0 bytes in 0 blocks
+==1333229== 
+==1333229== For lists of detected and suppressed errors, rerun with: -s
+==1333229== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)

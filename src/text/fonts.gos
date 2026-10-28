@@ -1,0 +1,9 @@
+// Which fonts text may use; the toolkit keeps the font registry.
+
+use gui_engine
+
+/// Lets text fall back to installed fonts (the default), or keeps it to the
+/// fonts bundled with the toolkit, as reproducible screenshots need.
+pub fn use_system_fonts(enabled: bool) {
+    gui_engine::use_system_fonts(enabled)
+}

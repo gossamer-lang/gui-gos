@@ -1,0 +1,9 @@
+controls-light: matches
+controls-dark: matches
+controls-rtl: matches
+controls-high-contrast: matches
+text: matches
+selection: matches
+menu: matches
+dialog: matches
+table: matches

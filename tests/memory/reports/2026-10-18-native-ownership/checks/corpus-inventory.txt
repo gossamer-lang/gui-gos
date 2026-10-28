@@ -1,0 +1,17 @@
+   Compiling gossamer-runtime v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-runtime)
+   Compiling gossamer-cli v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-cli)
+   Compiling gossamer-codegen-cranelift v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-codegen-cranelift)
+   Compiling gossamer-sched v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-sched)
+   Compiling gossamer-std v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-std)
+   Compiling gossamer-driver v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-driver)
+   Compiling gossamer-interp v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-interp)
+   Compiling gossamer-lsp v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-lsp)
+   Compiling gossamer-mcp v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-mcp)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 31.43s
+     Running tests/tier_parity.rs (target/debug/deps/tier_parity-44512cd212557ade)
+
+running 1 test
+test specs_cover_every_feature_testing_example ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 91 filtered out; finished in 0.00s
+

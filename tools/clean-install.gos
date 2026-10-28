@@ -1,0 +1,218 @@
+// Install and execute a produced package in source-free distro containers.
+// Usage: tools/clean-install.sh PACKAGE.tar.gz [IMAGE...]
+use std::{env, errors, fs, path, process}
+use std::archive::tar
+use std::compress::gzip
+use std::crypto::sha256
+use std::encoding::json
+use std::process::{Command, Stdio}
+
+const ARCHIVE_LIMIT: i64 = 2_147_483_648
+
+struct LinuxPackages {
+    ubuntu: Vec<String>
+    debian: Vec<String>
+    fedora: Vec<String>
+}
+
+struct Runtime {
+    modules: Vec<String>
+    linux: LinuxPackages
+}
+
+/// The fields of a package's runtime manifest this check reads.
+struct Metadata {
+    schema: i64
+    app_id: String
+    executable: String
+    platform: String
+    binary_sha256: String
+    runtime: Runtime
+}
+
+struct Outcome {
+    image: String
+    status: String
+    image_id: Option<String>
+    error: Option<String>
+}
+
+struct Report {
+    #[rename("package")]
+    artifact: String
+    results: Vec<Outcome>
+}
+
+fn fail(message: String) -> errors::Error { errors::new(f"clean-install: {message}") }
+
+/// A name that is safe as a file name and a shell word.
+fn safe(value: String) -> bool {
+    let mut first = true
+    for c in value {
+        let ok = c.is_ascii_alphanumeric() || (!first && (c == '.' || c == '_' || c == '-'))
+        if !ok {
+            return false
+        }
+        first = false
+    }
+    !first
+}
+
+fn image_name(value: String) -> bool {
+    let mut first = true
+    for c in value {
+        let ok = c.is_ascii_alphanumeric() || (!first && "_./:@-".contains(c))
+        if !ok {
+            return false
+        }
+        first = false
+    }
+    !first
+}
+
+fn package_name(value: String) -> bool {
+    !value.is_empty() && value.chars().all(|c| c.is_ascii_alphanumeric() || "+._-".contains(c))
+}
+
+fn quote(word: String) -> String { "'" + word.replace("'", "'\\''") + "'" }
+
+fn install(archive: String, images: Vec<String>) -> Result<(), errors::Error> {
+    for image in images {
+        if !image_name(image) {
+            return Err(fail(f"invalid container image: {image:?}"))
+        }
+    }
+    let work = fs::temp_dir("gui-install-")?
+    defer fs::remove_dir_all(work)
+    let compressed = fs::read(archive)?
+    tar::extract(gzip::decode_limited(compressed, ARCHIVE_LIMIT)?, work)?
+    let roots = fs::read_dir(work)?
+    if roots.len() != 1 || !roots[0].is_dir || !safe(roots[0].name) {
+        return Err(fail("package must contain one named directory"))
+    }
+    let root = roots[0]
+    let mut manifests = #[]
+    for doc in fs::read_dir(path::join(root.path, "share/doc"))? {
+        let candidate = path::join(doc.path, "package.json")
+        if doc.is_dir && fs::is_file(candidate) {
+            manifests.push(candidate)
+        }
+    }
+    if manifests.len() != 1 {
+        return Err(fail("package has no unique runtime manifest"))
+    }
+    let metadata = json::decode::<Metadata>(fs::read_to_string(manifests[0])?)?
+    let exe = metadata.executable
+    if !safe(exe) || !safe(metadata.app_id) || metadata.platform != "linux" || metadata.schema != 1 {
+        return Err(fail("invalid Linux package manifest"))
+    }
+    let binary = path::join(root.path, f"bin/{exe}")
+    if sha256::hex(fs::read(binary)?) != metadata.binary_sha256 {
+        return Err(fail("executable checksum mismatch"))
+    }
+    // The archive's own extraction keeps file contents only; the checksum
+    // above vouches for the executable that is made runnable here.
+    fs::set_permissions(binary, 0o755)?
+    let config = path::join(work, "config")
+    fs::create_dir_all(config)?
+    let expected = Command::new(binary)
+        .arg("--fixture")
+        .dir(work)
+        .env("XDG_CONFIG_HOME", config)
+        .env("SDL_VIDEO_DRIVER", "offscreen")
+        .env("GUI_ACCESSIBILITY", "off")
+        .env("DBUS_SESSION_BUS_ADDRESS", "disabled:")
+        .stdin(Stdio::Null)
+        .output()?
+    if expected.code != 0 {
+        return Err(fail(f"{exe} --fixture exited with status {expected.code} on the host:\n{expected.stderr}"))
+    }
+    let expected_sha = sha256::hex(expected.stdout.bytes())
+    fs::write(path::join(work, "expected.txt"), expected.stdout.bytes())?
+    let mut failures = #[]
+    let mut results = #[]
+    for image in images {
+        let repository = image.split(":")[0]
+        let family = if repository.contains("fedora") {
+            "fedora"
+        } else if repository.contains("debian") {
+            "debian"
+        } else {
+            "ubuntu"
+        }
+        let packages = match family {
+            "fedora" => metadata.runtime.linux.fedora
+            "debian" => metadata.runtime.linux.debian
+            _ => metadata.runtime.linux.ubuntu
+        }
+        if !packages.iter().all(package_name) {
+            return Err(fail("invalid runtime package list"))
+        }
+        let deps = packages.map(quote).join(" ")
+        let setup = if family == "fedora" {
+            f"dnf install -y -q {deps}"
+        } else {
+            f"apt-get update -qq && apt-get install -y -qq --no-install-recommends {deps}"
+        }
+        let installed = f"/opt/GUI App/bin/{exe}"
+        // The bind mount contains only the extracted artifact and expected
+        // transcript. No workspace, SDK, Cargo cache or compiler is mounted.
+        let script = #[
+            "set -eu"
+            f"{setup} >/dev/null"
+            f"PREFIX='/opt/GUI App' sh /package/{root.name}/install.sh"
+            f"if ldd '{installed}' | grep 'not found'; then exit 1; fi"
+            "mkdir -p /tmp/config"
+            f"XDG_CONFIG_HOME=/tmp/config SDL_VIDEO_DRIVER=offscreen GUI_ACCESSIBILITY=off DBUS_SESSION_BUS_ADDRESS=disabled: '{installed}' --fixture > /tmp/got.txt"
+            f"[ \"$(sha256sum /tmp/got.txt | cut -d ' ' -f1)\" = \"{expected_sha}\" ]"
+            f"[ -f '/opt/GUI App/share/doc/{exe}/sdl3-zlib.txt' ]"
+            f"grep -F 'Exec=\"{installed}\"' '/opt/GUI App/share/applications/{metadata.app_id}.desktop'"
+        ].join("\n") + "\n"
+        let code = Command::new("docker")
+            .args(#["run", "--rm", "--network", "bridge", "--mount", f"type=bind,source={work},target=/package,readonly", image, "sh", "-ec", script])
+            .stdin(Stdio::Null)
+            .status()?
+        if code == 0 {
+            let inspected = process::run("docker", #["image", "inspect", image, "--format", "{{.Id}}"])?
+            results.push(Outcome { image: image, status: "pass", image_id: Some(inspected.stdout.trim()), error: None })
+            println(f"PASS: {root.name} on {image}")
+        } else {
+            failures.push(image)
+            let why = f"docker run exited with status {code}"
+            results.push(Outcome { image: image, status: "fail", image_id: None, error: Some(why) })
+            eprintln(f"FAIL: {root.name} on {image}: {why}")
+        }
+    }
+    if let Some(report) = env::var("GUI_INSTALL_REPORT") && !report.is_empty() {
+        let text = json::encode_pretty(Report { artifact: archive, results: results }) + "\n"
+        fs::write(report, text.bytes())?
+    }
+    if !failures.is_empty() {
+        return Err(fail(f"clean installation failed on {failures}"))
+    }
+    Ok(())
+}
+
+fn main() {
+    let args = env::args()
+    if args.is_empty() {
+        eprintln("clean-install: usage: tools/clean-install.sh PACKAGE.tar.gz [IMAGE...]")
+        process::exit(1)
+    }
+    let archive = match fs::canonicalize(args[0]) {
+        Ok(p) => p
+        Err(e) => {
+            eprintln(f"clean-install: {args[0]}: {e}")
+            process::exit(1)
+        }
+    }
+    let images = if args.len() > 1 {
+        args[1..]
+    } else {
+        #["ubuntu:24.04", "debian:trixie", "fedora:44"]
+    }
+    if let Err(e) = install(archive, images) {
+        eprintln(f"{e}")
+        process::exit(1)
+    }
+}

@@ -1,0 +1,7 @@
+scalar   = #[2, 3, 4]
+nested   = #[#[1, 9], #[2, 9]]
+replace  = #[#[7], #[7]]
+strings  = #["a!", "b!"]
+structs  = 2 3
+readonly = 6
+inline   = #[#[1, 5]]

@@ -1,0 +1,595 @@
+gos 0.75.0; windowing 0.1.0; gui-toolkit 0.1.0
+    Blocking waiting for file lock on package cache
+    Updating crates.io index
+    Blocking waiting for file lock on package cache
+     Locking 91 packages to latest Rust 1.98.0 compatible versions
+      Adding async-broadcast v0.7.2
+      Adding async-channel v2.5.0
+      Adding async-executor v1.14.0
+      Adding async-io v2.6.0
+      Adding async-lock v3.4.2
+      Adding async-process v2.5.0
+      Adding async-recursion v1.2.0
+      Adding async-signal v0.2.14
+      Adding async-task v4.7.1
+      Adding async-trait v0.1.92
+      Adding block2 v0.6.2
+      Adding blocking v1.7.0
+      Adding cmake v0.1.58
+      Adding concurrent-queue v2.5.0
+      Adding defmt v1.2.0
+      Adding defmt-macros v1.2.0
+      Adding defmt-parser v1.1.0
+      Adding dispatch2 v0.3.1
+      Adding dlib v0.5.3
+      Adding downcast-rs v1.2.1
+      Adding endi v1.1.1
+      Adding enumflags2 v0.7.12
+      Adding enumflags2_derive v0.7.12
+      Adding event-listener v5.4.2
+      Adding event-listener-strategy v0.5.4
+      Adding futures-lite v2.6.1
+      Adding gos-windowing v0.1.0 (/home/daniel/dev/goose-libs/windowing-gos/rust/gos-windowing)
+      Adding gui-toolkit v0.1.0 (/home/daniel/dev/goose-libs/gui-toolkit-gos/rust/gui-toolkit)
+      Adding gui-toolkit-binding v0.1.0 (/home/daniel/dev/goose-libs/gui-toolkit-gos/rust/binding)
+      Adding hermit-abi v0.5.3
+      Adding hex v0.4.3
+      Adding jiff v0.2.38
+      Adding jiff-core v0.1.1
+      Adding jiff-static v0.2.38
+      Adding jiff-tzdb v0.1.9
+      Adding jiff-tzdb-platform v0.1.3
+      Adding libloading v0.8.9
+      Adding memoffset v0.9.1
+      Adding objc2 v0.6.5
+      Adding objc2-app-kit v0.3.2
+      Adding objc2-cloud-kit v0.3.2
+      Adding objc2-core-data v0.3.2
+      Adding objc2-core-foundation v0.3.2
+      Adding objc2-core-graphics v0.3.2
+      Adding objc2-core-image v0.3.2
+      Adding objc2-core-location v0.3.2
+      Adding objc2-core-text v0.3.2
+      Adding objc2-core-video v0.3.2
+      Adding objc2-encode v4.1.0
+      Adding objc2-foundation v0.3.2
+      Adding objc2-io-surface v0.3.2
+      Adding objc2-quartz-core v0.3.2
+      Adding objc2-user-notifications v0.3.2
+      Adding ordered-stream v0.2.0
+      Adding parking v2.2.1
+      Adding piper v0.2.5
+ Downgrading png v0.18.1 -> v0.17.16
+      Adding polling v3.11.0
+      Adding portable-atomic v1.15.0
+      Adding portable-atomic-util v0.2.8
+      Adding proc-macro-crate v3.5.0
+      Adding roxmltree v0.20.0
+      Adding rpkg-config v0.1.2
+      Adding scoped-tls v1.0.1
+      Adding sdl3-src v3.4.10 (available: v3.4.18)
+      Adding sdl3-sys v0.6.6+SDL-3.4.10 (available: v0.6.8+SDL-3.4.14)
+      Adding serde_repr v0.1.21
+      Adding syn v3.0.9
+    Updating toml_datetime v0.7.5+spec-1.1.0 -> v1.1.2+spec-1.1.0
+      Adding toml_edit v0.25.17+spec-1.1.0
+    Updating toml_parser v1.1.2+spec-1.1.0 -> v1.1.5+spec-1.1.0
+      Adding tracing-attributes v0.1.31
+      Adding uds_windows v1.2.1
+      Adding wayland-backend v0.3.17
+      Adding wayland-client v0.31.15
+      Adding wayland-scanner v0.31.11
+      Adding wayland-sys v0.31.11
+      Adding windowing-binding v0.1.0 (/home/daniel/dev/goose-libs/windowing-gos/rust/binding)
+      Adding windows v0.62.2
+      Adding windows-collections v0.3.2
+      Adding windows-future v0.3.2
+      Adding windows-numerics v0.3.1
+      Adding windows-threading v0.2.1
+      Adding x11-dl v2.21.0
+      Adding zbus v5.19.0
+      Adding zbus_macros v5.19.0
+      Adding zbus_names v4.3.5
+      Adding zcheapstr v1.1.0
+      Adding zvariant v5.15.1
+      Adding zvariant_derive v5.15.1
+      Adding zvariant_utils v4.2.0
+    Blocking waiting for file lock on package cache
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.46
+   Compiling unicode-ident v1.0.24
+   Compiling serde_core v1.0.228
+   Compiling serde v1.0.228
+   Compiling cfg-if v1.0.4
+   Compiling pin-project-lite v0.2.17
+   Compiling parking v2.2.1
+   Compiling libc v0.2.186
+   Compiling winnow v1.0.4
+   Compiling equivalent v1.0.2
+   Compiling hashbrown v0.17.1
+   Compiling futures-core v0.3.32
+   Compiling crossbeam-utils v0.8.22
+   Compiling indexmap v2.14.0
+   Compiling syn v2.0.118
+   Compiling syn v3.0.9
+   Compiling toml_parser v1.1.5+spec-1.1.0
+   Compiling find-msvc-tools v0.1.9
+   Compiling shlex v2.0.1
+   Compiling toml_datetime v1.1.2+spec-1.1.0
+   Compiling rustix v1.1.4
+   Compiling toml_edit v0.25.17+spec-1.1.0
+   Compiling cc v1.2.67
+   Compiling fastrand v2.4.1
+   Compiling futures-io v0.3.32
+   Compiling bitflags v2.13.0
+   Compiling pkg-config v0.3.33
+   Compiling linux-raw-sys v0.12.1
+   Compiling concurrent-queue v2.5.0
+   Compiling proc-macro-crate v3.5.0
+   Compiling event-listener v5.4.2
+   Compiling once_cell v1.21.4
+   Compiling event-listener-strategy v0.5.4
+   Compiling futures-lite v2.6.1
+   Compiling autocfg v1.5.1
+   Compiling async-io v2.6.0
+   Compiling smallvec v1.15.2
+   Compiling slab v0.4.12
+   Compiling wayland-sys v0.31.11
+   Compiling errno v0.3.14
+   Compiling libloading v0.8.9
+   Compiling endi v1.1.1
+   Compiling async-task v4.7.1
+   Compiling parking_lot_core v0.9.12
+   Compiling dlib v0.5.3
+   Compiling signal-hook-registry v1.4.8
+   Compiling serde_derive v1.0.228
+   Compiling enumflags2_derive v0.7.12
+   Compiling async-channel v2.5.0
+   Compiling wayland-backend v0.3.17
+   Compiling cmake v0.1.58
+   Compiling rpkg-config v0.1.2
+   Compiling sdl3-src v3.4.10
+   Compiling atomic-waker v1.1.2
+   Compiling log v0.4.33
+   Compiling scopeguard v1.2.0
+   Compiling memchr v2.8.3
+   Compiling simd-adler32 v0.3.9
+   Compiling lock_api v0.4.14
+   Compiling piper v0.2.5
+   Compiling sdl3-sys v0.6.6+SDL-3.4.10
+   Compiling quick-xml v0.41.0
+   Compiling tracing-attributes v0.1.31
+   Compiling async-lock v3.4.2
+   Compiling polling v3.11.0
+   Compiling tracing-core v0.1.36
+   Compiling zvariant_utils v4.2.0
+   Compiling enumflags2 v0.7.12
+   Compiling zcheapstr v1.1.0
+   Compiling x11-dl v2.21.0
+   Compiling thiserror v2.0.18
+   Compiling zmij v1.0.23
+   Compiling adler2 v2.0.1
+   Compiling async-signal v0.2.14
+   Compiling downcast-rs v1.2.1
+   Compiling linkme-impl v0.3.36
+   Compiling zvariant_derive v5.15.1
+   Compiling crc32fast v1.5.0
+   Compiling wayland-client v0.31.15
+   Compiling scoped-tls v1.0.1
+   Compiling zvariant v5.15.1
+   Compiling async-process v2.5.0
+   Compiling tracing v0.1.44
+   Compiling wayland-scanner v0.31.11
+   Compiling parking_lot v0.12.5
+   Compiling zbus_names v4.3.5
+   Compiling zbus_macros v5.19.0
+   Compiling blocking v1.7.0
+   Compiling async-trait v0.1.92
+   Compiling async-recursion v1.2.0
+   Compiling serde_repr v0.1.21
+   Compiling thiserror-impl v2.0.18
+   Compiling async-executor v1.14.0
+   Compiling async-broadcast v0.7.2
+   Compiling uuid v1.23.5
+   Compiling ordered-stream v0.2.0
+   Compiling hex v0.4.3
+   Compiling serde_json v1.0.150
+   Compiling linkme v0.3.36
+   Compiling miniz_oxide v0.9.1
+   Compiling itoa v1.0.18
+   Compiling zbus v5.19.0
+   Compiling tinyvec_macros v0.1.1
+   Compiling flate2 v1.1.10
+   Compiling tinyvec v1.12.0
+   Compiling miniz_oxide v0.8.9
+   Compiling fdeflate v0.3.7
+   Compiling gossamer-binding-macros v0.75.0 (/home/daniel/dev/gossamer/crates/gossamer-binding-macros)
+   Compiling rustc-hash v2.1.3
+   Compiling gossamer-binding-abi v0.75.0 (/home/daniel/dev/gossamer/crates/gossamer-binding-abi)
+   Compiling bitflags v1.3.2
+   Compiling pastey v0.1.1
+   Compiling jiff-core v0.1.1
+   Compiling png v0.17.16
+   Compiling gossamer-binding v0.75.0 (/home/daniel/dev/gossamer/crates/gossamer-binding)
+   Compiling unicode-normalization v0.1.25
+   Compiling jiff v0.2.38
+   Compiling roxmltree v0.20.0
+   Compiling unicode-properties v0.1.4
+   Compiling unicode-segmentation v1.13.3
+   Compiling unicase v2.9.0
+   Compiling gos-windowing v0.1.0 (/home/daniel/dev/goose-libs/windowing-gos/rust/gos-windowing)
+   Compiling gui-toolkit v0.1.0 (/home/daniel/dev/goose-libs/gui-toolkit-gos/rust/gui-toolkit)
+   Compiling windowing-binding v0.1.0 (/home/daniel/dev/goose-libs/windowing-gos/rust/binding)
+   Compiling gui-toolkit-binding v0.1.0 (/home/daniel/dev/goose-libs/gui-toolkit-gos/rust/binding)
+   Compiling gos-bindings v0.0.0 (/tmp/tmp.zbzdyph2Na/cache/gossamer/bindings/gui_toolkit_binding+1-1c5512347751a397/build)
+    Finished `release` profile [optimized] target(s) in 1m 09s
+    Finished `release` profile [optimized] target(s) in 0.03s
+    Updating crates.io index
+     Locking 91 packages to latest Rust 1.98.0 compatible versions
+      Adding async-broadcast v0.7.2
+      Adding async-channel v2.5.0
+      Adding async-executor v1.14.0
+      Adding async-io v2.6.0
+      Adding async-lock v3.4.2
+      Adding async-process v2.5.0
+      Adding async-recursion v1.2.0
+      Adding async-signal v0.2.14
+      Adding async-task v4.7.1
+      Adding async-trait v0.1.92
+      Adding block2 v0.6.2
+      Adding blocking v1.7.0
+      Adding cmake v0.1.58
+      Adding concurrent-queue v2.5.0
+      Adding defmt v1.2.0
+      Adding defmt-macros v1.2.0
+      Adding defmt-parser v1.1.0
+      Adding dispatch2 v0.3.1
+      Adding dlib v0.5.3
+      Adding downcast-rs v1.2.1
+      Adding endi v1.1.1
+      Adding enumflags2 v0.7.12
+      Adding enumflags2_derive v0.7.12
+      Adding event-listener v5.4.2
+      Adding event-listener-strategy v0.5.4
+      Adding futures-lite v2.6.1
+      Adding gos-windowing v0.1.0 (/home/daniel/dev/goose-libs/windowing-gos/rust/gos-windowing)
+      Adding gui-toolkit v0.1.0 (/home/daniel/dev/goose-libs/gui-toolkit-gos/rust/gui-toolkit)
+      Adding gui-toolkit-binding v0.1.0 (/home/daniel/dev/goose-libs/gui-toolkit-gos/rust/binding)
+      Adding hermit-abi v0.5.3
+      Adding hex v0.4.3
+      Adding jiff v0.2.38
+      Adding jiff-core v0.1.1
+      Adding jiff-static v0.2.38
+      Adding jiff-tzdb v0.1.9
+      Adding jiff-tzdb-platform v0.1.3
+      Adding libloading v0.8.9
+      Adding memoffset v0.9.1
+      Adding objc2 v0.6.5
+      Adding objc2-app-kit v0.3.2
+      Adding objc2-cloud-kit v0.3.2
+      Adding objc2-core-data v0.3.2
+      Adding objc2-core-foundation v0.3.2
+      Adding objc2-core-graphics v0.3.2
+      Adding objc2-core-image v0.3.2
+      Adding objc2-core-location v0.3.2
+      Adding objc2-core-text v0.3.2
+      Adding objc2-core-video v0.3.2
+      Adding objc2-encode v4.1.0
+      Adding objc2-foundation v0.3.2
+      Adding objc2-io-surface v0.3.2
+      Adding objc2-quartz-core v0.3.2
+      Adding objc2-user-notifications v0.3.2
+      Adding ordered-stream v0.2.0
+      Adding parking v2.2.1
+      Adding piper v0.2.5
+ Downgrading png v0.18.1 -> v0.17.16
+      Adding polling v3.11.0
+      Adding portable-atomic v1.15.0
+      Adding portable-atomic-util v0.2.8
+      Adding proc-macro-crate v3.5.0
+      Adding roxmltree v0.20.0
+      Adding rpkg-config v0.1.2
+      Adding scoped-tls v1.0.1
+      Adding sdl3-src v3.4.10 (available: v3.4.18)
+      Adding sdl3-sys v0.6.6+SDL-3.4.10 (available: v0.6.8+SDL-3.4.14)
+      Adding serde_repr v0.1.21
+      Adding syn v3.0.9
+    Updating toml_datetime v0.7.5+spec-1.1.0 -> v1.1.2+spec-1.1.0
+      Adding toml_edit v0.25.17+spec-1.1.0
+    Updating toml_parser v1.1.2+spec-1.1.0 -> v1.1.5+spec-1.1.0
+      Adding tracing-attributes v0.1.31
+      Adding uds_windows v1.2.1
+      Adding wayland-backend v0.3.17
+      Adding wayland-client v0.31.15
+      Adding wayland-scanner v0.31.11
+      Adding wayland-sys v0.31.11
+      Adding windowing-binding v0.1.0 (/home/daniel/dev/goose-libs/windowing-gos/rust/binding)
+      Adding windows v0.62.2
+      Adding windows-collections v0.3.2
+      Adding windows-future v0.3.2
+      Adding windows-numerics v0.3.1
+      Adding windows-threading v0.2.1
+      Adding x11-dl v2.21.0
+      Adding zbus v5.19.0
+      Adding zbus_macros v5.19.0
+      Adding zbus_names v4.3.5
+      Adding zcheapstr v1.1.0
+      Adding zvariant v5.15.1
+      Adding zvariant_derive v5.15.1
+      Adding zvariant_utils v4.2.0
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.46
+   Compiling unicode-ident v1.0.24
+   Compiling serde_core v1.0.228
+   Compiling cfg-if v1.0.4
+   Compiling serde v1.0.228
+   Compiling pin-project-lite v0.2.17
+   Compiling parking v2.2.1
+   Compiling winnow v1.0.4
+   Compiling libc v0.2.186
+   Compiling crossbeam-utils v0.8.22
+   Compiling equivalent v1.0.2
+   Compiling futures-core v0.3.32
+   Compiling hashbrown v0.17.1
+   Compiling indexmap v2.14.0
+   Compiling syn v2.0.118
+   Compiling syn v3.0.9
+   Compiling toml_parser v1.1.5+spec-1.1.0
+   Compiling find-msvc-tools v0.1.9
+   Compiling rustix v1.1.4
+   Compiling toml_datetime v1.1.2+spec-1.1.0
+   Compiling shlex v2.0.1
+   Compiling cc v1.2.67
+   Compiling toml_edit v0.25.17+spec-1.1.0
+   Compiling fastrand v2.4.1
+   Compiling futures-io v0.3.32
+   Compiling bitflags v2.13.0
+   Compiling pkg-config v0.3.33
+   Compiling linux-raw-sys v0.12.1
+   Compiling proc-macro-crate v3.5.0
+   Compiling concurrent-queue v2.5.0
+   Compiling event-listener v5.4.2
+   Compiling once_cell v1.21.4
+   Compiling event-listener-strategy v0.5.4
+   Compiling futures-lite v2.6.1
+   Compiling autocfg v1.5.1
+   Compiling async-io v2.6.0
+   Compiling slab v0.4.12
+   Compiling smallvec v1.15.2
+   Compiling wayland-sys v0.31.11
+   Compiling errno v0.3.14
+   Compiling libloading v0.8.9
+   Compiling endi v1.1.1
+   Compiling async-task v4.7.1
+   Compiling parking_lot_core v0.9.12
+   Compiling dlib v0.5.3
+   Compiling signal-hook-registry v1.4.8
+   Compiling async-channel v2.5.0
+   Compiling wayland-backend v0.3.17
+   Compiling cmake v0.1.58
+   Compiling sdl3-src v3.4.10
+   Compiling serde_derive v1.0.228
+   Compiling enumflags2_derive v0.7.12
+   Compiling log v0.4.33
+   Compiling atomic-waker v1.1.2
+   Compiling rpkg-config v0.1.2
+   Compiling scopeguard v1.2.0
+   Compiling memchr v2.8.3
+   Compiling simd-adler32 v0.3.9
+   Compiling sdl3-sys v0.6.6+SDL-3.4.10
+   Compiling lock_api v0.4.14
+   Compiling quick-xml v0.41.0
+   Compiling piper v0.2.5
+   Compiling tracing-attributes v0.1.31
+   Compiling async-lock v3.4.2
+   Compiling tracing-core v0.1.36
+   Compiling x11-dl v2.21.0
+   Compiling polling v3.11.0
+   Compiling downcast-rs v1.2.1
+   Compiling thiserror v2.0.18
+   Compiling wayland-client v0.31.15
+   Compiling scoped-tls v1.0.1
+   Compiling crc32fast v1.5.0
+   Compiling linkme-impl v0.3.36
+   Compiling zmij v1.0.23
+   Compiling adler2 v2.0.1
+   Compiling async-signal v0.2.14
+   Compiling async-process v2.5.0
+   Compiling tracing v0.1.44
+   Compiling wayland-scanner v0.31.11
+   Compiling parking_lot v0.12.5
+   Compiling blocking v1.7.0
+   Compiling zvariant_utils v4.2.0
+   Compiling enumflags2 v0.7.12
+   Compiling zcheapstr v1.1.0
+   Compiling async-recursion v1.2.0
+   Compiling serde_repr v0.1.21
+   Compiling async-trait v0.1.92
+   Compiling thiserror-impl v2.0.18
+   Compiling zvariant_derive v5.15.1
+   Compiling async-executor v1.14.0
+   Compiling async-broadcast v0.7.2
+   Compiling zvariant v5.15.1
+   Compiling uuid v1.23.5
+   Compiling ordered-stream v0.2.0
+   Compiling hex v0.4.3
+   Compiling linkme v0.3.36
+   Compiling serde_json v1.0.150
+   Compiling miniz_oxide v0.9.1
+   Compiling zbus_names v4.3.5
+   Compiling itoa v1.0.18
+   Compiling tinyvec_macros v0.1.1
+   Compiling tinyvec v1.12.0
+   Compiling flate2 v1.1.10
+   Compiling zbus_macros v5.19.0
+   Compiling miniz_oxide v0.8.9
+   Compiling fdeflate v0.3.7
+   Compiling gossamer-binding-macros v0.75.0 (/home/daniel/dev/gossamer/crates/gossamer-binding-macros)
+   Compiling rustc-hash v2.1.3
+   Compiling bitflags v1.3.2
+   Compiling jiff-core v0.1.1
+   Compiling pastey v0.1.1
+   Compiling gossamer-binding-abi v0.75.0 (/home/daniel/dev/gossamer/crates/gossamer-binding-abi)
+   Compiling png v0.17.16
+   Compiling unicode-normalization v0.1.25
+   Compiling gossamer-binding v0.75.0 (/home/daniel/dev/gossamer/crates/gossamer-binding)
+   Compiling roxmltree v0.20.0
+   Compiling jiff v0.2.38
+   Compiling unicode-properties v0.1.4
+   Compiling unicase v2.9.0
+   Compiling unicode-segmentation v1.13.3
+   Compiling zbus v5.19.0
+   Compiling gos-windowing v0.1.0 (/home/daniel/dev/goose-libs/windowing-gos/rust/gos-windowing)
+   Compiling gui-toolkit v0.1.0 (/home/daniel/dev/goose-libs/gui-toolkit-gos/rust/gui-toolkit)
+   Compiling windowing-binding v0.1.0 (/home/daniel/dev/goose-libs/windowing-gos/rust/binding)
+   Compiling gui-toolkit-binding v0.1.0 (/home/daniel/dev/goose-libs/gui-toolkit-gos/rust/binding)
+   Compiling gos-static-5d9cf9aa6e44 v0.0.0 (/tmp/tmp.zbzdyph2Na/cache/gossamer/bindings/static-5d9cf9aa6e44)
+note: link against the following native artifacts when linking against this static library. The order and any duplication can be significant on some platforms
+
+note: native-static-libs: -ldl -lm -lgcc_s -lutil -lrt -lpthread -lm -ldl -lc
+
+    Finished `dev` profile [unoptimized] target(s) in 28.23s
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.46
+   Compiling unicode-ident v1.0.24
+   Compiling serde_core v1.0.228
+   Compiling serde v1.0.228
+   Compiling cfg-if v1.0.4
+   Compiling pin-project-lite v0.2.17
+   Compiling parking v2.2.1
+   Compiling libc v0.2.186
+   Compiling winnow v1.0.4
+   Compiling futures-core v0.3.32
+   Compiling equivalent v1.0.2
+   Compiling crossbeam-utils v0.8.22
+   Compiling hashbrown v0.17.1
+   Compiling indexmap v2.14.0
+   Compiling syn v2.0.118
+   Compiling syn v3.0.9
+   Compiling toml_parser v1.1.5+spec-1.1.0
+   Compiling toml_datetime v1.1.2+spec-1.1.0
+   Compiling find-msvc-tools v0.1.9
+   Compiling shlex v2.0.1
+   Compiling rustix v1.1.4
+   Compiling cc v1.2.67
+   Compiling toml_edit v0.25.17+spec-1.1.0
+   Compiling pkg-config v0.3.33
+   Compiling fastrand v2.4.1
+   Compiling futures-io v0.3.32
+   Compiling bitflags v2.13.0
+   Compiling linux-raw-sys v0.12.1
+   Compiling proc-macro-crate v3.5.0
+   Compiling concurrent-queue v2.5.0
+   Compiling event-listener v5.4.2
+   Compiling once_cell v1.21.4
+   Compiling futures-lite v2.6.1
+   Compiling event-listener-strategy v0.5.4
+   Compiling autocfg v1.5.1
+   Compiling async-io v2.6.0
+   Compiling smallvec v1.15.2
+   Compiling slab v0.4.12
+   Compiling wayland-sys v0.31.11
+   Compiling errno v0.3.14
+   Compiling libloading v0.8.9
+   Compiling endi v1.1.1
+   Compiling parking_lot_core v0.9.12
+   Compiling async-task v4.7.1
+   Compiling serde_derive v1.0.228
+   Compiling enumflags2_derive v0.7.12
+   Compiling dlib v0.5.3
+   Compiling signal-hook-registry v1.4.8
+   Compiling async-channel v2.5.0
+   Compiling wayland-backend v0.3.17
+   Compiling cmake v0.1.58
+   Compiling memchr v2.8.3
+   Compiling scopeguard v1.2.0
+   Compiling simd-adler32 v0.3.9
+   Compiling log v0.4.33
+   Compiling sdl3-src v3.4.10
+   Compiling atomic-waker v1.1.2
+   Compiling rpkg-config v0.1.2
+   Compiling piper v0.2.5
+   Compiling quick-xml v0.41.0
+   Compiling sdl3-sys v0.6.6+SDL-3.4.10
+   Compiling lock_api v0.4.14
+   Compiling tracing-attributes v0.1.31
+   Compiling async-lock v3.4.2
+   Compiling tracing-core v0.1.36
+   Compiling x11-dl v2.21.0
+   Compiling adler2 v2.0.1
+   Compiling scoped-tls v1.0.1
+   Compiling polling v3.11.0
+   Compiling zmij v1.0.23
+   Compiling zvariant_utils v4.2.0
+   Compiling enumflags2 v0.7.12
+   Compiling zcheapstr v1.1.0
+   Compiling downcast-rs v1.2.1
+   Compiling wayland-client v0.31.15
+   Compiling thiserror v2.0.18
+   Compiling async-signal v0.2.14
+   Compiling crc32fast v1.5.0
+   Compiling linkme-impl v0.3.36
+   Compiling zvariant_derive v5.15.1
+   Compiling async-process v2.5.0
+   Compiling zvariant v5.15.1
+   Compiling tracing v0.1.44
+   Compiling wayland-scanner v0.31.11
+   Compiling zbus_names v4.3.5
+   Compiling parking_lot v0.12.5
+   Compiling zbus_macros v5.19.0
+   Compiling blocking v1.7.0
+   Compiling serde_repr v0.1.21
+   Compiling async-trait v0.1.92
+   Compiling async-recursion v1.2.0
+   Compiling async-executor v1.14.0
+   Compiling thiserror-impl v2.0.18
+   Compiling async-broadcast v0.7.2
+   Compiling uuid v1.23.5
+   Compiling ordered-stream v0.2.0
+   Compiling hex v0.4.3
+   Compiling serde_json v1.0.150
+   Compiling linkme v0.3.36
+   Compiling zbus v5.19.0
+   Compiling miniz_oxide v0.9.1
+   Compiling itoa v1.0.18
+   Compiling tinyvec_macros v0.1.1
+   Compiling tinyvec v1.12.0
+   Compiling flate2 v1.1.10
+   Compiling miniz_oxide v0.8.9
+   Compiling fdeflate v0.3.7
+   Compiling gossamer-binding-macros v0.75.0 (/home/daniel/dev/gossamer/crates/gossamer-binding-macros)
+   Compiling gossamer-binding-abi v0.75.0 (/home/daniel/dev/gossamer/crates/gossamer-binding-abi)
+   Compiling pastey v0.1.1
+   Compiling jiff-core v0.1.1
+   Compiling bitflags v1.3.2
+   Compiling rustc-hash v2.1.3
+   Compiling png v0.17.16
+   Compiling gossamer-binding v0.75.0 (/home/daniel/dev/gossamer/crates/gossamer-binding)
+   Compiling unicode-normalization v0.1.25
+   Compiling jiff v0.2.38
+   Compiling unicode-properties v0.1.4
+   Compiling roxmltree v0.20.0
+   Compiling unicase v2.9.0
+   Compiling unicode-segmentation v1.13.3
+   Compiling gos-windowing v0.1.0 (/home/daniel/dev/goose-libs/windowing-gos/rust/gos-windowing)
+   Compiling gui-toolkit v0.1.0 (/home/daniel/dev/goose-libs/gui-toolkit-gos/rust/gui-toolkit)
+   Compiling windowing-binding v0.1.0 (/home/daniel/dev/goose-libs/windowing-gos/rust/binding)
+   Compiling gui-toolkit-binding v0.1.0 (/home/daniel/dev/goose-libs/gui-toolkit-gos/rust/binding)
+   Compiling gos-static-5d9cf9aa6e44 v0.0.0 (/tmp/tmp.zbzdyph2Na/cache/gossamer/bindings/static-5d9cf9aa6e44)
+note: link against the following native artifacts when linking against this static library. The order and any duplication can be significant on some platforms
+
+note: native-static-libs: -ldl -lm -lgcc_s -lutil -lrt -lpthread -lm -ldl -lc
+
+    Finished `release` profile [optimized] target(s) in 53.46s
+PASS: hello-world (check, debug native, release native)
+PASS: widgets-showcase (VM, JIT, debug native, release native)
+PASS: code-editor (VM, JIT, debug native, release native)
+   Compiling gui-toolkit v0.1.0 (/home/daniel/dev/goose-libs/gui-toolkit-gos/rust/gui-toolkit)
+   Compiling gui-toolkit-binding v0.1.0 (/home/daniel/dev/goose-libs/gui-toolkit-gos/rust/binding)
+   Compiling gos-static-5d9cf9aa6e44 v0.0.0 (/tmp/tmp.zbzdyph2Na/cache/gossamer/bindings/static-5d9cf9aa6e44)
+note: link against the following native artifacts when linking against this static library. The order and any duplication can be significant on some platforms
+
+note: native-static-libs: -ldl -lm -lgcc_s -lutil -lrt -lpthread -lm -ldl -lc
+
+    Finished `release` profile [optimized] target(s) in 20.37s
+PASS: application-launcher (VM, JIT, debug native, release native)

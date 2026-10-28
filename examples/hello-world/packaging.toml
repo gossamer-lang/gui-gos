@@ -1,0 +1,11 @@
+# What tools/package.sh needs beyond project.toml.
+name = "Hello"
+app_id = "dev.gossamer.gui-hello-world"
+comment = "Greets you by name"
+categories = "Utility;"
+
+# This minimal application deliberately has no App::icon.
+icon = false
+
+# No scripted interactive journey in this minimal application.
+fixture = false

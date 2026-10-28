@@ -1,0 +1,44 @@
+==1492875== Memcheck, a memory error detector
+==1492875== Copyright (C) 2002-2022, and GNU GPL'd, by Julian Seward et al.
+==1492875== Using Valgrind-3.22.0 and LibVEX; rerun with -h for copyright info
+==1492875== Command: /tmp/gui-mut-ref-fixed-debug/mut_ref_element_loops
+==1492875== Parent PID: 1492799
+==1492875== 
+==1492875== 
+==1492875== HEAP SUMMARY:
+==1492875==     in use at exit: 3,584 bytes in 2 blocks
+==1492875==   total heap usage: 110 allocs, 108 frees, 77,305 bytes allocated
+==1492875== 
+==1492875== 1,024 bytes in 1 blocks are still reachable in loss record 1 of 2
+==1492875==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1492875==    by 0x19919D: <std::sync::once::Once>::call_once_force::<<std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::initialize<<std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::get_or_init<std::io::stdio::stdout::{closure#0}>::{closure#0}, !>::{closure#0}>::{closure#0} (in /tmp/gui-mut-ref-fixed-debug/mut_ref_element_loops)
+==1492875==    by 0x19DC96: <std::sys::sync::once::futex::Once>::call (in /tmp/gui-mut-ref-fixed-debug/mut_ref_element_loops)
+==1492875==    by 0x187731: <std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::initialize::<<std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::get_or_init<std::io::stdio::stdout::{closure#0}>::{closure#0}, !> (in /tmp/gui-mut-ref-fixed-debug/mut_ref_element_loops)
+==1492875==    by 0x1ACB2A: std::io::stdio::stdout (in /tmp/gui-mut-ref-fixed-debug/mut_ref_element_loops)
+==1492875==    by 0x14BEEB: gossamer_runtime::c_abi::print::write_terminal_direct (in /tmp/gui-mut-ref-fixed-debug/mut_ref_element_loops)
+==1492875==    by 0x14B988: gossamer_runtime::c_abi::print::write_terminal (in /tmp/gui-mut-ref-fixed-debug/mut_ref_element_loops)
+==1492875==    by 0x14B8B3: gossamer_runtime::c_abi::print::write_stdout (in /tmp/gui-mut-ref-fixed-debug/mut_ref_element_loops)
+==1492875==    by 0x17A3AA: gos_rt_println (in /tmp/gui-mut-ref-fixed-debug/mut_ref_element_loops)
+==1492875==    by 0x1305F8: gos_main (in /tmp/gui-mut-ref-fixed-debug/mut_ref_element_loops)
+==1492875==    by 0x1312F8: gos_main_shim (in /tmp/gui-mut-ref-fixed-debug/mut_ref_element_loops)
+==1492875==    by 0x1782C9: gos_rt_call_main (in /tmp/gui-mut-ref-fixed-debug/mut_ref_element_loops)
+==1492875== 
+==1492875== 2,560 bytes in 1 blocks are still reachable in loss record 2 of 2
+==1492875==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1492875==    by 0x163750: std::sync::once::Once::call_once_force::{{closure}} (in /tmp/gui-mut-ref-fixed-debug/mut_ref_element_loops)
+==1492875==    by 0x19DC96: <std::sys::sync::once::futex::Once>::call (in /tmp/gui-mut-ref-fixed-debug/mut_ref_element_loops)
+==1492875==    by 0x165045: std::sync::once_lock::OnceLock<T>::initialize (in /tmp/gui-mut-ref-fixed-debug/mut_ref_element_loops)
+==1492875==    by 0x151815: gossamer_runtime::c_abi::string::register_heap_string_body (in /tmp/gui-mut-ref-fixed-debug/mut_ref_element_loops)
+==1492875==    by 0x1514E7: gossamer_runtime::c_abi::string::alloc_growable_forced (in /tmp/gui-mut-ref-fixed-debug/mut_ref_element_loops)
+==1492875==    by 0x17A9A2: gos_rt_set_args (in /tmp/gui-mut-ref-fixed-debug/mut_ref_element_loops)
+==1492875==    by 0x131319: main (in /tmp/gui-mut-ref-fixed-debug/mut_ref_element_loops)
+==1492875== 
+==1492875== LEAK SUMMARY:
+==1492875==    definitely lost: 0 bytes in 0 blocks
+==1492875==    indirectly lost: 0 bytes in 0 blocks
+==1492875==      possibly lost: 0 bytes in 0 blocks
+==1492875==    still reachable: 3,584 bytes in 2 blocks
+==1492875==         suppressed: 0 bytes in 0 blocks
+==1492875== 
+==1492875== For lists of detected and suppressed errors, rerun with: -s
+==1492875== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)

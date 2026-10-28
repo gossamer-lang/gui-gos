@@ -1,0 +1,232 @@
+// Generates src/text/ucd.gos from the pinned Unicode 15.1.0 data files in
+// data/ucd-15.1.0. Run from the repository root:
+//
+//     gos run tools/gen-ucd.gos
+//
+// Each property becomes a sorted table of merged ranges, flattened as
+// `start, end, value` triples, which `text::ucd` searches by bisection.
+
+use std::{fs, strings}
+
+const DATA: String = "data/ucd-15.1.0"
+const OUT: String = "src/text/ucd.gos"
+
+const BIDI_NAMES: [String; 23] = ["L", "R", "AL", "EN", "ES", "ET", "AN", "CS", "NSM", "BN", "B", "S", "WS"
+    "ON", "LRE", "LRO", "RLE", "RLO", "PDF", "LRI", "RLI", "FSI", "PDI"]
+
+const LINE_NAMES: [String; 48] = ["XX", "BK", "CR", "LF", "CM", "NL", "SG", "WJ", "ZW", "GL", "SP", "ZWJ"
+    "B2", "BA", "BB", "HY", "CB", "CL", "CP", "EX", "IN", "NS", "OP", "QU", "IS", "NU", "PO", "PR", "SY"
+    "AI", "AL", "CJ", "EB", "EM", "H2", "H3", "HL", "ID", "JL", "JV", "JT", "RI", "SA", "AK", "AP", "AS"
+    "VF", "VI"]
+
+const JOIN_NAMES: [String; 6] = ["U", "R", "L", "D", "C", "T"]
+
+const INDIC_SYLLABIC_NAMES: [String; 37] = ["Other", "Avagraha", "Bindu", "Brahmi_Joining_Number"
+    "Cantillation_Mark", "Consonant", "Consonant_Dead", "Consonant_Final", "Consonant_Head_Letter"
+    "Consonant_Initial_Postfixed", "Consonant_Killer", "Consonant_Medial", "Consonant_Placeholder"
+    "Consonant_Preceding_Repha", "Consonant_Prefixed", "Consonant_Subjoined", "Consonant_Succeeding_Repha"
+    "Consonant_With_Stacker", "Gemination_Mark", "Invisible_Stacker", "Joiner", "Modifying_Letter"
+    "Non_Joiner", "Nukta", "Number", "Number_Joiner", "Pure_Killer", "Register_Shifter"
+    "Syllable_Modifier", "Tone_Letter", "Tone_Mark", "Virama", "Visarga", "Vowel", "Vowel_Dependent"
+    "Vowel_Independent", "Reordering_Killer"]
+
+const INDIC_POSITIONAL_NAMES: [String; 16] = ["NA", "Bottom", "Bottom_And_Left", "Bottom_And_Right"
+    "Left", "Left_And_Right", "Overstruck", "Right", "Top", "Top_And_Bottom", "Top_And_Bottom_And_Left"
+    "Top_And_Bottom_And_Right", "Top_And_Left", "Top_And_Left_And_Right", "Top_And_Right"
+    "Visual_Order_Left"]
+
+fn hex(text: String) -> i64 {
+    let mut value = 0
+    for c in text.trim() {
+        let digit = match c.to_digit(16) {
+            Some(d) => d as i64
+            None => panic(f"bad hex digit in {text}")
+        }
+        value = value * 16 + digit
+    }
+    value
+}
+
+fn index_of(names: Vec<String>, name: String) -> i64 {
+    match names.iter().position(|n| n == name) {
+        Some(i) => i as i64
+        None => panic(f"unknown property value {name}")
+    }
+}
+
+// The `(start, end, value)` ranges a data file lists for one field.
+fn ranges(file: String, field: i64, names: Vec<String>) -> Vec<(i64, i64, i64)> {
+    let text = fs::read_to_string(f"{DATA}/{file}").unwrap()
+    let mut out = #[]
+    for raw in text.lines() {
+        let line = match strings::split_once(raw, "#") {
+            Some((before, _)) => before
+            None => raw
+        }
+        if line.trim().is_empty() {
+            continue
+        }
+        let fields = line.split(";").map(|f| f.trim())
+        let span = fields[0]
+        let value = index_of(names, fields[field])
+        let start, end = match strings::split_once(span, "..") {
+            Some((a, b)) => (hex(a), hex(b))
+            None => (hex(span), hex(span))
+        }
+        out.push((start, end, value))
+    }
+    merged(out)
+}
+
+fn merged(mut items: Vec<(i64, i64, i64)>) -> Vec<(i64, i64, i64)> {
+    items.sort_by_key(|r| r.0)
+    let mut out: Vec<(i64, i64, i64)> = #[]
+    for r in items {
+        let n = out.len()
+        if n > 0 && out[n - 1].1 + 1 == r.0 && out[n - 1].2 == r.2 {
+            out[n - 1] = (out[n - 1].0, r.1, r.2)
+        } else {
+            out.push(r)
+        }
+    }
+    out
+}
+
+// A table of triples in the shape `gos fmt` writes: commas between the
+// values of a line, a line break (and no comma) between lines.
+fn table(name: String, rows: Vec<(i64, i64, i64)>) -> String {
+    let mut s = f"pub (package) const {name}: [i64; {rows.len() * 3}] = [\n"
+    let mut line = ""
+    for r in rows {
+        let item = f"{r.0}, {r.1}, {r.2}"
+        if !line.is_empty() && line.byte_len() + item.byte_len() + 6 > 96 {
+            s += f"    {line}\n"
+            line = ""
+        }
+        line = if line.is_empty() { item } else { f"{line}, {item}" }
+    }
+    s += f"    {line}\n]\n\n"
+    s
+}
+
+fn names_table(name: String, names: Vec<String>) -> String {
+    let quoted = names.map(|n| f"\"{n}\"").join(", ")
+    f"pub (package) const {name}: [String; {names.len()}] = [{quoted}]\n\n"
+}
+
+// Scripts.txt names its values; their order of first appearance is the index.
+fn script_ranges() -> (Vec<(i64, i64, i64)>, Vec<String>) {
+    let text = fs::read_to_string(f"{DATA}/Scripts.txt").unwrap()
+    let mut names: Vec<String> = #["Unknown"]
+    let mut out = #[]
+    for raw in text.lines() {
+        let line = match strings::split_once(raw, "#") {
+            Some((before, _)) => before
+            None => raw
+        }
+        if line.trim().is_empty() {
+            continue
+        }
+        let fields = line.split(";").map(|f| f.trim())
+        let name = fields[1]
+        if !names.contains(name) {
+            names.push(name)
+        }
+        let value = index_of(names, name)
+        let start, end = match strings::split_once(fields[0], "..") {
+            Some((a, b)) => (hex(a), hex(b))
+            None => (hex(fields[0]), hex(fields[0]))
+        }
+        out.push((start, end, value))
+    }
+    (merged(out), names)
+}
+
+// The four-letter ISO 15924 code of each script name, from
+// PropertyValueAliases.txt, in the order of `names`.
+fn script_codes(names: Vec<String>) -> Vec<String> {
+    let text = fs::read_to_string(f"{DATA}/PropertyValueAliases.txt").unwrap()
+    let mut codes: Map<String, String> = Map::new()
+    for raw in text.lines() {
+        let line = match strings::split_once(raw, "#") {
+            Some((before, _)) => before
+            None => raw
+        }
+        let fields = line.split(";").map(|f| f.trim())
+        if fields.len() >= 3 && fields[0] == "sc" {
+            codes[fields[2]] = fields[1]
+        }
+    }
+    names.map(|n| match codes.get(n) {
+        Some(code) => code
+        None => panic(f"no ISO 15924 code for script {n}")
+    })
+}
+
+fn mirror_pairs() -> Vec<(i64, i64, i64)> {
+    let text = fs::read_to_string(f"{DATA}/BidiMirroring.txt").unwrap()
+    let mut out = #[]
+    for raw in text.lines() {
+        let line = match strings::split_once(raw, "#") {
+            Some((before, _)) => before
+            None => raw
+        }
+        if line.trim().is_empty() {
+            continue
+        }
+        let fields = line.split(";").map(|f| f.trim())
+        let c = hex(fields[0])
+        out.push((c, c, hex(fields[1])))
+    }
+    out.sort_by_key(|r| r.0)
+    out
+}
+
+fn emoji_ranges(property: String) -> Vec<(i64, i64, i64)> {
+    let text = fs::read_to_string(f"{DATA}/emoji-data.txt").unwrap()
+    let mut out = #[]
+    for raw in text.lines() {
+        let line = match strings::split_once(raw, "#") {
+            Some((before, _)) => before
+            None => raw
+        }
+        if line.trim().is_empty() {
+            continue
+        }
+        let fields = line.split(";").map(|f| f.trim())
+        if fields[1] != property {
+            continue
+        }
+        let start, end = match strings::split_once(fields[0], "..") {
+            Some((a, b)) => (hex(a), hex(b))
+            None => (hex(fields[0]), hex(fields[0]))
+        }
+        out.push((start, end, 1))
+    }
+    merged(out)
+}
+
+fn main() {
+    let bidi_names = BIDI_NAMES.to_vec()
+    let line_names = LINE_NAMES.to_vec()
+    let join_names = JOIN_NAMES.to_vec()
+    let scripts, script_names = script_ranges()
+    let mut out = "// Generated by tools/gen-ucd.gos from Unicode 15.1.0 (data/ucd-15.1.0).\n"
+    out += "// Do not edit by hand; regenerate after changing the pinned data.\n\n"
+    out += "pub (package) const UNICODE_VERSION: String = \"15.1.0\"\n\n"
+    out += table("BIDI", ranges("DerivedBidiClass.txt", 1, bidi_names))
+    out += table("MIRROR", mirror_pairs())
+    out += table("LINE_BREAK", ranges("LineBreak.txt", 1, line_names))
+    out += table("SCRIPT", scripts)
+    out += names_table("SCRIPT_NAMES", script_names)
+    out += names_table("SCRIPT_CODES", script_codes(script_names))
+    out += table("JOINING", ranges("ArabicShaping.txt", 2, join_names))
+    out += table("EMOJI_PRESENTATION", emoji_ranges("Emoji_Presentation"))
+    out += table("EXTENDED_PICTOGRAPHIC", emoji_ranges("Extended_Pictographic"))
+    out += table("INDIC_SYLLABIC", ranges("IndicSyllabicCategory.txt", 1, INDIC_SYLLABIC_NAMES.to_vec()))
+    out += names_table("INDIC_SYLLABIC_NAMES", INDIC_SYLLABIC_NAMES.to_vec())
+    out += table("INDIC_POSITIONAL", ranges("IndicPositionalCategory.txt", 1, INDIC_POSITIONAL_NAMES.to_vec()))
+    out += names_table("INDIC_POSITIONAL_NAMES", INDIC_POSITIONAL_NAMES.to_vec())
+    fs::write(OUT, (out.trim_end() + "\n").bytes()).unwrap()
+    println(f"wrote {OUT}")
+}

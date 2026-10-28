@@ -1,0 +1,60 @@
+gos 0.75.0
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling gos-windowing v0.1.0 (/home/daniel/dev/goose-libs/windowing-gos/rust/gos-windowing)
+   Compiling windowing-binding v0.1.0 (/home/daniel/dev/goose-libs/windowing-gos/rust/binding)
+   Compiling gos-bindings v0.0.0 (/home/daniel/.cache/gossamer/bindings/windowing_binding-af71c0b5f7e61a91/build)
+    Finished `release` profile [optimized] target(s) in 10.09s
+    Updating crates.io index
+     Locking 27 packages to latest Rust 1.98.0 compatible versions
+      Adding block2 v0.6.2
+      Adding dispatch2 v0.3.1
+      Adding objc2 v0.6.5
+      Adding objc2-app-kit v0.3.2
+      Adding objc2-cloud-kit v0.3.2
+      Adding objc2-core-data v0.3.2
+      Adding objc2-core-foundation v0.3.2
+      Adding objc2-core-graphics v0.3.2
+      Adding objc2-core-image v0.3.2
+      Adding objc2-core-location v0.3.2
+      Adding objc2-core-text v0.3.2
+      Adding objc2-core-video v0.3.2
+      Adding objc2-encode v4.1.0
+      Adding objc2-foundation v0.3.2
+      Adding objc2-io-surface v0.3.2
+      Adding objc2-quartz-core v0.3.2
+      Adding objc2-user-notifications v0.3.2
+      Adding windows v0.62.2
+      Adding windows-collections v0.3.2
+      Adding windows-core v0.62.2
+      Adding windows-future v0.3.2
+      Adding windows-implement v0.60.2
+      Adding windows-interface v0.59.3
+      Adding windows-numerics v0.3.1
+      Adding windows-result v0.4.1
+      Adding windows-strings v0.5.1
+      Adding windows-threading v0.2.1
+   Compiling gossamer-binding-macros v0.75.0 (/home/daniel/dev/gossamer/crates/gossamer-binding-macros)
+   Compiling gossamer-binding-abi v0.75.0 (/home/daniel/dev/gossamer/crates/gossamer-binding-abi)
+   Compiling gos-windowing v0.1.0 (/home/daniel/dev/goose-libs/windowing-gos/rust/gos-windowing)
+   Compiling gossamer-binding v0.75.0 (/home/daniel/dev/gossamer/crates/gossamer-binding)
+   Compiling windowing-binding v0.1.0 (/home/daniel/dev/goose-libs/windowing-gos/rust/binding)
+   Compiling gos-static-ac89b982b932 v0.0.0 (/home/daniel/.cache/gossamer/bindings/static-ac89b982b932)
+note: link against the following native artifacts when linking against this static library. The order and any duplication can be significant on some platforms
+
+note: native-static-libs: -ldl -lm -lgcc_s -lutil -lrt -lpthread -lm -ldl -lc
+
+    Finished `dev` profile [unoptimized] target(s) in 3.44s
+   Compiling gossamer-binding-macros v0.75.0 (/home/daniel/dev/gossamer/crates/gossamer-binding-macros)
+   Compiling gossamer-binding-abi v0.75.0 (/home/daniel/dev/gossamer/crates/gossamer-binding-abi)
+   Compiling gos-windowing v0.1.0 (/home/daniel/dev/goose-libs/windowing-gos/rust/gos-windowing)
+   Compiling gossamer-binding v0.75.0 (/home/daniel/dev/gossamer/crates/gossamer-binding)
+   Compiling windowing-binding v0.1.0 (/home/daniel/dev/goose-libs/windowing-gos/rust/binding)
+   Compiling gos-static-ac89b982b932 v0.0.0 (/home/daniel/.cache/gossamer/bindings/static-ac89b982b932)
+note: link against the following native artifacts when linking against this static library. The order and any duplication can be significant on some platforms
+
+note: native-static-libs: -ldl -lm -lgcc_s -lutil -lrt -lpthread -lm -ldl -lc
+
+    Finished `release` profile [optimized] target(s) in 9.98s
+parity: four tiers agree (177 lines)

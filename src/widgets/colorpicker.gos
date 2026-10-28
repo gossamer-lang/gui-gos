@@ -1,0 +1,170 @@
+// Shared color draft for a reusable picker and dialog. CSS edits retain invalid
+// or incomplete text without changing the last valid color. Values are sRGB.
+use std::math::{atan2, sqrt}
+use crate::accessibility::{AccessNode, Role}
+use crate::geometry::{Rect, Size}
+use crate::style::color::{Color, CssColor}
+use crate::widgets::Widget
+use crate::widgets::cx::UiMsg
+
+#[derive(PartialEq)]
+pub struct ColorPicker {
+    pub id: String
+    pub original: Color
+    pub value: Color
+    pub draft: String
+    pub hue: f64
+    pub alpha: bool
+    pub error: String
+}
+impl ColorPicker {
+    pub fn new(id: String, value: Color) -> ColorPicker {
+        let h, _, _ = value.hsv_parts()
+        ColorPicker { id: id, original: value, value: value, draft: value.css(), hue: h, alpha: true, error: "" }
+    }
+    /// Consumes child messages. Returns a changed valid color once; previews
+    /// remain drafts until the caller explicitly commits or restores original.
+    pub fn update(&mut self, msg: UiMsg) -> Option<Color> {
+        let before = self.value
+        let prefix = f"{self.id}:"
+        let id = crate::app::msg_id(msg)
+        if !id.starts_with(prefix) { return None }
+        let part = id.substring(prefix.byte_len(), id.byte_len())
+        let mut color = self.value
+        match msg {
+            UiMsg::Text(_, text) if part == "css" => {
+                self.draft = text
+                match crate::style::color::parse(text) {
+                    CssColor::Valid(c) => color = c
+                    CssColor::Intermediate => { self.error = crate::localization::tr("Complete the CSS color"); return None }
+                    CssColor::Invalid(why) | CssColor::Unsupported(why) => { self.error = why; return None }
+                }
+            }
+            UiMsg::Value(_, v) => {
+                let _, s, val = color.hsv_parts()
+                let _, hs, l = color.hsl_parts()
+                match part {
+                    "r" => color.r = v.max(0.0).min(255.0).round() as u8
+                    "g" => color.g = v.max(0.0).min(255.0).round() as u8
+                    "b" => color.b = v.max(0.0).min(255.0).round() as u8
+                    "a" => color.a = v.max(0.0).min(255.0).round() as u8
+                    "h" => { self.hue = v.max(0.0).min(360.0) % 360.0; color = Color::hsv(self.hue, s, val).with_alpha(color.a as i64) }
+                    "s" => color = Color::hsv(self.hue, v / 100.0, val).with_alpha(color.a as i64)
+                    "v" => color = Color::hsv(self.hue, s, v / 100.0).with_alpha(color.a as i64)
+                    "hs" => color = Color::hsl(self.hue, v / 100.0, l).with_alpha(color.a as i64)
+                    "l" => color = Color::hsl(self.hue, hs, v / 100.0).with_alpha(color.a as i64)
+                    _ => return None
+                }
+            }
+            UiMsg::Custom(_, values) if part == "wheel" => {
+                let p = values.split("|")
+                if p.len() != 3 { return None }
+                let Some(h) = p[0].to_f64() else { return None }
+                let Some(s) = p[1].to_f64() else { return None }
+                let Some(v) = p[2].to_f64() else { return None }
+                self.hue = h
+                color = Color::hsv(h, s, v).with_alpha(color.a as i64)
+            }
+            UiMsg::Click(_) if part == "original" => color = self.original
+            _ => return None
+        }
+        if !self.alpha { color.a = 255 }
+        let h, s, _ = color.hsv_parts()
+        if s > 0.00001 { self.hue = h }
+        self.value = color
+        self.draft = color.css()
+        self.error = ""
+        if before == color { None } else { Some(color) }
+    }
+    pub fn view(&self) -> Widget {
+        let id = self.id
+        let _, s, v = self.value.hsv_parts()
+        let _, hs, l = self.value.hsl_parts()
+        // Each channel is its label over a spin box; a model's channels wrap
+        // to the next line rather than narrow when the picker is narrow or
+        // the text large.
+        let row = |part: String, title: String, value: f64, max: f64| -> Widget {
+            Widget::column(#[Widget::paragraph(title).key(f"{id}:{part}:label"), Widget::spin_box(f"{id}:{part}", value, 0.0, max, 1.0, 0).accessible(title)], 4)
+        }
+        // One row per color model: RGB(A), HSV, then HSL.
+        let mut rgb = #[row("r", crate::localization::tr("Red"), self.value.r as f64, 255.0), row("g", crate::localization::tr("Green"), self.value.g as f64, 255.0), row("b", crate::localization::tr("Blue"), self.value.b as f64, 255.0)]
+        if self.alpha { rgb.push(row("a", crate::localization::tr("Alpha"), self.value.a as f64, 255.0)) }
+        let mut channels = #[Widget::flow(rgb, 16)]
+        channels.push(Widget::flow(#[row("h", crate::localization::tr("Hue"), self.hue, 360.0), row("s", crate::localization::tr("Saturation"), s * 100.0, 100.0), row("v", crate::localization::tr("Value"), v * 100.0, 100.0)], 16))
+        channels.push(Widget::flow(#[row("hs", crate::localization::tr("HSL saturation"), hs * 100.0, 100.0), row("l", crate::localization::tr("Lightness"), l * 100.0, 100.0)], 16))
+        let mut css = crate::widgets::textinput::TextInput::new(f"{id}:css", self.draft, crate::localization::tr("CSS color"), crate::widgets::textinput::InputKind::Line)
+        css.label = crate::localization::tr("CSS color")
+        css.error = self.error
+        let original = self.original
+        let current = self.value
+        Widget::column(#[Widget::row(#[Widget::ColorWheel(ColorWheel { id: f"{id}:wheel", value: current, hue: self.hue }), Widget::column(channels, 12).grow(1)], 16), Widget::flow(#[Widget::column(#[Widget::paragraph(crate::localization::tr("CSS color")).key(f"{id}:css:label"), Widget::input(css)], 4).width(240), Widget::column(#[Widget::paragraph(crate::localization::tr("Original and new")), Widget::flex(crate::widgets::Axis::Horizontal, #[checkerboard(original).width(64), checkerboard(current).width(64), Widget::spacer(8), Widget::button(f"{id}:original", crate::localization::tr("Revert")).disabled(current == original)], 0, crate::widgets::MainAlign::Start, crate::widgets::CrossAlign::Center)], 4)], 16)], 16).key(id).role(Role::ColorWell).accessible(crate::localization::message("color", "Color {color}", 1, { "color": current.css() }))
+    }
+}
+
+#[derive(PartialEq)]
+pub struct ColorWheel { pub id: String, pub value: Color, pub hue: f64 }
+
+// Rendered rings by size and fade color; a handful of sizes are live at once.
+static mut RINGS: Map<String, Vec<u8>> = {}
+
+// The hue ring as `side` x `side` RGBA pixels: hue follows the angle from
+// the positive x axis, clockwise on screen as `wheel_event` reads it, and
+// both edges are antialiased by their pixel coverage.
+fn hue_ring(side: i64, fade: Option<Color>) -> Vec<u8> {
+    let key = match fade { Some(c) => f"{side}:{c.css()}", None => f"{side}" }
+    if let Some(cached) = RINGS.get(key) {
+        return cached
+    }
+    let mid = side as f64 / 2.0
+    let outer = side as f64 * 0.47
+    let inner = outer * 0.78
+    let mut px = #[0u8; side * side * 4]
+    for y in 0..side {
+        for x in 0..side {
+            let dx = x as f64 + 0.5 - mid
+            let dy = y as f64 + 0.5 - mid
+            let d = sqrt(dx * dx + dy * dy)
+            let cover = (outer - d + 0.5).max(0.0).min(1.0) * (d - inner + 0.5).max(0.0).min(1.0)
+            if cover <= 0.0 { continue }
+            let hue = (atan2(dy, dx) * 180.0 / 3.141592653589793 + 360.0) % 360.0
+            let base = Color::hsv(hue, 1.0, 1.0)
+            let c = match fade { Some(f) => base.mix(f, 0.65), None => base }
+            let at = (y * side + x) * 4
+            px[at] = c.r
+            px[at + 1] = c.g
+            px[at + 2] = c.b
+            px[at + 3] = (cover * 255.0 + 0.5) as u8
+        }
+    }
+    if RINGS.len() >= 8 { RINGS = Map::new() }
+    RINGS[key] = px
+    px
+}
+pub fn wheel_semantics(w: ColorWheel) -> Option<AccessNode> {
+    let mut n = AccessNode::control(Role::Slider, w.id, crate::localization::tr("Hue wheel and saturation/value"), "increment")
+    n.actions.push("decrement")
+    n.value = w.value.css()
+    n.description = crate::localization::tr("Left/right: hue; up/down: value; Page Up/Down: saturation")
+    n.range(0.0, 360.0, w.hue)
+    Some(n)
+}
+
+
+/// The preview composites sRGB alpha over theme-colored checker squares.
+pub fn checkerboard(color: Color) -> Widget {
+    let label = crate::localization::message("color", "Transparency preview {color}", 1, { "color": color.css() })
+    Widget::Custom(crate::widgets::Custom::new("", Role::Image, label
+        |c, t| c.constrain(Size::new(t.px(120), t.px(32)))
+        |size, theme| {
+            let cell = theme.px(8).max(1)
+            let mut ops = #[]
+            for y in 0..((size.height + cell - 1) / cell) {
+                for x in 0..((size.width + cell - 1) / cell) {
+                    let background = if (x + y) % 2 == 0 { theme.surface } else { theme.border }
+                    ops.push(crate::render::display::DrawOp::FillRect { rect: Rect::new(x * cell, y * cell, cell.min(size.width - x * cell), cell.min(size.height - y * cell)), color: color.over(background) })
+                }
+            }
+            ops
+        }
+        |_| #[]))
+}

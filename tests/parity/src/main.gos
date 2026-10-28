@@ -1,0 +1,145 @@
+use std::errors
+use std::sync::channel
+
+use gui::{EditState, TaskOutcome, UiMsg, Widget}
+use gui::text::offsets
+use gui::text::offsets::{ByteOffset, ScalarIndex, Utf16Offset}
+use gui::text::syntax
+use gui::widgets::completion
+use windowing
+
+#[cfg(feature = "probe")]
+use crate::probe
+
+#[cfg(feature = "probe")]
+fn conditional() -> String { probe::report() }
+
+#[cfg(not(feature = "probe"))]
+fn conditional() -> String { "probe module compiled out" }
+
+// Records each finished task as `key=value`, in arrival order.
+fn record(log: Vec<String>, msg: UiMsg) -> Vec<String> {
+    match msg {
+        UiMsg::Task(key, TaskOutcome::Done(value)) => {
+            let mut next = log
+            next.push(f"{key}={value}")
+            next
+        }
+        _ => log
+    }
+}
+
+fn show(log: Vec<String>) -> Widget {
+    Widget::label(f"tasks {log.join(", ")}")
+}
+
+// Opens the second window when asked; counts its openings.
+fn windows_update(opened: i64, msg: UiMsg) -> i64 {
+    match msg {
+        UiMsg::Click(id) => {
+            if id == "open" {
+                gui::perform(gui::Effect::OpenWindow { key: "second", title: "Second", width: 240, height: 160 })
+                return opened + 1
+            }
+            opened
+        }
+        _ => opened
+    }
+}
+
+fn windows_main(opened: i64) -> Widget {
+    Widget::column(#[Widget::label(f"main, opened {opened}"), Widget::button("open", "Open")], 4).padding(8)
+}
+
+fn windows_second(opened: i64, key: String) -> Widget {
+    Widget::column(#[Widget::label(f"{key} {opened}"), Widget::text_field("notes", "", "Notes")], 4).padding(8).background(gui::Tone::Accent)
+}
+
+// Two windows render their own trees and pixels; closing one disposes its
+// widget state, so reopening starts afresh.
+fn two_windows() -> Result<(), errors::Error> {
+    let mut s = gui::application("Windows", "dev.gossamer.gui-parity-windows", || 0, windows_update, windows_main).windows(windows_second).size(240, 160).start()?
+    assert(s.click("open")?)
+    assert_eq(s.window_count(), 2)
+    assert(s.semantics(1).dump().contains("second 1"))
+    assert(s.semantics(0).dump() != s.semantics(1).dump())
+    s.set_focus(1, "notes")
+    s.inject(windowing::Event::Text { window: s.window_id(1), text: "kept" })?
+    assert_eq(s.edit_state(1, "notes").text, "kept")
+    s.close_window(1)
+    assert_eq(s.window_count(), 1)
+    assert(s.semantics(0).dump().contains("main, opened 1"))
+    assert(s.click("open")?)
+    assert_eq(s.window_count(), 2)
+    assert_eq(s.edit_state(1, "notes").text, "")
+    s.shutdown()
+    println("windows: a second window opens apart; a closed window's state is disposed")
+    Ok(())
+}
+
+fn main() -> Result<(), errors::Error> {
+    let mut edit = EditState::default()
+    edit.sync("é👩‍💻é!")
+    edit.move_to(13, false)
+    assert(edit.backspace(false, 1))
+    assert_eq(edit.text, "éé!")
+    assert(edit.undo())
+    assert_eq(edit.text, "é👩‍💻é!")
+    assert(edit.redo())
+    assert_eq(edit.text, "éé!")
+    println("editing: Unicode, undo and redo")
+
+    let text = "e\u{301}\u{1F600}\n\u{5D0}z"
+    let at = offsets::byte_of_utf16(text, Utf16Offset(4))
+    let back = offsets::utf16_of_byte(text, ByteOffset(7))
+    let pos = offsets::LineIndex::new(text).position(ByteOffset(10))
+    let range = offsets::ByteRange::from_scalars(text, ScalarIndex(2), ScalarIndex(3))
+    println(f"offsets: {at} {back} {pos} {range}")
+    let failures = #[offsets::byte_of_utf16(text, Utf16Offset(3)), offsets::check_grapheme(text, ByteOffset(1)), offsets::check_byte(text, ByteOffset(4))]
+    for f in failures {
+        match f {
+            Ok(b) => println(f"offsets: unexpected {b}")
+            Err(e) => println(f"offsets: {e}")
+        }
+    }
+    let mut ime = EditState::default()
+    ime.sync("ab")
+    ime.compose("\u{304B}\u{1F600}", ScalarIndex(1))
+    let shown, from, to = ime.display()
+    println(f"offsets: preedit {shown} {from}..{to} caret {ime.preedit_caret}")
+
+    let mut source = syntax::Document::new("fn main() {}\n// comment", "gos")
+    source.update("fn main() {}\n// changed")
+    assert_eq(source.scanned, 1)
+    assert_eq(source.lines.len(), 2)
+    assert_eq(source.text.substring(source.spans[0].start, source.spans[0].end), "fn")
+    println("syntax: cached lines and byte offsets")
+
+    let items = #[gui::CompletionItem::new("alpha", "Alpha"), gui::CompletionItem::new("beta", "Beta")]
+    let ranked = completion::rank(items, "alp", gui::MatchMode::Prefix, 8)
+    assert_eq(ranked.len(), 1)
+    assert_eq(ranked[0].key, "alpha")
+    println("completion: stable matching")
+
+    println(f"modules: {conditional()}")
+
+    let mut session = gui::application("Parity", "dev.gossamer.gui-parity", || #[], record, show).start()?
+    let mailbox = session.mailbox()
+    let done, finished = channel()
+    let worker = spawn(|| {
+        for i in 0..3 {
+            mailbox.post(UiMsg::Task(f"job{i}", TaskOutcome::Done(f"{i * i}")))
+        }
+        done.send(3)
+        done.close()
+    })
+    assert_eq(finished.recv(), Some(3))
+    assert_eq(worker.join(), Ok(()))
+    assert(session.flush().is_ok())
+    let dump = session.semantics(0).dump()
+    assert(dump.contains("tasks job0=0, job1=1, job2=4"))
+    session.shutdown()
+    println("channels: worker posts reach the session in order")
+
+    two_windows()
+}

@@ -1,0 +1,166 @@
+use std::{env, errors, fs, path, process}
+use gui
+use gui::{UiMsg, Widget}
+use gui::dialogs::request
+use gui::style::color::Color
+
+struct Model { color: gui::ColorPicker, date: String, time: String, duration: String, font: String, result: String, preview: Color, serving: bool }
+fn init() -> Model { Model { color: gui::ColorPicker::new("color", Color::rgba(20, 100, 180, 128)), date: "2026-10-18", time: "12:30:00", duration: "2:00:00", font: "DejaVu Sans|Regular|14", result: "", preview: Color::rgba(20, 100, 180, 128), serving: env::args().contains("--serve") } }
+fn update(m: Model, msg: UiMsg) -> Model {
+    let mut n = m
+    n.color.update(msg)
+    match msg {
+        UiMsg::Timer(tag) => if tag == "integration-stop" { gui::perform(gui::Effect::Quit) }
+        UiMsg::Date(id, text) => match id { "date" | "calendar" => n.date = text, "time" => n.time = text, "duration" => n.duration = text, _ => () }
+        UiMsg::Click(id) => {
+            if id == "integration-stop" { gui::perform(gui::Effect::Quit); return n }
+            let req = match id {
+                "pick-color" => request::color("c", "Choose color", n.color.value)
+                "pick-font" => request::font("f", "Choose font", n.font)
+                "pick-date" => request::date("d", "Choose date", n.date, request::DateMode::Date, "2020-01-01", "2030-12-31")
+                _ => return n
+            }
+            gui::perform(gui::Effect::OpenDialog(req))
+        }
+        UiMsg::DialogPreview(id, value) => { n.result = f"Preview {id}: {value}"; if let gui::Outcome::Color(color) = value { n.preview = color } }
+        UiMsg::Dialog(id, value) => n.result = f"Answer {id}: {value}"
+        _ => ()
+    }
+    n
+}
+fn view(m: Model) -> Widget {
+    let mut controls = #[Widget::title("Toolkit and platform integration")]
+    if m.serving { controls.push(Widget::button("integration-stop", "Finish integration probe")) }
+    controls.extend(#[
+        Widget::date_field("date", m.date).accessible("Date")
+        Widget::time_field("time", m.time).accessible("Time")
+        Widget::duration_field("duration", m.duration).accessible("Duration")
+        Widget::Calendar(gui::Calendar::new("calendar", gui::Date::parse(m.date).unwrap()))
+        m.color.view()
+        Widget::row(#[Widget::button("pick-color", "Choose color"), Widget::button("pick-font", "Choose font"), Widget::button("pick-date", "Choose date")], 8)
+        Widget::label(m.result)
+        Widget::label(f"Preview color {m.preview.css()}")
+    ])
+    Widget::scroll("scroll", Widget::column(controls, 8).padding(16))
+}
+fn browser_check(ok: bool, step: String) -> Result<(), errors::Error> {
+    if !ok { return Err(errors::new(f"File browser: {step}")) }
+    Ok(())
+}
+fn file_browser_journey(session: &mut gui::Session) -> Result<(), errors::Error> {
+    let folder = path::join(env::temp_dir(), f"gui-toolkit-files-{process::id()}")
+    fs::create_dir_all(folder)?
+    fs::write(path::join(folder, ".hidden"), "hidden".bytes())?
+    let folder = fs::canonicalize(folder)?
+    // A full recent list must not make focus scroll the toolbar out of reach.
+    let settings_file = gui::services::settings_path("dev.gossamer.toolkit-integration", "file-dialogs")
+    let mut settings = gui::services::load_settings(settings_file, 1, |_, s| s)?
+    let mut recent = #[]
+    for i in 0..8 { recent.push(path::join(folder, f"previous-{i}")) }
+    settings.set_list("recent:integration-navigation", recent)
+    gui::services::save_settings(settings_file, settings)?
+    session.open_dialog_in(0, request::DialogRequest::File { id: "files", mode: request::FileMode::Save, title: "Save file", directory: folder, name: "draft.gos", filters: #[], backend: request::FileBackend::Toolkit, purpose: "integration-navigation", needs_favorites: true })
+    session.flush()?
+    if session.semantics(session.window_count() - 1).dump().contains(".hidden") { browser_check(session.click("dlg:files:hidden")?, "hide initial hidden files")? }
+    browser_check(!session.semantics(session.window_count() - 1).dump().contains(".hidden"), "hidden files start hidden")?
+    browser_check(session.click("dlg:files:new-folder")?, "open New folder")?
+    browser_check(session.focused() == "dlg:files:new-folder:name", "focus new folder name")?
+    session.type_text("created")?
+    session.press(windowing::Key::Return, windowing::Mods::default())?
+    browser_check(fs::is_dir(path::join(folder, "created")), "create folder")?
+    browser_check(session.focused() == "dlg:files:entries", "focus entries after creation")?
+    browser_check(session.click("dlg:files:back")?, "click Back")?
+    browser_check(session.dialog_draft(session.dialog_ids()[0]).1.get("directory") == Some(folder), "Back navigates after list focus")?
+    browser_check(session.click("dlg:files:forward")?, "click Forward")?
+    browser_check(session.dialog_draft(session.dialog_ids()[0]).1.get("directory") == Some(path::join(folder, "created")), "Forward navigates")?
+    browser_check(session.click(f"dlg:files:breadcrumb:{folder}")?, "click parent breadcrumb")?
+    browser_check(session.dialog_draft(session.dialog_ids()[0]).1.get("directory") == Some(folder), "breadcrumb navigates")?
+    browser_check(session.click("dlg:files:back")?, "click Back after breadcrumb")?
+    browser_check(session.click("dlg:files:up")?, "click Up")?
+    browser_check(session.dialog_draft(session.dialog_ids()[0]).1.get("directory") == Some(folder), "Up navigates")?
+    browser_check(session.click("dlg:files:hidden")?, "show hidden files")?
+    browser_check(session.semantics(session.window_count() - 1).dump().contains(".hidden"), "hidden file becomes visible")?
+    browser_check(session.click("dlg:files:hidden")?, "hide hidden files")?
+    browser_check(session.click("dlg:files:refresh")?, "refresh")?
+    browser_check(session.dialog_draft(session.dialog_ids()[0]).0 == "draft.gos", "preserve Save filename")?
+    browser_check(session.click("dlg:files:action:cancel")?, "click Cancel")?
+    browser_check(session.dialog_ids().is_empty(), "Cancel dismisses dialog")?
+    fs::remove_dir_all(folder)?
+    println("file browser history, hidden files and new folder: ok")
+    Ok(())
+}
+
+fn main() -> Result<(), errors::Error> {
+    let mut session = gui::application("Toolkit integration", "dev.gossamer.toolkit-integration", init, update, view).size(800, 900).focus("date").start()?
+    if env::args().contains("--files-fixture") {
+        let result = file_browser_journey(&mut session)
+        session.shutdown()
+        return result
+    }
+    if env::args().contains("--serve") {
+        println(f"AT-SPI endpoint: {session.accessibility_endpoint()}")
+        println(session.accessibility_status())
+        // The client closes through the accessible button. This bounds a
+        // failed or abandoned probe without racing slow instrumented queries.
+        gui::perform(gui::Effect::Timer("integration-stop", 90_000, false))
+        return session.run()
+    }
+    assert(session.focus("time")?)
+    session.press(windowing::Key::A, windowing::Mods { ctrl: true, ..windowing::Mods::default() })?
+    session.type_text("99:00")?
+    let dump = session.semantics(0).dump()
+    if !dump.contains("invalid") { return Err(errors::new(dump)) }
+    session.press(windowing::Key::A, windowing::Mods { ctrl: true, ..windowing::Mods::default() })?
+    session.type_text("13:45")?
+    assert(session.semantics(0).dump().contains("13:45:00"))
+    println("temporal draft validation: ok")
+    gui::perform(gui::Effect::ScrollTo("pick-color"))
+    session.flush()?
+    assert(session.click("pick-color")?)
+    assert(session.focus("dlg:c:color:css")?)
+    session.press(windowing::Key::A, windowing::Mods { ctrl: true, ..windowing::Mods::default() })?
+    session.type_text("#ff000080")?
+    session.press(windowing::Key::Escape, windowing::Mods::default())?
+    assert(session.dialog_ids().is_empty())
+    assert(session.semantics(0).dump().contains("Preview color #1464b480"))
+    println("color preview and cancel: ok")
+    assert(session.click("pick-date")?)
+    session.press(windowing::Key::Escape, windowing::Mods::default())?
+    println("calendar dialog and focus restoration: ok")
+    session.open_dialog_in(0, request::font("f", "Font", "DejaVu Sans|Regular|14"))
+    session.flush()?
+    assert(session.focus("dlg:f:font:size")?)
+    session.press(windowing::Key::A, windowing::Mods { ctrl: true, ..windowing::Mods::default() })?
+    session.type_text("20")?
+    session.press(windowing::Key::Return, windowing::Mods::default())?
+    session.press(windowing::Key::Escape, windowing::Mods::default())?
+    assert(session.dialog_ids().is_empty())
+    println("font preview and cancel: ok")
+    let name = request::PreferenceField { key: "name", label: "Display name", kind: request::PreferenceKind::Text, value: "Ada", default: "Guest", help: "Your display name" }
+    session.open_dialog_in(0, request::preferences("p", "Preferences", #[request::PreferencePage { key: "general", title: "General", fields: #[name] }]))
+    session.flush()?
+    assert(session.focus("dlg:p:field:name")?)
+    session.press(windowing::Key::A, windowing::Mods { ctrl: true, ..windowing::Mods::default() })?
+    session.type_text("Grace")?
+    assert(session.click("dlg:p:action:apply")?)
+    assert_eq(session.dialog_ids(), #["p"])
+    assert(session.click("dlg:p:action:defaults")?)
+    session.press(windowing::Key::Escape, windowing::Mods::default())?
+    assert_eq(session.dialog_ids(), #["p"])
+    assert(session.semantics(0).dump().contains("Discard unapplied settings changes?"))
+    assert(session.click("dlg:p:discard")?)
+    assert(session.dialog_ids().is_empty())
+    println("preferences Apply baseline and dirty Cancel: ok")
+    session.open_dialog_in(0, request::wizard("w", "Wizard", #[request::WizardPage { key: "name", title: "Name", description: "Choose a name", fields: #[name], skip_if: "" }, request::WizardPage { key: "finish", title: "Review", description: "Finish setup", fields: #[], skip_if: "" }]))
+    session.flush()?
+    assert(session.click("dlg:w:action:next")?)
+    assert(session.click("dlg:w:action:back")?)
+    assert(session.semantics(0).dump().contains("Ada"))
+    assert(session.click("dlg:w:action:next")?)
+    assert(session.click("dlg:w:action:finish")?)
+    assert(session.dialog_ids().is_empty())
+    println("wizard Back, drafts and Finish: ok")
+    let result = file_browser_journey(&mut session)
+    session.shutdown()
+    result
+}

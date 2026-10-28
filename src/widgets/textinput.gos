@@ -1,0 +1,366 @@
+// textinput: single-line fields, text areas, password and search fields,
+// masked and validated inputs, and history recall, all over the shared
+// editing controller. Typing never comes from key-down events: committed
+// text arrives as `Event::Text` and composition as `Event::Composing`, so
+// dead keys, AltGr, and input methods behave the platform's way.
+
+use std::math::floor
+use std::unicode
+use windowing::Key
+
+use crate::accessibility::{AccessNode, Role}
+use crate::editing
+use crate::editing::{EditKind, EditState, Validity}
+use crate::geometry::Rect
+use crate::render::icons::Icon
+use crate::style::{Theme, TextRole}
+use crate::text::layout::{TextStyle}
+use crate::widgets::completion
+use crate::widgets::completion::{Completion, CompletionItem, Source}
+use crate::widgets::cx::Node
+use crate::widgets::state::{StateStore, WState}
+
+/// What kind of text input.
+#[derive(PartialEq, Eq)]
+pub enum InputKind {
+    Line
+    Area
+    Password
+    Search
+}
+
+/// A text input. The application owns `text`; edits are reported as
+/// `UiMsg::Text(id, text)`.
+pub struct TextInput {
+    pub id: String
+    pub text: String
+    pub document: i64
+    pub rich_document: i64
+    pub rich_block: i64
+    pub placeholder: String
+    pub kind: InputKind
+    /// Visible lines of a text area.
+    pub rows: i64
+    pub read_only: bool
+    /// Most graphemes accepted (0 = unlimited).
+    pub max_length: i64
+    /// Input mask: `9` digit, `a` letter, `*` any; other characters are
+    /// inserted literally.
+    pub mask: String
+    /// Judges the draft; invalid drafts stay editable and are marked. The
+    /// host id of the judge (`validated` registers one).
+    pub validate: Option<i64>
+    /// An error to show under the field (from the application).
+    pub error: String
+    pub help: String
+    /// Accessible name (defaults to the placeholder).
+    pub label: String
+    /// Previous entries recalled with Up/Down (oldest first).
+    pub history: Vec<String>
+    pub completion: Option<Completion>
+    /// Optional leading content; completion navigation previews the highlighted item.
+    pub leading_icon: Option<Icon>
+    pub leading_image: Option<crate::services::apps::AppIcon>
+    /// Source spans for the current committed text, in UTF-8 bytes.
+    pub syntax: Vec<crate::text::syntax::Span>
+    pub mono: bool
+    /// Soft-wrap a text area (otherwise it scrolls horizontally).
+    pub wrap: bool
+    /// Tab inserts a tab character in a text area instead of moving focus.
+    pub tab_inserts: bool
+    pub required: bool
+    /// A dropdown button lists every completion item (an editable combo).
+    pub dropdown: bool
+    /// Only completion items are accepted: leaving the field with other
+    /// text restores the last accepted item.
+    pub strict: bool
+}
+
+impl PartialEq for TextInput {
+    fn eq(&self, other: TextInput) -> bool {
+        self.id == other.id && self.text == other.text && self.document == other.document && self.rich_document == other.rich_document && self.rich_block == other.rich_block && self.placeholder == other.placeholder && self.kind == other.kind && self.rows == other.rows && self.read_only == other.read_only && self.error == other.error && self.help == other.help && self.label == other.label && self.mask == other.mask && self.max_length == other.max_length && self.leading_icon == other.leading_icon && self.leading_image == other.leading_image
+    }
+}
+
+impl TextInput {
+    /// This input judged by `judge`: invalid drafts stay editable and are
+    /// marked.
+    pub fn validated(self, judge: Fn(String) -> Validity) -> TextInput {
+        let mut t = self
+        t.validate = Some(crate::app::host::validator(judge))
+        t
+    }
+
+    pub fn new(id: String, text: String, placeholder: String, kind: InputKind) -> TextInput {
+        TextInput {
+            id: id
+            text: text
+            document: 0
+            rich_document: 0
+            rich_block: 0
+            placeholder: placeholder
+            kind: kind
+            rows: 4
+            read_only: false
+            max_length: 0
+            mask: String::new()
+            validate: None
+            error: String::new()
+            help: String::new()
+            label: String::new()
+            history: #[]
+            completion: None
+            leading_icon: None
+            leading_image: None
+            syntax: #[]
+            mono: false
+            wrap: true
+            tab_inserts: false
+            required: false
+            dropdown: false
+            strict: false
+        }
+    }
+
+    pub fn multiline(&self) -> bool {
+        self.kind == InputKind::Area
+    }
+}
+
+fn style_of(t: TextInput, theme: Theme) -> TextStyle {
+    if t.mono { theme.font(TextRole::Mono) } else { theme.font(TextRole::Body) }
+}
+
+fn trailing_button(t: TextInput) -> bool {
+    (t.kind == InputKind::Search && !t.text.is_empty()) || t.kind == InputKind::Password || t.dropdown
+}
+
+fn caption(t: TextInput, validity: String) -> String {
+    if !t.error.is_empty() { return t.error }
+    if !validity.is_empty() { return validity }
+    t.help
+}
+
+
+// One bullet per grapheme, so caret offsets map through `bullet_offset`.
+fn bullets(text: String) -> String {
+    let mut out = String::new()
+    for _ in unicode::graphemes(text) {
+        out.push('\u{2022}')
+    }
+    out
+}
+
+// Maps a byte offset in the real text to the bullet text and back.
+fn to_shown(t: TextInput, st: EditState, offset: i64) -> i64 {
+    if t.kind != InputKind::Password || st.revealed {
+        return offset
+    }
+    let shown, _, _ = st.display()
+    unicode::grapheme_count(shown.substring(0, offset.min(shown.byte_len()))) * 3
+}
+
+fn from_shown(t: TextInput, st: EditState, offset: i64) -> i64 {
+    if t.kind != InputKind::Password || st.revealed {
+        return offset
+    }
+    let n = offset / 3
+    let mut at = 0
+    let mut k = 0
+    for g in unicode::graphemes(st.text) {
+        if k >= n { break }
+        at += g.byte_len()
+        k += 1
+    }
+    at
+}
+
+fn state_of(t: TextInput, st: StateStore) -> EditState {
+    let mut s = st.edit(t.id)
+    s.sync(t.text)
+    s
+}
+
+
+fn fold_prefix(full: String, prefix: String) -> bool {
+    completion::fold(full).starts_with(completion::fold(prefix))
+}
+
+
+fn clear_text_drag(id: String, st: &mut StateStore) {
+    st.set_field(id, "drag-x", "")
+    st.set_field(id, "drag-y", "")
+    st.set_field(id, "drag-at", "")
+}
+
+// `a..b` widened outward to grapheme boundaries, keeping its direction.
+fn grapheme_range(text: String, a: i64, b: i64) -> (i64, i64) {
+    if a <= b {
+        (editing::snap(text, a), up_to_boundary(text, b))
+    } else {
+        (up_to_boundary(text, a), editing::snap(text, b))
+    }
+}
+
+fn up_to_boundary(text: String, at: i64) -> i64 {
+    let down = editing::snap(text, at)
+    if down == at { at } else { editing::next_boundary(text, down) }
+}
+
+fn inner_rect(node: Node) -> Rect {
+    if node.parts.len() >= 2 { node.parts[1] } else { Rect::from_size(node.size()) }
+}
+
+fn field_rect(node: Node) -> Rect {
+    if node.parts.len() >= 1 { node.parts[0] } else { Rect::from_size(node.size()) }
+}
+
+
+fn accepts_tab(t: TextInput) -> bool {
+    match t.completion {
+        Some(c) => c.accept_tab
+        None => false
+    }
+}
+
+fn edit_shortcut(t: TextInput, s: &mut EditState, key: Key, shift: bool, now: i64, editable: bool) -> bool {
+    let single = !t.multiline()
+    match key {
+        Key::A => { s.select_all(); true }
+        Key::C => t.kind != InputKind::Password && s.copy()
+        Key::X => editable && t.kind != InputKind::Password && s.cut(now)
+        Key::V => editable && s.paste(single, now, t.max_length)
+        Key::Z => editable && if shift { s.redo() } else { s.undo() }
+        Key::Y => editable && s.redo()
+        _ => false
+    }
+}
+
+fn recall(t: TextInput, s: &mut EditState, dir: i64, now: i64) {
+    let n = t.history.len()
+    let mut idx = s.history_index
+    if dir < 0 {
+        idx = if idx < 0 { n - 1 } else { (idx - 1).max(0) }
+    } else {
+        if idx < 0 { return }
+        idx += 1
+    }
+    let value = if idx >= n { "" } else { t.history[idx] }
+    s.select_all()
+    s.replace_selection(value, EditKind::Other, now, t.max_length)
+    s.history_index = if idx >= n { -1 } else { idx }
+}
+
+// The text range a completion replaces: the word before the caret, or all.
+fn completion_range(t: TextInput, s: EditState) -> (i64, i64) {
+    let word = match t.completion {
+        Some(c) => c.word
+        None => false
+    }
+    if !word {
+        return (0, s.text.byte_len())
+    }
+    let mut start = s.caret
+    while start > 0 {
+        let prev = editing::prev_boundary(s.text, start)
+        let piece = s.text.substring(prev, start)
+        let mut ok = false
+        for c in piece {
+            if unicode::is_letter(c) || unicode::is_number(c) || c == '_' { ok = true }
+        }
+        if !ok { break }
+        start = prev
+    }
+    (start, s.caret)
+}
+
+
+/// Delivers asynchronous completion results; answers false when they are
+/// stale (a newer request, or a revision the text has moved past).
+pub fn deliver(st: &mut StateStore, id: String, request: i64, items: Vec<CompletionItem>, error: String) -> bool {
+    let cs_id = f"{id}#completion"
+    let mut cs = st.choice(cs_id)
+    if request != cs.request || !cs.open {
+        return false
+    }
+    if st.edit(id).revision != cs.revision {
+        return false
+    }
+    if error.is_empty() {
+        let mut sorted = items
+        completion::sort_ranked(&mut sorted)
+        cs.set_items(sorted)
+    } else {
+        // The error row is the list's only row, so Enter retries.
+        cs.items = #[]
+        cs.loading = false
+        cs.error = error
+    }
+    st.set(cs_id, WState::Choice(cs))
+    true
+}
+
+// Whether `text` is one of a strict combo's item labels.
+fn matches_item(t: TextInput, text: String) -> bool {
+    let Some(comp) = t.completion else { return true }
+    let Source::Local(items, _) = comp.source else { return true }
+    if text.is_empty() { return true }
+    items.iter().any(|it| completion::fold(it.label) == completion::fold(text))
+}
+
+
+pub fn input_semantics(t: TextInput, st: StateStore) -> Option<AccessNode> {
+    let role = match t.kind {
+        InputKind::Line => Role::TextField
+        InputKind::Area => Role::TextArea
+        InputKind::Password => Role::PasswordField
+        InputKind::Search => Role::SearchField
+    }
+    let name = if t.label.is_empty() { t.placeholder } else { t.label }
+    let mut n = AccessNode::control(role, t.id, name, "focus")
+    let s = state_of(t, st)
+    // Passwords never expose their value.
+    if t.kind != InputKind::Password {
+        n.value = s.text
+        let a, b = s.selection()
+        n.text_start = a
+        n.text_end = b
+        n.caret = s.caret
+    }
+    n.read_only = t.read_only
+    n.required = t.required
+    n.multiline = t.multiline()
+    let validity = st.field(t.id, "validity", "")
+    n.invalid = !t.error.is_empty() || !validity.is_empty()
+    n.description = caption(t, validity)
+    if t.completion.is_some() {
+        let cs = st.choice(f"{t.id}#completion")
+        n.expanded = if cs.open { 1 } else { 0 }
+        n.controls = f"{t.id}#completion"
+        if cs.open { n.children.push(completion::list_semantics(cs, f"{t.id}#completion", name, t.id, "")) }
+    }
+    Some(n)
+}
+
+/// The state's selection for tests: (anchor, caret).
+pub fn selection(st: StateStore, id: String) -> (i64, i64) {
+    let s = st.edit(id)
+    (s.anchor, s.caret)
+}
+
+/// Floors a layout x to a pixel; exposed for the code editor's gutter.
+pub fn pixel(x: f64) -> i64 {
+    floor(x) as i64
+}
+
+impl Display for TextInput {
+    fn fmt(&self) -> String {
+        f"TextInput({self.id})"
+    }
+}
+
+impl Debug for TextInput {
+    fn fmt(&self) -> String {
+        f"TextInput {{ id: {self.id:?}, text: {self.text:?} }}"
+    }
+}

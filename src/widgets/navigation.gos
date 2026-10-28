@@ -1,0 +1,50 @@
+// Navigation uses the standard selection controller, so arrow/typeahead keys,
+// disabled entries and native accessibility share the control's stable keys.
+use crate::accessibility::Role
+use crate::widgets::{buttons, Widget, Tone}
+use crate::widgets::collections::{Collection, Row}
+
+#[derive(PartialEq)]
+pub struct Destination { pub key: String, pub label: String, pub icon: Option<crate::render::icons::Icon>, pub disabled: bool }
+impl Destination {
+    pub fn new(key: String, label: String) -> Destination { Destination { key: key, label: label, icon: None, disabled: false } }
+}
+/// Sidebar selection reports UiMsg::Select(id, destination key).
+pub fn sidebar(id: String, destinations: Vec<Destination>, selected: String) -> Widget {
+    let count = destinations.len()
+    let list = Collection::new(id, count, |i| {
+        let item = destinations[i]
+        let mut row = Row::new(item.key, item.label)
+        row.icon = item.icon
+        row.disabled = item.disabled
+        row
+    })
+    Widget::collection(list.selected(#[selected]).label(crate::localization::tr("Navigation")).empty_text("No destinations").rows(count.max(1))).role(Role::Pane).accessible("Navigation")
+}
+/// Each ancestor is a standard keyboard button named `{id}#{key}`. The current
+/// item is readable text. Activation reports UiMsg::Click with that button id.
+pub fn breadcrumb(id: String, ancestors: Vec<Destination>, current: String) -> Widget {
+    let mut children = #[]
+    for item in ancestors {
+        if !children.is_empty() { children.push(Widget::muted("/").decorative()) }
+        children.push(if item.key == current { Widget::label(item.label).padding_xy(12, 0).role(Role::Label).accessible(f"{item.label}, current location") } else { Widget::flat_button(f"{id}#{item.key}", item.label).disabled(item.disabled) })
+    }
+    Widget::flow(children, 4).key(id).role(Role::Pane).accessible(crate::localization::tr("Breadcrumb"))
+}
+pub fn toolbar(id: String, controls: Vec<Widget>) -> Widget { Widget::flow(controls, 4).key(id).role(Role::Toolbar) }
+pub fn status_bar(id: String, text: String) -> Widget { Widget::text(text, crate::style::TextRole::Small, Tone::Muted).padding(6).key(id).role(Role::StatusBar) }
+pub fn accordion(id: String, sections: Vec<(String, String, Widget)>, opened: Vec<String>) -> Widget {
+    let mut children = #[]
+    for (key, title, content) in sections { children.push(disclosure(f"{id}#{key}", title, content, opened.contains(key))) }
+    Widget::column(children, 4).key(id).role(Role::Group)
+}
+
+/// The header reports UiMsg::Toggle(id, open); the caller retains expansion.
+pub fn disclosure(id: String, title: String, content: Widget, opened: bool) -> Widget {
+    let mut header = buttons::Button::new(id, title, buttons::ButtonKind::Flat)
+    header.toggled = if opened { 1 } else { 0 }
+    header.expander = true
+    let mut children = #[Widget::Button(header)]
+    if opened { children.push(content) }
+    Widget::column(children, 4).role(Role::Group)
+}

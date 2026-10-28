@@ -1,0 +1,1 @@
+build: 14148064B native executable at /tmp/gui-editor-bounded-release-memory/bin/gui-code-editor (target x86_64-unknown-linux-gnu)

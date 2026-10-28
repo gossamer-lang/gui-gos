@@ -1,0 +1,8 @@
+[project]
+id = "dev.gossamer/gui-charts"
+version = "0.1.0"
+gossamer-version = "^v0.75.5"
+
+[dependencies]
+"github.com/gossamer-lang/gui-gos" = { path = "../.." }
+"github.com/gossamer-lang/windowing-gos" = { git = "https://github.com/gossamer-lang/windowing-gos", tag = "v0.1.0" }

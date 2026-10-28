@@ -1,0 +1,257 @@
+// A run box like KRunner: one text field, frameless along the top of the
+// screen, that proposes the installed applications as you type
+// (`services::apps`). Arrow keys move through the proposals, Enter starts the
+// highlighted one (or the best match), and Escape or turning to another
+// window closes it. The window is as tall as the field and grows while the
+// proposals show. Recent launches rank first; launching never runs a shell.
+// `--fixture` drives a fixed catalog and records launches instead of
+// starting processes.
+use std::{env, errors}
+use gui
+use gui::{Effect, UiMsg, Widget}
+use gui::services::apps
+use gui::services::apps::{AppEntry, AppHistory}
+use gui::widgets::completion
+use gui::widgets::completion::{Completion, CompletionItem, MatchMode}
+use gui::widgets::cx::TaskOutcome
+use gui::widgets::textinput::{InputKind, TextInput}
+
+const APP_ID: String = "dev.gossamer.launcher"
+
+// Proposals the list holds; it shows eight and scrolls.
+const PROPOSALS: i64 = 50
+
+struct Model {
+    apps: Vec<AppEntry>
+    loading: bool
+    history: AppHistory
+    query: String
+    /// A completion request that arrived before the catalog: (id, query).
+    waiting: Option<(i64, String)>
+    /// Text submitted before the catalog arrived, launched once it does.
+    submitted: Option<String>
+    /// Why the last Enter started nothing, shown under the field until the
+    /// text changes.
+    error: String
+    fixture: bool
+    launches: Vec<String>
+}
+
+fn fixture_entry(id: String, name: String, program: String) -> AppEntry {
+    AppEntry { id: id, name: name, generic_name: String::new(), comment: String::new(), icon: String::new(), keywords: #[], categories: #[], exec: #[program], terminal: false, source: String::new(), image: None }
+}
+
+fn fixture_catalog() -> Vec<AppEntry> {
+    let mut editor = fixture_entry("editor", "Text Editor", "gedit")
+    editor.keywords = #["notes"]
+    editor.generic_name = "Editor"
+    let mut calculator = fixture_entry("calculator", "Calculator", "gnome-calculator")
+    calculator.generic_name = "Calculator"
+    #[calculator, editor, fixture_entry("terminal", "Terminal", "x-terminal-emulator")]
+}
+
+fn init() -> Model {
+    let fixture = env::args().contains("--fixture")
+    if !fixture { gui::perform(Effect::LoadApps("catalog")) }
+    Model {
+        apps: if fixture { fixture_catalog() } else { #[] }
+        loading: !fixture
+        history: if fixture { AppHistory::default() } else { apps::load_history(APP_ID).unwrap_or(AppHistory::default()) }
+        query: "", waiting: None, submitted: None, error: "", fixture: fixture, launches: #[]
+    }
+}
+
+// The proposals for `query`, best first.
+fn proposals(m: Model, query: String) -> Vec<CompletionItem> {
+    let found = apps::search(m.apps, query, m.history, PROPOSALS)
+    let n = found.len()
+    let mut out = #[]
+    for (i, e) in found.iter().enumerate() {
+        let mut item = CompletionItem::new(e.id, e.name).with_detail(e.generic_name)
+        // The list sorts by score; descending scores keep the search's order.
+        item.score = (n - i) as f64
+        item.matches = completion::match_label(e.name, query.trim(), MatchMode::Substring).1
+        out.push(item)
+    }
+    out
+}
+
+fn remember(m: Model, history: AppHistory) -> Model {
+    let mut n = m
+    n.history = history
+    if !n.fixture {
+        if let Err(e) = apps::save_history(APP_ID, history) { n.error = f"Could not save recent launches: {e}" }
+    }
+    n
+}
+
+fn launch(m: Model, id: String) -> Model {
+    let chosen = m.apps.filter(|e| e.id == id)
+    if chosen.is_empty() { return m }
+    let e = chosen[0]
+    let mut n = remember(m, m.history.launched(e.id))
+    if n.fixture {
+        n.launches.push(e.id)
+    } else {
+        gui::perform(Effect::LaunchApp("launch", e, #[]))
+    }
+    n
+}
+
+// Enter without a highlighted proposal starts the best match.
+fn submit(m: Model, text: String) -> Model {
+    if m.loading {
+        let mut n = m
+        n.submitted = Some(text)
+        return n
+    }
+    let best = apps::search(m.apps, text, m.history, 1)
+    if best.is_empty() {
+        let mut n = m
+        n.error = if text.trim().is_empty() { "" } else { f"No application matches \u{201c}{text.trim()}\u{201d}" }
+        return n
+    }
+    launch(m, best[0].id)
+}
+
+fn update(m: Model, msg: UiMsg) -> Model {
+    let mut n = m
+    match msg {
+        UiMsg::AppsLoaded(_, found) => {
+            n.apps = found
+            n.loading = false
+            if let Some((request, query)) = n.waiting {
+                gui::perform(Effect::Complete("run", request, proposals(n, query), ""))
+                n.waiting = None
+            }
+            if let Some(text) = n.submitted {
+                n.submitted = None
+                n = submit(n, text)
+            }
+        }
+        UiMsg::CompletionRequest(id, request, query, _) => if id == "run" {
+            if n.loading { n.waiting = Some((request, query)) } else { gui::perform(Effect::Complete("run", request, proposals(n, query), "")) }
+        }
+        UiMsg::Text(id, text) => if id == "run" {
+            n.query = text
+            n.error = ""
+        }
+        UiMsg::Select(id, key) => if id == "run" { n = launch(n, key) }
+        UiMsg::Submit(id, text) => if id == "run" { n = submit(n, text) }
+        UiMsg::Task(id, outcome) => if id == "launch" {
+            match outcome {
+                TaskOutcome::Done(_) => gui::perform(Effect::Quit)
+                TaskOutcome::Failed(why) => n.error = f"Could not start it: {why}"
+                TaskOutcome::Cancelled => ()
+            }
+        }
+        _ => ()
+    }
+    n
+}
+
+fn view(m: Model) -> Widget {
+    let mut c = Completion::asynchronous(0)
+    c.limit = PROPOSALS
+    let mut field = TextInput::new("run", m.query, "Run an application", InputKind::Line)
+    field.completion = Some(c)
+    field.error = m.error
+    Widget::input(field).padding(8).bordered()
+}
+
+fn app() -> gui::App<Model> {
+    gui::application("Run", APP_ID, init, update, view).size(560, 52).frameless().at_top_center().dismissible().grows_for_popups().focus("run").icon(gui::AppIcon::drawn(gui::Icon::Search, 64, gui::Color::rgb(36, 112, 200), gui::Color::white()))
+}
+
+fn main() -> Result<(), errors::Error> {
+    if !env::args().contains("--fixture") { return app().run() }
+    let mut s = app().start()?
+    let height = || s.window_pixel_size(0).1
+    let closed = height()
+    s.type_text("t")?
+    s.advance(1)?
+    let listed = s.semantics(0).dump()
+    if !listed.contains("listitem \"Terminal\"") || !listed.contains("listitem \"Calculator\"") { return Err(errors::new(f"typing proposed nothing: {listed}")) }
+    if height() <= closed { return Err(errors::new(f"the window did not grow for the proposals: {height()} <= {closed}")) }
+    s.press(windowing::Key::Down, windowing::Mods::default())?
+    s.press(windowing::Key::Return, windowing::Mods::default())?
+    s.flush()?
+    let dump = s.semantics(0).dump()
+    if !dump.contains("= \"Text Editor\"") { return Err(errors::new(f"Down then Enter did not take the second proposal: {dump}")) }
+    if !s.popup_owners().is_empty() || height() != closed { return Err(errors::new(f"the list did not close back to the field: {height()} != {closed}")) }
+    let mut primary = windowing::Mods::default()
+    primary.ctrl = true
+    s.press(windowing::Key::A, primary)?
+    s.type_text("notes")?
+    s.advance(1)?
+    if !s.semantics(0).dump().contains("listitem \"Text Editor\"") { return Err(errors::new(f"the keyword search proposed nothing: {s.semantics(0).dump()}")) }
+    s.shutdown()
+    println("launcher: typing proposes matches by name or keyword, the window grows for them, Down and Enter take one; no process launched")
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use gui::UiMsg
+
+    fn fixture() -> super::Model {
+        let mut m = super::init()
+        m.fixture = true
+        m.apps = super::fixture_catalog()
+        m.loading = false
+        m.history = gui::services::apps::AppHistory::default()
+        m
+    }
+
+    #[test]
+    fn proposals_ignore_case_match_keywords_and_put_recent_launches_first() {
+        let mut m = fixture()
+        assert_eq(super::proposals(m, "cALC").map(|i| i.key), #["calculator"])
+        assert_eq(super::proposals(m, "Notes").map(|i| i.key), #["editor"])
+        // Names starting with the text, then a word starting with it, then containing it.
+        assert_eq(super::proposals(m, "t").map(|i| i.key), #["terminal", "editor", "calculator"])
+        assert_eq(super::proposals(m, "e").map(|i| i.key), #["editor", "terminal"])
+        // A recent launch leads matches of its kind, not better ones.
+        m = super::update(m, UiMsg::Select("run", "editor"))
+        assert_eq(super::proposals(m, "t").map(|i| i.key), #["editor", "terminal", "calculator"])
+        m = super::update(m, UiMsg::Select("run", "terminal"))
+        assert_eq(super::proposals(m, "e").map(|i| i.key), #["editor", "terminal"])
+    }
+
+    #[test]
+    fn enter_starts_the_best_match_and_waits_for_the_catalog() {
+        let mut m = fixture()
+        m = super::update(m, UiMsg::Submit("run", "edit"))
+        assert_eq(m.launches, #["editor"])
+        let mut early = fixture()
+        let catalog = early.apps
+        early.apps = #[]
+        early.loading = true
+        early = super::update(early, UiMsg::Submit("run", "term"))
+        assert(early.launches.is_empty())
+        early = super::update(early, UiMsg::AppsLoaded("catalog", catalog))
+        assert_eq(early.launches, #["terminal"])
+    }
+
+    #[test]
+    fn enter_on_text_nothing_matches_explains_until_the_text_changes() {
+        let mut m = fixture()
+        m = super::update(m, UiMsg::Submit("run", "zzz"))
+        assert(m.launches.is_empty())
+        assert_eq(m.error, "No application matches \u{201c}zzz\u{201d}")
+        m = super::update(m, UiMsg::Text("run", "zz"))
+        assert_eq(m.error, "")
+    }
+
+    #[test]
+    fn a_request_before_the_catalog_is_answered_when_it_arrives() {
+        let mut m = fixture()
+        let catalog = m.apps
+        m.apps = #[]
+        m.loading = true
+        m = super::update(m, UiMsg::CompletionRequest("run", 7, "calc", 1))
+        assert_eq(m.waiting, Some((7, "calc")))
+        m = super::update(m, UiMsg::AppsLoaded("catalog", catalog))
+        assert_eq(m.waiting, None)
+    }
+}

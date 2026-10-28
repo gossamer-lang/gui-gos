@@ -1,0 +1,9 @@
+opened from the command line: ok
+saved text: hello world
+two tabs: true
+save dialog cancellation restores focus: ok
+save dialog accepts typed path and click: ok
+tab tear-off and merge preserve editing state: ok
+focus after Ctrl+Tab: editor-doc1
+quit asks about the draft: #["close:doc2"]
+quit after discarding: true

@@ -1,0 +1,5 @@
+name = "Image Viewer"
+app_id = "dev.gossamer.gui-image-viewer"
+comment = "View PNG, JPEG, GIF and SVG images"
+categories = "Graphics;Viewer;"
+icon = false

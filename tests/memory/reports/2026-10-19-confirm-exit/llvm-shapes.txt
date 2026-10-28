@@ -1,0 +1,46 @@
+    Blocking waiting for file lock on artifact directory
+   Compiling gossamer-pkg v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-pkg)
+   Compiling gossamer-types v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-types)
+   Compiling gossamer-hir v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-hir)
+   Compiling gossamer-mir v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-mir)
+   Compiling gossamer-codegen-llvm v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-codegen-llvm)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 48.51s
+     Running tests/lower_shapes.rs (target/debug/deps/lower_shapes-46d9155856176dc0)
+
+running 33 tests
+test binop_shl_i64_emits_shl_instruction ... ok
+test binop_bitxor_i64_emits_xor_instruction ... ok
+test binop_div_i64_emits_sdiv_instruction ... ok
+test binop_rem_i64_emits_srem_instruction ... ok
+test a_direct_callee_reads_its_aggregate_parameters_in_the_callers_storage ... ok
+test an_aggregate_passed_twice_reaches_the_callee_as_two_copies ... ok
+test const_int_zero_emits_store_i64 ... ok
+test a_body_answering_through_caller_storage_builds_its_answer_there ... ok
+test channel_recv_option_uses_status_out_pointer_call ... ok
+test const_int_max_emits_max_literal ... ok
+test channel_try_recv_option_uses_status_out_pointer_call ... ok
+test binop_sub_i64_emits_sub_instruction ... ok
+test binop_mul_i64_emits_mul_instruction ... ok
+test binop_add_i64_emits_add_instruction ... ok
+test binop_bitand_i64_emits_and_instruction ... ok
+test a_foreign_field_write_at_a_constant_offset_is_an_inline_store ... ok
+test binop_shr_i64_emits_ashr_instruction ... ok
+test binop_bitor_i64_emits_or_instruction ... ok
+test integer_abs_uses_the_integer_runtime_helper ... ok
+test ir_contains_module_id_header ... ok
+test fixed_u8_array_uses_packed_native_storage ... ok
+test ir_contains_target_triple ... ok
+test a_carrier_release_calls_the_runtime_only_for_an_arm_that_owns_storage ... ok
+test large_fixed_array_local_spills_to_heap_storage ... ok
+test string_map_with_capacity_uses_typed_storage ... ok
+test vec_i64_swap_is_inlined ... ok
+test vec_i64_pop_option_is_inlined ... ok
+test native_static_finalizer_is_shared_across_stores_and_functions ... ok
+test a_foreign_scalar_of_a_constant_class_is_an_inline_load_or_store ... ok
+test a_parameter_the_body_writes_is_copied_into_the_frame ... ok
+test multi_slot_struct_parameter_still_arrives_by_pointer ... ok
+test heap_enum_by_value_parameter_crosses_a_direct_call_as_the_word ... ok
+test boxed_enum_payload_clones_containers_in_the_destination ... ok
+
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

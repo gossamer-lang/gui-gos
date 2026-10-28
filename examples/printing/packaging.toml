@@ -1,0 +1,5 @@
+name = "Printing"
+app_id = "dev.gossamer.gui-printing"
+comment = "Preview, export and print a paginated document"
+categories = "Office;Viewer;"
+icon = false

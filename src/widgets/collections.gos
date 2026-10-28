@@ -1,0 +1,352 @@
+// collections: virtualized lists, icon grids, tables, and trees. Views
+// never materialise one widget per item: the application gives a count and
+// a row function, the view asks only for the rows in the viewport plus a
+// small overscan, and painting, hit testing, and accessibility all work
+// from row indices mapped to stable keys. Selection, focus, the range
+// anchor, and edits are tracked by key, so inserting, removing, or
+// reordering items never moves the selection to a different item.
+//
+// Variable row heights use a prefix-sum extent table rebuilt only when the
+// application bumps `revision` (or the count changes). The changes that
+// produced each revision (`changes`, from a `models::ModelLog`) let the view
+// keep its top visible row and its focus on the same items across inserts,
+// removals and moves; the session replays them once per revision (`sync`). Keyboard: Up/Down,
+// Page Up/Down, Home/End move focus; Space toggles in multiple selection;
+// Shift extends from the anchor; Ctrl moves focus without selecting;
+// Enter (or a double click) activates; letters jump by typeahead.
+
+use crate::text::layout::TextAlign
+use windowing
+
+use crate::editing::EditState
+use crate::models::{position_after, ModelChange}
+use crate::style::Theme
+use crate::text::layout::{TextAlign}
+use crate::widgets::state::{StateStore, WState}
+
+/// One row of a list or icon grid.
+#[derive(PartialEq)]
+pub struct Row {
+    pub key: String
+    pub label: String
+    pub detail: String
+    pub icon: Option<crate::render::icons::Icon>
+    pub disabled: bool
+    /// Tree depth (for trees) and whether the item can expand.
+    pub depth: i64
+    pub expandable: bool
+    pub expanded: bool
+    /// Table cells, by column order.
+    pub cells: Vec<String>
+}
+
+impl Row {
+    pub fn new(key: String, label: String) -> Row {
+        Row { key: key, label: label, detail: String::new(), icon: None, disabled: false, depth: 0, expandable: false, expanded: false, cells: #[] }
+    }
+}
+
+/// How a collection lays out its rows.
+#[derive(PartialEq, Eq)]
+pub enum ViewMode {
+    List
+    IconGrid
+}
+
+/// A table column.
+#[derive(PartialEq)]
+pub struct Column {
+    pub key: String
+    pub title: String
+    /// Width in interface units.
+    pub width: i64
+    pub min_width: i64
+    pub sortable: bool
+    pub editable: bool
+    pub align: TextAlign
+}
+
+impl Column {
+    pub fn new(key: String, title: String, width: i64) -> Column {
+        Column { key: key, title: title, width: width, min_width: 40, sortable: true, editable: false, align: TextAlign::Start }
+    }
+}
+
+/// A virtualized list, icon grid, or table.
+pub struct Collection {
+    pub id: String
+    pub count: i64
+    pub row: i64
+    /// Row height in interface units, or `height_of` for variable rows.
+    pub height_of: Option<i64>
+    /// Bump when items change so cached extents are rebuilt.
+    pub revision: i64
+    /// The changes that produced recent revisions, numbered by revision
+    /// (`ModelLog::changes`); without them a new revision keeps the scroll
+    /// offset as it is.
+    pub changes: Vec<(i64, ModelChange)>
+    pub selected: Vec<String>
+    pub multiple: bool
+    pub mode: ViewMode
+    pub columns: Vec<Column>
+    /// (column key, ascending) the table is sorted by, or ("", true).
+    pub sort: (String, bool)
+    pub label: String
+    pub empty_text: String
+    /// Visible rows requested (natural height), 0 for 8.
+    pub rows: i64
+    /// Show a tree's expand arrows and indentation.
+    pub tree: bool
+    /// Lets the pointer drag rows out: the dragged row keys (the selection,
+    /// when a selected row is dragged) to the items offered. Answered by
+    /// `UiMsg::DragFinished(id, operation)`.
+    pub drag: Option<i64>
+    /// Draws a list row's content (after its tree arrow and icon) as the
+    /// widget it answers, in place of the label and detail. The widget is
+    /// drawn only: the row keeps selection, focus, keyboard and accessibility,
+    /// and its text takes the row's selected or disabled color.
+    pub delegate: Option<i64>
+}
+
+impl Collection {
+    /// A list of `count` rows, `row(i)` describing each, with nothing
+    /// selected, fixed-height rows, and no columns.
+    pub fn new(id: String, count: i64, row: Fn(i64) -> Row) -> Collection {
+        Collection { id: id, count: count, row: crate::app::host::rows(row), height_of: None, revision: 0, changes: #[], selected: #[], multiple: false, mode: ViewMode::List, columns: #[], sort: (String::new(), true), label: String::new(), empty_text: String::new(), rows: 0, tree: false, drag: None, delegate: None }
+    }
+
+    /// Rows `height_of(i)` interface units tall instead of one fixed height.
+    pub fn height_of(self, height_of: Fn(i64) -> i64) -> Collection {
+        let mut c = self
+        c.height_of = Some(crate::app::host::heights(height_of))
+        c
+    }
+
+    /// The items' revision and the changes that produced recent ones.
+    pub fn revision(self, revision: i64, changes: Vec<(i64, ModelChange)>) -> Collection {
+        let mut c = self
+        c.revision = revision
+        c.changes = changes
+        c
+    }
+
+    /// The selected rows' keys.
+    pub fn selected(self, keys: Vec<String>) -> Collection {
+        let mut c = self
+        c.selected = keys
+        c
+    }
+
+    /// Whether several rows can be selected at once.
+    pub fn multiple(self, allowed: bool) -> Collection {
+        let mut c = self
+        c.multiple = allowed
+        c
+    }
+
+    pub fn mode(self, mode: ViewMode) -> Collection {
+        let mut c = self
+        c.mode = mode
+        c
+    }
+
+    /// A table of `columns`.
+    pub fn columns(self, columns: Vec<Column>) -> Collection {
+        let mut c = self
+        c.columns = columns
+        c
+    }
+
+    /// The column the table is sorted by and whether ascending.
+    pub fn sorted_by(self, key: String, ascending: bool) -> Collection {
+        let mut c = self
+        c.sort = (key, ascending)
+        c
+    }
+
+    /// The accessible name.
+    pub fn label(self, label: String) -> Collection {
+        let mut c = self
+        c.label = label
+        c
+    }
+
+    /// What shows when there are no rows.
+    pub fn empty_text(self, text: String) -> Collection {
+        let mut c = self
+        c.empty_text = text
+        c
+    }
+
+    /// How many rows tall it asks to be.
+    pub fn rows(self, rows: i64) -> Collection {
+        let mut c = self
+        c.rows = rows
+        c
+    }
+
+    /// Whether rows show as a tree, with expand arrows and indentation.
+    pub fn tree(self, tree: bool) -> Collection {
+        let mut c = self
+        c.tree = tree
+        c
+    }
+
+    /// Lets the pointer drag rows out as `items(keys)`.
+    pub fn draggable(self, items: Fn(Vec<String>) -> Vec<windowing::DragItem>) -> Collection {
+        let mut c = self
+        c.drag = Some(crate::app::host::drag_offer(items))
+        c
+    }
+
+    /// Draws each list row's content as `delegate(row)`.
+    pub fn delegate(self, delegate: Fn(Row) -> crate::widgets::Widget) -> Collection {
+        let mut c = self
+        c.delegate = Some(crate::app::host::row_delegate(delegate))
+        c
+    }
+}
+
+impl PartialEq for Collection {
+    fn eq(&self, other: Collection) -> bool {
+        self.id == other.id && self.count == other.count && self.revision == other.revision && self.selected == other.selected && self.columns == other.columns && self.sort == other.sort
+    }
+}
+
+impl Display for Collection {
+    fn fmt(&self) -> String {
+        f"Collection({self.id}, {self.count} rows)"
+    }
+}
+
+impl Debug for Collection {
+    fn fmt(&self) -> String {
+        self.to_string()
+    }
+}
+
+/// Interaction state of a collection.
+#[derive(PartialEq)]
+pub struct CollectionState {
+    pub scroll_y: i64
+    pub scroll_x: i64
+    pub focus: String
+    pub anchor: String
+    pub typeahead: String
+    pub typeahead_time: i64
+    /// Prefix sums of row heights (pixels), length count + 1.
+    pub extents: Vec<i64>
+    pub extents_revision: i64
+    pub extents_count: i64
+    pub extents_scale: f64
+    /// The collection revision the scroll position and focus were last
+    /// brought up to, or -1 before the first.
+    pub revision: i64
+    /// Where the focused row was, a hint for finding it again.
+    pub focus_index: i64
+    /// Column widths (pixels) and display order, by key.
+    pub widths: Map<String, i64>
+    pub order: Vec<String>
+    /// Pointer drag: 1 header resize, 2 header reorder, 3 a row that may be
+    /// dragged out; column key; pointer start.
+    pub drag_kind: i64
+    pub drag_column: String
+    pub drag_start: i64
+    pub drag_width: i64
+    /// The cell being edited: (row key, column key), or ("", "").
+    pub edit_row: String
+    pub edit_column: String
+    pub last_click_key: String
+    pub last_click_time: i64
+    /// The row a press armed for dragging out, where it was pressed, and
+    /// whether the press deferred selecting it to the release.
+    pub drag_row: String
+    pub drag_row_index: i64
+    pub drag_row_y: i64
+    pub select_on_release: bool
+}
+
+impl Default for CollectionState {
+    fn default() -> CollectionState {
+        CollectionState {
+            scroll_y: 0
+            scroll_x: 0
+            focus: String::new()
+            anchor: String::new()
+            typeahead: String::new()
+            typeahead_time: 0
+            extents: #[]
+            extents_revision: -1
+            extents_count: -1
+            extents_scale: 0.0
+            revision: -1
+            focus_index: -1
+            widths: Map::new()
+            order: #[]
+            drag_kind: 0
+            drag_column: String::new()
+            drag_start: 0
+            drag_width: 0
+            edit_row: String::new()
+            edit_column: String::new()
+            last_click_key: String::new()
+            last_click_time: 0
+            drag_row: String::new()
+            drag_row_index: -1
+            drag_row_y: 0
+            select_on_release: false
+        }
+    }
+}
+
+/// Rows painted beyond the viewport on each side.
+pub const OVERSCAN: i64 = 4
+
+
+// Where position `i` is after `change`; a removed item's place passes to
+// the item after it.
+fn follow(i: i64, change: ModelChange) -> i64 {
+    let p = position_after(i, change)
+    if p >= 0 { return p }
+    match change {
+        ModelChange::Removed(at, _) => at
+        _ => i
+    }
+}
+
+
+fn columns_in_order(c: Collection, s: CollectionState, theme: Theme) -> Vec<(Column, i64)> {
+    let mut ordered: Vec<Column> = #[]
+    for key in s.order {
+        for col in c.columns { if col.key == key { ordered.push(col) } }
+    }
+    for col in c.columns {
+        if !s.order.contains(col.key) { ordered.push(col) }
+    }
+    ordered.map(|col| {
+        let w = match s.widths.get(col.key) { Some(px) => px, None => theme.text_px(col.width) }
+        (col, w.max(theme.text_px(col.min_width)))
+    })
+}
+
+
+fn col_index(c: Collection, key: String) -> i64 {
+    let mut i = 0
+    while i < c.columns.len() {
+        if c.columns[i].key == key { return i }
+        i += 1
+    }
+    0
+}
+
+
+fn start_edit(c: Collection, s: &mut CollectionState, st: &mut StateStore, item: Row, column: String) {
+    let ci = col_index(c, column)
+    let text = if ci < item.cells.len() { item.cells[ci] } else { item.label }
+    s.edit_row = item.key
+    s.edit_column = column
+    let mut e = EditState::default()
+    e.sync(text)
+    e.select_all()
+    st.set(f"{c.id}#edit", WState::Edit(e))
+}

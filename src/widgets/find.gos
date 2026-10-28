@@ -1,0 +1,161 @@
+// find: the find and replace bar. The application owns a `FindBar`, folds
+// its messages through `FindBar::update`, runs the search the answered
+// request names over its own text (`editing::search`), selects the result
+// with `Effect::SelectText`, and records the count with `FindBar::found`.
+
+use crate::editing::search::SearchOptions
+use crate::localization
+use crate::localization::tr
+use crate::widgets::Widget
+use crate::widgets::cx::UiMsg
+use crate::widgets::textinput::{InputKind, TextInput}
+
+/// What the application does after a find bar message.
+#[derive(Debug, PartialEq, Eq)]
+pub enum FindRequest {
+    /// Nothing beyond showing the bar again.
+    Nothing
+    /// The query or an option changed: recount and select the first match from the caret.
+    Search
+    /// Select the next match after the selection.
+    Next
+    /// Select the match before the selection.
+    Previous
+    /// Replace the selection when it is a match, then select the next one.
+    Replace
+    /// Replace every match as one edit.
+    ReplaceAll
+    /// The bar closed: give focus back to the document.
+    Close
+}
+
+/// One find bar's state.
+#[derive(Debug, PartialEq)]
+pub struct FindBar {
+    pub id: String
+    pub open: bool
+    /// Whether the replacement row shows.
+    pub replacing: bool
+    pub query: String
+    pub replacement: String
+    pub options: SearchOptions
+    /// Matches in the searched text.
+    pub count: i64
+    /// The selected match's index, or -1 when the selection is not a match.
+    pub current: i64
+}
+
+impl FindBar {
+    /// A closed bar whose controls use ids beginning with `id`.
+    pub fn new(id: String) -> FindBar {
+        FindBar { id: id, open: false, replacing: false, query: "", replacement: "", options: SearchOptions::default(), count: 0, current: -1 }
+    }
+
+    /// Opens the bar, with the replacement row when `replacing`.
+    pub fn show(&mut self, replacing: bool) {
+        self.open = true
+        self.replacing = replacing
+    }
+
+    /// The query field's id, to focus when the bar opens.
+    pub fn query_id(&self) -> String {
+        f"{self.id}:query"
+    }
+
+    /// Records a search result: the number of matches and the selected one (-1 for none).
+    pub fn found(&mut self, count: i64, current: i64) {
+        self.count = count.max(0)
+        self.current = if current >= 0 && current < self.count { current } else { -1 }
+    }
+
+    /// "2 of 5", "5 matches", "No matches", or "" before anything is typed.
+    pub fn summary(&self) -> String {
+        if self.query.is_empty() {
+            return ""
+        }
+        if self.count == 0 {
+            return tr("No matches")
+        }
+        if self.current < 0 {
+            return localization::message("find", if self.count == 1 { "{count} match" } else { "{count} matches" }, self.count, Map::new())
+        }
+        localization::message("find", "{current} of {count}", self.count, { "current": f"{self.current + 1}" })
+    }
+
+    /// Folds one message into the bar and answers the work it asks for;
+    /// messages for other widgets answer `Nothing`.
+    pub fn update(&mut self, msg: UiMsg) -> FindRequest {
+        let prefix = f"{self.id}:"
+        match msg {
+            UiMsg::Text(id, text) => {
+                if id == f"{prefix}query" {
+                    if text == self.query { return FindRequest::Nothing }
+                    self.query = text
+                    return FindRequest::Search
+                }
+                if id == f"{prefix}replacement" { self.replacement = text }
+                FindRequest::Nothing
+            }
+            UiMsg::Submit(id, _) => {
+                if id == f"{prefix}query" { FindRequest::Next } else if id == f"{prefix}replacement" { FindRequest::Replace } else { FindRequest::Nothing }
+            }
+            UiMsg::Toggle(id, on) => {
+                if id == f"{prefix}case" {
+                    self.options.match_case = on
+                    FindRequest::Search
+                } else if id == f"{prefix}word" {
+                    self.options.whole_word = on
+                    FindRequest::Search
+                } else {
+                    FindRequest::Nothing
+                }
+            }
+            UiMsg::Click(id) => {
+                if !id.starts_with(prefix) {
+                    return FindRequest::Nothing
+                }
+                match id.substring(prefix.byte_len(), id.byte_len()) {
+                    "previous" => FindRequest::Previous
+                    "next" => FindRequest::Next
+                    "replace" => FindRequest::Replace
+                    "replace-all" => FindRequest::ReplaceAll
+                    "close" => {
+                        self.open = false
+                        FindRequest::Close
+                    }
+                    _ => FindRequest::Nothing
+                }
+            }
+            _ => FindRequest::Nothing
+        }
+    }
+
+    /// The bar's widgets; nothing while it is closed.
+    pub fn view(&self) -> Widget {
+        if !self.open {
+            return Widget::Empty
+        }
+        let mut query = TextInput::new(self.query_id(), self.query, tr("Find"), InputKind::Search)
+        query.label = tr("Find")
+        let found = !self.query.is_empty() && self.count > 0
+        let mut rows = #[Widget::row(#[
+            Widget::input(query).grow(1)
+            Widget::toggle_button(f"{self.id}:case", tr("Match case"), self.options.match_case)
+            Widget::toggle_button(f"{self.id}:word", tr("Whole words"), self.options.whole_word)
+            Widget::muted(self.summary()).min_width(96)
+            Widget::button(f"{self.id}:previous", tr("Previous")).disabled(!found)
+            Widget::button(f"{self.id}:next", tr("Next")).disabled(!found)
+            Widget::button(f"{self.id}:close", tr("Close"))
+        ], 6)]
+        if self.replacing {
+            let mut replacement = TextInput::new(f"{self.id}:replacement", self.replacement, tr("Replace with"), InputKind::Line)
+            replacement.label = tr("Replace with")
+            rows.push(Widget::row(#[
+                Widget::input(replacement).grow(1)
+                Widget::button(f"{self.id}:replace", tr("Replace")).disabled(!found)
+                Widget::button(f"{self.id}:replace-all", tr("Replace All")).disabled(!found)
+            ], 6))
+        }
+        Widget::column(rows, 6).padding_xy(8, 6).role(crate::accessibility::Role::Group).accessible(tr("Find and replace"))
+    }
+}

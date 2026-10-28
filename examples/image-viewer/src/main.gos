@@ -1,0 +1,197 @@
+// An image viewer: open PNG, JPEG, GIF or SVG files from a chooser or by
+// typing a path and pressing Enter, fit or show actual
+// size, zoom with the wheel or Page Up and Page Down, drag to pan and turn
+// with R. Decoding runs in the background and a newer file supersedes one
+// still loading. `image-viewer FILE` opens a file at start.
+
+use std::{env, errors, fs, path, process}
+use std::encoding::base64
+
+use gui
+use gui::{Axis, CrossAlign, Effect, MainAlign, Outcome, UiMsg, Widget}
+use gui::dialogs::request
+use gui::imageview::{State, Viewer, Zoom}
+
+struct Model {
+    viewer: Viewer
+    file: String
+    status: String
+}
+
+fn describe(state: State) -> String {
+    match state {
+        State::Empty => "No image"
+        State::Loading(file) => f"Loading {file}"
+        State::Ready { width, height, format } => f"{width} x {height} {format}"
+        State::Failed(why) => f"Cannot open: {why}"
+        State::Cancelled => "Cancelled"
+    }
+}
+
+fn init() -> Model {
+    let viewer = Viewer::open().unwrap()
+    let args = env::args()
+    let file = args.iter().find(|a| !a.starts_with("--")).unwrap_or("")
+    let m = Model { viewer: viewer, file: file, status: "Open an image" }
+    if file.is_empty() { m } else { load(m, file) }
+}
+
+fn load(m: Model, file: String) -> Model {
+    let mut n = m
+    n.file = file
+    n.status = match n.viewer.load(file) {
+        Ok(_) => f"Loading {file}"
+        Err(why) => f"Cannot open: {why}"
+    }
+    n
+}
+
+fn choose(toolkit: bool) {
+    let images = #[
+        request::FileFilter { name: "Images", patterns: #["*.png", "*.jpg", "*.jpeg", "*.gif", "*.svg"] }
+        request::FileFilter { name: "All files", patterns: #["*"] }
+    ]
+    let req = request::open_file("open", "Open Image", images)
+    gui::perform(Effect::OpenDialog(if toolkit { request::toolkit_file(req) } else { req }))
+}
+
+fn update(m: Model, msg: UiMsg) -> Model {
+    let mut n = m
+    match msg {
+        UiMsg::Text(id, text) if id == "file" => n.file = text
+        UiMsg::Submit(id, text) if id == "file" && !text.trim().is_empty() => n = load(n, text.trim())
+        UiMsg::Dialog(id, outcome) if id == "open" => match outcome {
+            Outcome::Paths(paths) => if !paths.is_empty() { n = load(n, paths[0]) }
+            // Without a native chooser the toolkit's own file browser asks.
+            Outcome::Unsupported(_) | Outcome::Failed(_) => choose(true)
+            _ => ()
+        }
+        UiMsg::Click(id) => match id {
+            "open" => choose(false)
+            "reload" => {
+                let _ = n.viewer.reload()
+            }
+            "cancel" => {
+                let _ = n.viewer.cancel()
+            }
+            "fit" => {
+                let _ = n.viewer.set_zoom(Zoom::Fit)
+            }
+            "actual" => {
+                let _ = n.viewer.set_zoom(Zoom::Scale(1.0))
+            }
+            "turn" => {
+                let _ = n.viewer.turn()
+            }
+            _ => ()
+        }
+        UiMsg::Image(_, status) => n.status = describe(status.state)
+        _ => ()
+    }
+    n
+}
+
+fn view(m: Model) -> Widget {
+    Widget::flex(Axis::Vertical, #[
+        Widget::row(#[
+            Widget::button("open", "Open...")
+            Widget::text_field("file", m.file, "Or type a path and press Enter").grow(1)
+            Widget::button("reload", "Reload")
+            Widget::button("cancel", "Cancel")
+        ], 8)
+        Widget::row(#[
+            Widget::button("fit", "Fit")
+            Widget::button("actual", "Actual size")
+            Widget::button("turn", "Turn")
+            Widget::label(m.status)
+        ], 8)
+        m.viewer.view("image", "Image", 640, 420).grow(1)
+    ], 8, MainAlign::Start, CrossAlign::Stretch).padding(12)
+}
+
+fn app() -> gui::App<Model> {
+    gui::application("Image Viewer", "dev.gossamer.gui-image-viewer", init, update, view).size(760, 600).focus("image")
+}
+
+fn require(value: bool, why: String) -> Result<(), errors::Error> {
+    if value { Ok(()) } else { Err(errors::new(why)) }
+}
+
+fn await_status(s: &mut gui::Session, text: String) -> Result<String, errors::Error> {
+    loop {
+        let dump = s.semantics(0).dump()
+        if dump.contains(text) {
+            return Ok(dump)
+        }
+        s.step()?
+    }
+}
+
+fn open(s: &mut gui::Session, file: String) -> Result<(), errors::Error> {
+    s.click("open")?
+    s.answer_file_dialog("open", file)?
+    Ok(())
+}
+
+// The fixture's photo travels inside the binary, so a packaged build runs its
+// journey from any directory. A compile-time result is text, so the bytes
+// cross as base64.
+comptime fn rotated_jpeg() -> String {
+    match fs::read("fixtures/rotated.jpg") {
+        Ok(bytes) => base64::encode(bytes)
+        Err(e) => panic("src/fixtures/rotated.jpg is unreadable: {}", e)
+    }
+}
+
+fn fixture() -> Result<(), errors::Error> {
+    let dir = path::join(env::temp_dir(), f"gui-image-viewer-{process::id()}")
+    fs::create_dir_all(dir)?
+    let photo = path::join(dir, "photo.jpg")
+    fs::write(photo, base64::decode(rotated_jpeg())?)?
+    let icon = path::join(dir, "icon.png")
+    fs::write(icon, gui::AppIcon::drawn(gui::Icon::Search, 48, gui::Color::white(), gui::Color::rgb(20, 40, 60)).to_png())?
+    let svg = path::join(dir, "drawing.svg")
+    fs::write(svg, "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'><circle cx='5' cy='5' r='4' fill='#c03030'/></svg>".bytes())?
+    let broken = path::join(dir, "broken.png")
+    fs::write(broken, "not really a picture".bytes())?
+    let mut s = app().start()?
+    // A second file supersedes the first while it loads.
+    open(&mut s, icon)?
+    open(&mut s, photo)?
+    await_status(&mut s, "32 x 64 Jpeg")?
+    println("jpeg: the EXIF orientation turns the 64 x 32 photo upright")
+    open(&mut s, svg)?
+    await_status(&mut s, "2048 x 2048 Svg")?
+    println("svg: the drawing rasterizes in the background")
+    open(&mut s, broken)?
+    await_status(&mut s, "Cannot open: the file is not a PNG, JPEG, GIF or SVG image")?
+    println("errors: a file that is not an image says so")
+    open(&mut s, icon)?
+    await_status(&mut s, "48 x 48 Png")?
+    fs::write(icon, gui::AppIcon::drawn(gui::Icon::Search, 96, gui::Color::white(), gui::Color::rgb(20, 40, 60)).to_png())?
+    s.click("reload")?
+    await_status(&mut s, "96 x 96 Png")?
+    println("reload: a replaced file decodes afresh")
+    s.click("actual")?
+    require(s.semantics(0).dump().contains("Image"), "viewer missing")?
+    s.focus("image")?
+    s.press(windowing::Key::PageUp, windowing::Mods::default())?
+    s.press(windowing::Key::R, windowing::Mods::default())?
+    s.press(windowing::Key::Home, windowing::Mods::default())?
+    s.advance(2000)?
+    let spoken = s.spoken()
+    require(spoken.len() >= 1 && spoken[spoken.len() - 1].ends_with("%"), f"spoken: {spoken}")?
+    println("view: actual size, zoom in, turn and fit again from the keyboard")
+    s.shutdown()
+    fs::remove_dir_all(dir)?
+    Ok(())
+}
+
+fn main() -> Result<(), errors::Error> {
+    if env::args().contains("--fixture") {
+        fixture()?
+        require(gui::app::host::callback_count() == 0, "the image viewer leaked callbacks")?
+        return Ok(())
+    }
+    app().run()
+}

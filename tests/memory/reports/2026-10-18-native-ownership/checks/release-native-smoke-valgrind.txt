@@ -1,0 +1,43 @@
+==2748185== Memcheck, a memory error detector
+==2748185== Copyright (C) 2002-2022, and GNU GPL'd, by Julian Seward et al.
+==2748185== Using Valgrind-3.22.0 and LibVEX; rerun with -h for copyright info
+==2748185== Command: /tmp/gui-release-toolchain-smoke/native_owner_lifecycles
+==2748185== Parent PID: 2748146
+==2748185== 
+==2748185== 
+==2748185== HEAP SUMMARY:
+==2748185==     in use at exit: 3,584 bytes in 2 blocks
+==2748185==   total heap usage: 3,065 allocs, 3,063 frees, 460,940 bytes allocated
+==2748185== 
+==2748185== 1,024 bytes in 1 blocks are still reachable in loss record 1 of 2
+==2748185==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==2748185==    by 0x1C9A02: <std::sync::once::Once>::call_once_force::<<std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::initialize<<std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::get_or_init<std::io::stdio::stdout::{closure#0}>::{closure#0}, !>::{closure#0}>::{closure#0} (in /tmp/gui-release-toolchain-smoke/native_owner_lifecycles)
+==2748185==    by 0x1C6E86: <std::sys::sync::once::futex::Once>::call (in /tmp/gui-release-toolchain-smoke/native_owner_lifecycles)
+==2748185==    by 0x1C995E: <std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::initialize::<<std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::get_or_init<std::io::stdio::stdout::{closure#0}>::{closure#0}, !> (in /tmp/gui-release-toolchain-smoke/native_owner_lifecycles)
+==2748185==    by 0x14C310: gossamer_runtime::c_abi::print::write_terminal_direct (in /tmp/gui-release-toolchain-smoke/native_owner_lifecycles)
+==2748185==    by 0x14BABA: gossamer_runtime::c_abi::print::write_terminal (in /tmp/gui-release-toolchain-smoke/native_owner_lifecycles)
+==2748185==    by 0x14B9BF: gossamer_runtime::c_abi::print::write_stdout (in /tmp/gui-release-toolchain-smoke/native_owner_lifecycles)
+==2748185==    by 0x182E09: gos_rt_println (in /tmp/gui-release-toolchain-smoke/native_owner_lifecycles)
+==2748185==    by 0x12E49C: gos_main (in /tmp/gui-release-toolchain-smoke/native_owner_lifecycles)
+==2748185==    by 0x17F826: gos_rt_call_main (in /tmp/gui-release-toolchain-smoke/native_owner_lifecycles)
+==2748185==    by 0x12E5D8: main (in /tmp/gui-release-toolchain-smoke/native_owner_lifecycles)
+==2748185== 
+==2748185== 2,560 bytes in 1 blocks are still reachable in loss record 2 of 2
+==2748185==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==2748185==    by 0x1685F5: std::sync::once::Once::call_once_force::{{closure}} (in /tmp/gui-release-toolchain-smoke/native_owner_lifecycles)
+==2748185==    by 0x1C6E86: <std::sys::sync::once::futex::Once>::call (in /tmp/gui-release-toolchain-smoke/native_owner_lifecycles)
+==2748185==    by 0x169F0D: std::sync::once_lock::OnceLock<T>::initialize (in /tmp/gui-release-toolchain-smoke/native_owner_lifecycles)
+==2748185==    by 0x151A97: gossamer_runtime::c_abi::string::register_heap_string_body (in /tmp/gui-release-toolchain-smoke/native_owner_lifecycles)
+==2748185==    by 0x15178C: gossamer_runtime::c_abi::string::alloc_growable_forced (in /tmp/gui-release-toolchain-smoke/native_owner_lifecycles)
+==2748185==    by 0x183708: gos_rt_set_args (in /tmp/gui-release-toolchain-smoke/native_owner_lifecycles)
+==2748185==    by 0x12E5C9: main (in /tmp/gui-release-toolchain-smoke/native_owner_lifecycles)
+==2748185== 
+==2748185== LEAK SUMMARY:
+==2748185==    definitely lost: 0 bytes in 0 blocks
+==2748185==    indirectly lost: 0 bytes in 0 blocks
+==2748185==      possibly lost: 0 bytes in 0 blocks
+==2748185==    still reachable: 3,584 bytes in 2 blocks
+==2748185==         suppressed: 0 bytes in 0 blocks
+==2748185== 
+==2748185== For lists of detected and suppressed errors, rerun with: -s
+==2748185== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)

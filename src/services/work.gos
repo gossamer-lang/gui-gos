@@ -1,0 +1,57 @@
+// Revisioned operations submitted to the session's bounded background service.
+use crate::widgets::completion::{CompletionItem, MatchMode}
+
+#[derive(PartialEq)]
+pub enum Operation {
+    ImportRich(crate::rich::Format, String)
+    ExportRich(i64, crate::rich::Format)
+    ReadRichImage(i64, String, String)
+    ReadText(String)
+    ReadDocument(String)
+    SaveSession(String, Vec<crate::editing::document::Record>, String)
+    RestoreSession(String)
+    SearchDocument(i64, String, crate::editing::search::SearchOptions, i64)
+    ReplaceDocument(i64, Vec<crate::text::offsets::ByteRange>, String)
+    WriteDocument(i64, String)
+    AnalyzeDocument(i64, String)
+    CompleteDocument(i64, Vec<CompletionItem>, String, MatchMode, i64)
+    WriteText(String, String)
+    Analyze(String, String)
+    Complete(Vec<CompletionItem>, String, MatchMode, i64)
+}
+
+#[derive(PartialEq)]
+pub struct Work {
+    pub owner: String
+    pub request: i64
+    pub revision: i64
+    pub timeout_ms: i64
+    pub operation: Operation
+}
+
+#[derive(PartialEq)]
+pub enum Outcome {
+    RichImported(crate::rich::Record)
+    RichExported(i64, String)
+    RichImageLoaded(i64, String)
+    Text(String, String)
+    DocumentLoaded(crate::editing::document::Record, String)
+    Saved(String, String)
+    DocumentSaved(i64, String)
+    Analyzed(i64, i64)
+    Search(Vec<crate::text::offsets::ByteRange>)
+    Replaced(i64, i64, i64)
+    SessionSaved(String)
+    SessionRestored(Vec<crate::editing::document::Record>, String)
+    Analysis(crate::text::syntax::Document)
+    Completions(Vec<CompletionItem>)
+    Progress(i64, i64)
+    Failed(String)
+    Cancelled
+}
+
+impl Work {
+    pub fn new(owner: String, request: i64, revision: i64, operation: Operation) -> Work {
+        Work { owner: owner, request: request, revision: revision, timeout_ms: 30_000, operation: operation }
+    }
+}

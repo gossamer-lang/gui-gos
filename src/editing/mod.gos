@@ -1,0 +1,642 @@
+// editing: the one editable-text controller every text control shares
+// (fields, search, password, text areas, editable combos, and the code
+// editor's line editing). Offsets are UTF-8 byte offsets that always sit
+// on extended grapheme cluster boundaries. Input-method preedit lives
+// outside the committed text until the platform commits it, and every
+// edit is a revisioned transaction recorded in a bounded undo history.
+
+use std::unicode
+
+use crate::services::clipboard
+use crate::text::layout::{grapheme_boundaries}
+use crate::text::offsets
+use crate::text::offsets::{ByteOffset, ScalarIndex}
+
+pub mod document
+
+/// One undoable state.
+#[derive(PartialEq, Eq)]
+pub struct Snapshot {
+    pub text: String
+    pub anchor: i64
+    pub caret: i64
+}
+
+impl Default for Snapshot {
+    fn default() -> Snapshot {
+        Snapshot {
+            text: String::new()
+            anchor: 0
+            caret: 0
+        }
+    }
+}
+
+/// How an edit groups with the one before it in undo history.
+#[derive(PartialEq, Eq)]
+pub enum EditKind {
+    NoEdit
+    Insert
+    Delete
+    Other
+}
+
+impl Default for EditKind {
+    fn default() -> EditKind {
+        EditKind::NoEdit
+    }
+}
+
+/// Editing state of one text control.
+#[derive(PartialEq)]
+pub struct EditState {
+    /// The text as edited here; may run ahead of the application's value
+    /// until the next view shows the change.
+    pub text: String
+    /// The application's value last seen, to tell external changes apart.
+    pub external: String
+    pub anchor: i64
+    pub caret: i64
+    pub preedit: String
+    /// Caret position inside the preedit, in bytes.
+    pub preedit_caret: i64
+    pub undo: Vec<Snapshot>
+    pub redo: Vec<Snapshot>
+    pub last_kind: EditKind
+    pub last_time: i64
+    pub revision: i64
+    /// The x a vertical move aims for, kept across consecutive moves.
+    pub goal_x: f64
+    pub scroll_x: f64
+    pub scroll_y: f64
+    pub selecting: bool
+    /// Position in the field's history list while browsing it, or -1.
+    pub history_index: i64
+    pub revealed: bool
+    pub initialized: bool
+}
+
+impl Default for EditState {
+    fn default() -> EditState {
+        EditState {
+            text: String::new()
+            external: String::new()
+            anchor: 0
+            caret: 0
+            preedit: String::new()
+            preedit_caret: 0
+            undo: #[]
+            redo: #[]
+            last_kind: EditKind::default()
+            last_time: 0
+            revision: 0
+            goal_x: 0.0
+            scroll_x: 0.0
+            scroll_y: 0.0
+            selecting: false
+            history_index: 0
+            revealed: false
+            initialized: false
+        }
+    }
+}
+
+/// Most undo entries kept per control.
+pub const UNDO_LIMIT: i64 = 200
+/// Typing pauses longer than this start a new undo group (ms).
+pub const GROUP_PAUSE: i64 = 1000
+
+impl EditState {
+    /// Brings the state in line with the application's current `value`:
+    /// adopts it when it changed outside this controller.
+    pub fn sync(&mut self, value: String) {
+        if !self.initialized {
+            self.text = value
+            self.external = value
+            self.anchor = value.byte_len()
+            self.caret = value.byte_len()
+            self.history_index = -1
+            self.goal_x = -1.0
+            self.initialized = true
+            return
+        }
+        if value != self.external {
+            self.external = value
+            if value != self.text {
+                self.text = value
+                self.preedit = ""
+                self.anchor = snap(value, self.anchor.min(value.byte_len()))
+                self.caret = snap(value, self.caret.min(value.byte_len()))
+                self.last_kind = EditKind::NoEdit
+            }
+        }
+    }
+
+    /// The selection as an ordered byte range, start first.
+    pub fn selection(&self) -> (i64, i64) {
+        (self.anchor.min(self.caret), self.anchor.max(self.caret))
+    }
+
+    /// Whether the selection covers any text.
+    pub fn has_selection(&self) -> bool {
+        self.anchor != self.caret
+    }
+
+    /// The selected part of the text.
+    pub fn selected_text(&self) -> String {
+        let a, b = self.selection()
+        self.text.substring(a, b)
+    }
+
+    fn snapshot(&self) -> Snapshot {
+        Snapshot { text: self.text, anchor: self.anchor, caret: self.caret }
+    }
+
+    // Records the state before an edit, merging with the previous entry
+    // when it continues the same kind of typing.
+    fn record(&mut self, kind: EditKind, now: i64) {
+        let continues = kind != EditKind::Other && kind == self.last_kind && now - self.last_time < GROUP_PAUSE && !self.undo.is_empty()
+        if !continues {
+            self.undo.push(self.snapshot())
+            if self.undo.len() > UNDO_LIMIT {
+                let _ = self.undo.remove(0)
+            }
+        }
+        self.redo = #[]
+        self.last_kind = kind
+        self.last_time = now
+    }
+
+    /// Replaces the selection with `insert` as one transaction. Answers
+    /// whether the text changed. `max_graphemes` (0 = none) bounds the result.
+    pub fn replace_selection(&mut self, insert: String, kind: EditKind, now: i64, max_graphemes: i64) -> bool {
+        let a, b = self.selection()
+        let mut piece = insert
+        if max_graphemes > 0 {
+            let current = unicode::grapheme_count(self.text) - unicode::grapheme_count(self.text.substring(a, b))
+            let room = (max_graphemes - current).max(0)
+            if unicode::grapheme_count(piece) > room {
+                piece = take_graphemes(piece, room)
+            }
+        }
+        if piece.is_empty() && a == b {
+            return false
+        }
+        self.record(kind, now)
+        self.text = self.text.substring(0, a) + piece + self.text.substring(b, self.text.byte_len())
+        self.caret = a + piece.byte_len()
+        self.anchor = self.caret
+        self.revision += 1
+        self.goal_x = -1.0
+        true
+    }
+
+    /// Commits input-method or typed text at the caret.
+    pub fn insert(&mut self, text: String, now: i64, max_graphemes: i64) -> bool {
+        self.preedit = ""
+        let kind = if text == " " || text.contains("\n") { EditKind::Other } else { EditKind::Insert }
+        self.replace_selection(text, kind, now, max_graphemes)
+    }
+
+    /// Deletes the selection, or the grapheme (or word, with `word`)
+    /// before the caret.
+    pub fn backspace(&mut self, word: bool, now: i64) -> bool {
+        if !self.has_selection() {
+            if self.caret == 0 {
+                return false
+            }
+            self.anchor = if word { prev_word(self.text, self.caret) } else { prev_boundary(self.text, self.caret) }
+        }
+        self.replace_selection("", EditKind::Delete, now, 0)
+    }
+
+    /// Deletes the selection, or the grapheme (or word) after the caret.
+    pub fn delete_forward(&mut self, word: bool, now: i64) -> bool {
+        if !self.has_selection() {
+            if self.caret >= self.text.byte_len() {
+                return false
+            }
+            self.anchor = if word { next_word(self.text, self.caret) } else { next_boundary(self.text, self.caret) }
+        }
+        self.replace_selection("", EditKind::Delete, now, 0)
+    }
+
+    /// Moves the caret to `to`, extending the selection when `extend`.
+    pub fn move_to(&mut self, to: i64, extend: bool) {
+        self.caret = snap(self.text, to.max(0).min(self.text.byte_len()))
+        if !extend {
+            self.anchor = self.caret
+        }
+        self.last_kind = EditKind::NoEdit
+    }
+
+    /// One grapheme (or word) left or right in logical order. Without
+    /// `extend`, a selection collapses to its side first.
+    pub fn step(&mut self, dir: i64, word: bool, extend: bool) {
+        if !extend && self.has_selection() && !word {
+            let a, b = self.selection()
+            self.move_to(if dir < 0 { a } else { b }, false)
+            return
+        }
+        let to = if dir < 0 {
+            if word { prev_word(self.text, self.caret) } else { prev_boundary(self.text, self.caret) }
+        } else if word {
+            next_word(self.text, self.caret)
+        } else {
+            next_boundary(self.text, self.caret)
+        }
+        self.move_to(to, extend)
+        self.goal_x = -1.0
+    }
+
+
+    /// Selects the whole text, caret at the end.
+    pub fn select_all(&mut self) {
+        self.anchor = 0
+        self.caret = self.text.byte_len()
+        self.last_kind = EditKind::NoEdit
+    }
+
+    /// Selects the word around `offset` (double-click).
+    pub fn select_word(&mut self, offset: i64) {
+        let bounds = word_boundaries(self.text)
+        let mut start = 0
+        let mut end = self.text.byte_len()
+        let mut i = 0
+        while i + 1 < bounds.len() {
+            if offset >= bounds[i] && offset < bounds[i + 1] {
+                start = bounds[i]
+                end = bounds[i + 1]
+                break
+            }
+            i += 1
+        }
+        self.anchor = start
+        self.caret = end
+    }
+
+    /// Selects the line around `offset` (triple-click).
+    pub fn select_line(&mut self, offset: i64) {
+        let mut start = offset.min(self.text.byte_len())
+        while start > 0 && self.text.byte_at(start - 1) != 10 { start -= 1 }
+        let mut end = offset.min(self.text.byte_len())
+        while end < self.text.byte_len() && self.text.byte_at(end) != 10 { end += 1 }
+        self.anchor = start
+        self.caret = end
+    }
+
+    /// Restores the text and selection before the last edit; answers whether there was one.
+    pub fn undo(&mut self) -> bool {
+        let Some(prev) = self.undo.pop() else { return false }
+        self.redo.push(self.snapshot())
+        self.text = prev.text
+        self.anchor = prev.anchor
+        self.caret = prev.caret
+        self.last_kind = EditKind::NoEdit
+        self.revision += 1
+        true
+    }
+
+    /// Reapplies the last undone edit; answers whether there was one.
+    pub fn redo(&mut self) -> bool {
+        let Some(next) = self.redo.pop() else { return false }
+        self.undo.push(self.snapshot())
+        self.text = next.text
+        self.anchor = next.anchor
+        self.caret = next.caret
+        self.last_kind = EditKind::NoEdit
+        self.revision += 1
+        true
+    }
+
+    /// Copies the selection; answers whether anything was copied.
+    pub fn copy(&self) -> bool {
+        if !self.has_selection() {
+            return false
+        }
+        clipboard::set_text(self.selected_text())
+        true
+    }
+
+    /// Copies the selection and deletes it as its own undo entry.
+    pub fn cut(&mut self, now: i64) -> bool {
+        if !self.copy() {
+            return false
+        }
+        self.replace_selection("", EditKind::Other, now, 0)
+    }
+
+    /// Pastes clipboard text as one undo group. Single-line controls turn
+    /// newlines into spaces.
+    pub fn paste(&mut self, single_line: bool, now: i64, max_graphemes: i64) -> bool {
+        let mut text = clipboard::text()
+        if text.is_empty() {
+            return false
+        }
+        if single_line {
+            text = text.replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
+        }
+        self.preedit = ""
+        self.replace_selection(text, EditKind::Other, now, max_graphemes)
+    }
+
+    /// Sets the input-method preedit shown at the caret (not committed).
+    /// `cursor` is the caret inside `text`; one outside it, such as SDL's
+    /// -1 for "not set", places the caret after the preedit.
+    pub fn compose(&mut self, text: String, cursor: ScalarIndex) {
+        self.preedit = text
+        self.preedit_caret = match offsets::byte_of_scalar(text, cursor) {
+            Ok(ByteOffset(b)) => b
+            Err(_) => text.byte_len()
+        }
+    }
+
+    /// Text as displayed: committed text with the preedit spliced in at
+    /// the caret, and the preedit's byte range in it.
+    pub fn display(&self) -> (String, i64, i64) {
+        if self.preedit.is_empty() {
+            return (self.text, -1, -1)
+        }
+        let a, b = self.selection()
+        let shown = self.text.substring(0, a) + self.preedit + self.text.substring(b, self.text.byte_len())
+        (shown, a, a + self.preedit.byte_len())
+    }
+}
+
+/// `offset` moved down onto a grapheme boundary of `text`.
+pub fn snap(text: String, offset: i64) -> i64 {
+    let mut best = 0
+    for b in grapheme_boundaries(text) {
+        if b <= offset { best = b } else { break }
+    }
+    best
+}
+
+pub fn prev_boundary(text: String, offset: i64) -> i64 {
+    let mut best = 0
+    for b in grapheme_boundaries(text) {
+        if b < offset { best = b } else { break }
+    }
+    best
+}
+
+pub fn next_boundary(text: String, offset: i64) -> i64 {
+    for b in grapheme_boundaries(text) {
+        if b > offset { return b }
+    }
+    text.byte_len()
+}
+
+/// Word boundaries, including 0 and the length: grapheme runs of word
+/// characters (letters, digits, marks, underscore), spaces, and punctuation
+/// each form one segment, and every ideograph is a word of its own.
+pub fn word_boundaries(text: String) -> Vec<i64> {
+    let mut out = #[0]
+    let mut at = 0
+    let mut last = -1
+    for g in unicode::graphemes(text) {
+        let class = word_class(g)
+        if at > 0 && (class != last || class == 3) {
+            out.push(at)
+        }
+        at += g.byte_len()
+        last = class
+    }
+    if at > 0 { out.push(at) }
+    out
+}
+
+// 0 word character, 1 space, 2 punctuation or symbol, 3 ideograph.
+fn word_class(g: String) -> i64 {
+    for c in g {
+        let v = c as i64
+        if (v >= 0x3400 && v <= 0x9fff) || (v >= 0x3040 && v <= 0x30ff) || (v >= 0xf900 && v <= 0xfaff) || (v >= 0x20000 && v <= 0x3fffd) {
+            return 3
+        }
+        if unicode::is_letter(c) || unicode::is_number(c) || c == '_' { return 0 }
+        if unicode::is_space(c) { return 1 }
+        return 2
+    }
+    2
+}
+
+fn is_word_segment(text: String, start: i64, end: i64) -> bool {
+    let piece = text.substring(start, end)
+    for c in piece {
+        if unicode::is_letter(c) || unicode::is_number(c) || c == '_' {
+            return true
+        }
+    }
+    false
+}
+
+/// The start of the word before `offset` (skipping spaces and punctuation).
+pub fn prev_word(text: String, offset: i64) -> i64 {
+    let b = word_boundaries(text)
+    let mut i = b.len() - 1
+    while i > 0 {
+        if b[i - 1] < offset && is_word_segment(text, b[i - 1], b[i]) {
+            return b[i - 1]
+        }
+        i -= 1
+    }
+    0
+}
+
+/// The end of the word after `offset`.
+pub fn next_word(text: String, offset: i64) -> i64 {
+    let b = word_boundaries(text)
+    let mut i = 0
+    while i + 1 < b.len() {
+        if b[i + 1] > offset && is_word_segment(text, b[i], b[i + 1]) {
+            return b[i + 1]
+        }
+        i += 1
+    }
+    text.byte_len()
+}
+
+fn take_graphemes(text: String, n: i64) -> String {
+    let mut out = String::new()
+    let mut k = 0
+    for g in unicode::graphemes(text) {
+        if k >= n { break }
+        out += g
+        k += 1
+    }
+    out
+}
+
+/// How a validator judges a draft value.
+#[derive(PartialEq, Eq)]
+pub enum Validity {
+    Valid
+    /// Could become valid with more typing (an incomplete number).
+    Intermediate(String)
+    Invalid(String)
+}
+
+/// Applies an input mask: `9` a digit, `a` a letter, `*` anything; other
+/// characters are literals inserted automatically. Answers the masked text
+/// and whether the input fit the mask.
+pub fn apply_mask(mask: String, input: String) -> (String, bool) {
+    let mut out = String::new()
+    let mut chars = input.chars().collect()
+    let mut ci = 0
+    let mut ok = true
+    for m in mask {
+        if ci >= chars.len() {
+            break
+        }
+        match m {
+            '9' | 'a' | '*' => {
+                // Skip input that does not fit this slot.
+                while ci < chars.len() {
+                    let c = chars[ci]
+                    ci += 1
+                    let fits = match m {
+                        '9' => c.is_ascii_digit()
+                        'a' => unicode::is_letter(c)
+                        _ => true
+                    }
+                    if fits {
+                        out.push(c)
+                        break
+                    }
+                    ok = false
+                }
+            }
+            literal => {
+                out.push(literal)
+                if chars[ci] == literal { ci += 1 }
+            }
+        }
+    }
+    if ci < chars.len() {
+        ok = false
+    }
+    (out, ok)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{apply_mask, next_word, prev_word, EditState, Validity}
+    use crate::text::offsets::ScalarIndex
+
+    fn state(text: String) -> EditState {
+        let mut s = EditState::default()
+        s.sync(text)
+        s
+    }
+
+    #[test]
+    fn typing_groups_into_one_undo_step() {
+        let mut s = state("")
+        s.insert("a", 0, 0)
+        s.insert("b", 10, 0)
+        s.insert("c", 20, 0)
+        assert_eq(s.text, "abc")
+        assert(s.undo())
+        assert_eq(s.text, "")
+        assert(s.redo())
+        assert_eq(s.text, "abc")
+    }
+
+    #[test]
+    fn a_pause_starts_a_new_group() {
+        let mut s = state("")
+        s.insert("a", 0, 0)
+        s.insert("b", 5000, 0)
+        assert(s.undo())
+        assert_eq(s.text, "a")
+    }
+
+    #[test]
+    fn backspace_removes_whole_graphemes() {
+        let mut s = state("ae\u{0301}")
+        s.backspace(false, 0)
+        assert_eq(s.text, "a")
+        let mut e = state("x\u{1F468}\u{200D}\u{1F469}")
+        e.backspace(false, 0)
+        assert_eq(e.text, "x")
+    }
+
+    #[test]
+    fn words_skip_punctuation() {
+        assert_eq(prev_word("hello, world", 12), 7)
+        assert_eq(prev_word("hello, world", 7), 0)
+        assert_eq(next_word("hello, world", 0), 5)
+        assert_eq(next_word("hello, world", 5), 12)
+    }
+
+    #[test]
+    fn selection_replacement_and_step_collapse() {
+        let mut s = state("hello")
+        s.move_to(1, false)
+        s.move_to(4, true)
+        assert_eq(s.selected_text(), "ell")
+        s.step(-1, false, false)
+        assert_eq(s.caret, 1)
+        s.move_to(4, true)
+        s.insert("i", 0, 0)
+        assert_eq(s.text, "hio")
+    }
+
+    #[test]
+    fn external_changes_are_adopted_and_clamped() {
+        let mut s = state("abcdef")
+        s.move_to(6, false)
+        s.sync("ab")
+        assert_eq(s.text, "ab")
+        assert_eq(s.caret, 2)
+        // A value the controller itself produced is not an external change.
+        s.insert("c", 0, 0)
+        s.sync("ab")
+        assert_eq(s.text, "abc")
+    }
+
+    #[test]
+    fn preedit_stays_out_of_committed_text() {
+        let mut s = state("ab")
+        s.compose("\u{304B}", ScalarIndex(1))
+        let shown, from, to = s.display()
+        assert_eq(shown, "ab\u{304B}")
+        assert_eq((from, to), (2, 5))
+        assert_eq(s.text, "ab")
+        s.insert("\u{6F22}", 0, 0)
+        assert_eq(s.text, "ab\u{6F22}")
+        assert(s.preedit.is_empty())
+    }
+
+    #[test]
+    fn preedit_caret_converts_scalars_and_defaults_to_the_end() {
+        let mut s = state("")
+        s.compose("\u{304B}\u{1F600}x", ScalarIndex(2))
+        assert_eq(s.preedit_caret, 7)
+        s.compose("\u{304B}\u{1F600}x", ScalarIndex(-1))
+        assert_eq(s.preedit_caret, 8)
+        s.compose("\u{304B}", ScalarIndex(5))
+        assert_eq(s.preedit_caret, 3)
+    }
+
+    #[test]
+    fn max_length_counts_graphemes() {
+        let mut s = state("ab")
+        s.insert("cde", 0, 4)
+        assert_eq(s.text, "abcd")
+        assert(!s.insert("x", 0, 4))
+    }
+
+    #[test]
+    fn masks_insert_literals_and_reject_misfits() {
+        assert_eq(apply_mask("9999-99-99", "20261016"), ("2026-10-16", true))
+        let shown, ok = apply_mask("99", "a1")
+        assert_eq(shown, "1")
+        assert(!ok)
+    }
+
+    #[test]
+    fn validity_compares() {
+        assert(Validity::Valid != Validity::Invalid("x"))
+    }
+}

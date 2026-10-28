@@ -1,0 +1,6 @@
+temporal draft validation: ok
+color preview and cancel: ok
+calendar dialog and focus restoration: ok
+font preview and cancel: ok
+preferences Apply baseline and dirty Cancel: ok
+wizard Back, drafts and Finish: ok

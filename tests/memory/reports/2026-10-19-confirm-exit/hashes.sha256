@@ -1,0 +1,7 @@
+5ca29726f0836540fec493ab751ff31960fe340c6dae50e555fa29369546dbd9  src/dialogs/host.gos
+6a0380126b6f91e03cd9bec10b56cc878471de067005516168217fcfcfd83c80  examples/code-editor/src/main.gos
+1d252449550aad299929a5931a9b0c37df53ed51c250b222c1bde41a88311529  /home/daniel/dev/gossamer/target/release/gos
+0e214ee0150ae8fc7cd74d5f213bbd2c54a1c507963f3137e533cf6b5172aa09  /home/daniel/dev/gossamer/target-prof/release/libgossamer_runtime.a
+087ce0f1f2c36d145a0b13009536c6a0bf7ddcb9c667d3ce6a565da336dc9b3b  examples/code-editor/target/release/gui-code-editor
+d5dbfdcc1d7765b6e38559f84942d6abd77cf8652cf022e2a19e7cd3271ab65b  /tmp/gui-confirm-memory/debug/gui-code-editor
+523314b7855160ffb0313e93cd5d19681d65f813ba2efcf25a51503e58933a25  /tmp/gui-confirm-memory/release/gui-code-editor

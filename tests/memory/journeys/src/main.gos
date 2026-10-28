@@ -1,0 +1,215 @@
+// Long-running resource journeys: each repeats one toolkit lifecycle and
+// prints its process's resident memory and open descriptors after a warmup
+// and at the end. `run.sh` runs every journey at two lengths per tier and
+// compares the runtime's live-object ledger at exit, which must not grow
+// with the number of iterations.
+//
+//     gos run . -- windows 200
+
+use std::{env, errors, fs, path, process}
+
+use gui
+use gui::{Effect, TabItem, UiMsg, Widget}
+use gui::widgets::{menus, tabs}
+use windowing
+
+const WARMUP: i64 = 10
+
+// ---- measurement ----
+
+// Resident set size in KiB, from /proc (Linux), or -1 elsewhere.
+fn rss_kib() -> i64 {
+    let Ok(status) = fs::read_to_string("/proc/self/status") else { return -1 }
+    for line in status.lines() {
+        if line.starts_with("VmRSS:") {
+            return line.substring(6, line.byte_len()).trim().replace(" kB", "").to_i64().unwrap_or(-1)
+        }
+    }
+    -1
+}
+
+// Open descriptors, from /proc (Linux), or -1 elsewhere.
+fn open_fds() -> i64 {
+    match fs::read_dir("/proc/self/fd") { Ok(entries) => entries.len(), Err(_) => -1 }
+}
+
+fn report(journey: String, phase: String, iterations: i64) {
+    println(f"{journey},{phase},{iterations},{rss_kib()},{open_fds()}")
+}
+
+// ---- windows: open and close a second window ----
+
+fn windows_update(m: i64, msg: UiMsg) -> i64 {
+    match msg {
+        UiMsg::Click(id) => {
+            if id == "open" { gui::perform(Effect::OpenWindow { key: "second", title: "Second", width: 320, height: 200 }) }
+            m + 1
+        }
+        _ => m
+    }
+}
+
+fn windows_view(m: i64) -> Widget {
+    Widget::column(#[Widget::label(f"opened {m}"), Widget::button("open", "Open")], 4)
+}
+
+fn windows_second(m: i64, key: String) -> Widget {
+    Widget::column(#[Widget::label(f"{key} {m}"), Widget::text_field("notes", "", "Notes"), Widget::checkbox("check", "Check", m % 2 == 0)], 4).padding(8)
+}
+
+fn windows_journey(n: i64) -> Result<(), errors::Error> {
+    let mut s = gui::application("Windows journey", "dev.gossamer.gui-journey-windows", || 0, windows_update, windows_view).windows(windows_second).size(320, 200).start()?
+    for i in 0..(WARMUP + n) {
+        if i == WARMUP { report("windows", "warm", i) }
+        if !s.click("open")? { return Err(errors::new("no Open button")) }
+        if s.window_count() != 2 { return Err(errors::new("the second window did not open")) }
+        s.set_focus(1, "notes")
+        s.inject(windowing::Event::Text { window: s.window_id(1), text: "typed" })?
+        let _ = s.capture_window(1)?
+        s.close_window(1)
+        s.flush()?
+    }
+    report("windows", "end", WARMUP + n)
+    s.shutdown()
+    Ok(())
+}
+
+// ---- popups: open and dismiss a menu and a select list ----
+
+fn popups_update(m: String, msg: UiMsg) -> String {
+    match msg {
+        UiMsg::Select(_, key) => key
+        _ => m
+    }
+}
+
+fn popups_view(m: String) -> Widget {
+    let choices = #[gui::CompletionItem::new("a", "Alpha"), gui::CompletionItem::new("b", "Beta"), gui::CompletionItem::new("c", "Gamma")]
+    Widget::column(#[
+        Widget::menu_bar("menu", #[menus::Menu::new("&View", #[menus::item("gui.toggle-theme"), menus::item("gui.inspector")])])
+        Widget::select("size", choices, m, "Size")
+    ], 4)
+}
+
+fn popups_journey(n: i64) -> Result<(), errors::Error> {
+    let mut s = gui::application("Popups journey", "dev.gossamer.gui-journey-popups", || "a", popups_update, popups_view).size(320, 240).start()?
+    let escape = windowing::Mods::default()
+    for i in 0..(WARMUP + n) {
+        if i == WARMUP { report("popups", "warm", i) }
+        if !s.click("size")? { return Err(errors::new("no select")) }
+        if s.popup_owners().is_empty() { return Err(errors::new("the select list did not open")) }
+        s.press(windowing::Key::Escape, escape)?
+        if !s.popup_owners().is_empty() { return Err(errors::new("Escape did not close the list")) }
+        s.press(windowing::Key::F10, escape)?
+        s.press(windowing::Key::Down, escape)?
+        s.press(windowing::Key::Escape, escape)?
+        s.press(windowing::Key::Escape, escape)?
+    }
+    report("popups", "end", WARMUP + n)
+    s.shutdown()
+    Ok(())
+}
+
+// ---- tabs: tear a tab off into its own window and merge it back ----
+
+struct TabsModel {
+    /// The window each tab is in.
+    windows: Map<String, String>
+}
+
+fn tabs_update(m: TabsModel, msg: UiMsg) -> TabsModel {
+    let mut n = m
+    match msg {
+        UiMsg::TabDetach(_, key, _, _) => {
+            let window = f"window-{key}"
+            n.windows[key] = window
+            gui::perform(Effect::OpenWindow { key: window, title: key, width: 320, height: 200 })
+        }
+        UiMsg::TabMove(_, key, strip, _) => {
+            let source = n.windows.get(key).unwrap_or("main")
+            n.windows[key] = strip.substring(5, strip.byte_len())
+            if source != "main" { gui::perform(Effect::CloseWindow(source)) }
+        }
+        _ => ()
+    }
+    n
+}
+
+fn tabs_strip(m: TabsModel, window: String) -> Widget {
+    let mut items = #[]
+    let mut pages: Map<String, Widget> = Map::new()
+    let mut active = ""
+    for key in #["one", "two"] {
+        if m.windows.get(key).unwrap_or("main") != window { continue }
+        items.push(TabItem::new(key, key))
+        pages[key] = Widget::text_area(f"editor-{key}", f"text of {key}", 4)
+        if active.is_empty() { active = key }
+    }
+    Widget::Tabs(tabs::Tabs { id: f"tabs:{window}", items: items, active: active, content: pages.get(active).unwrap_or(Widget::Empty), pages: pages, workspace: "journey", add_button: false, detachable: true })
+}
+
+fn tabs_view(m: TabsModel) -> Widget { tabs_strip(m, "main") }
+
+fn tabs_journey(n: i64) -> Result<(), errors::Error> {
+    let mut s = gui::application("Tabs journey", "dev.gossamer.gui-journey-tabs", || TabsModel { windows: Map::new() }, tabs_update, tabs_view).windows(tabs_strip).size(400, 240).start()?
+    for i in 0..(WARMUP + n) {
+        if i == WARMUP { report("tabs", "warm", i) }
+        s.emit(UiMsg::TabDetach("tabs:main", "two", 40, 40))
+        s.flush()?
+        if s.window_count() != 2 { return Err(errors::new("tearing off did not open a window")) }
+        s.emit(UiMsg::TabMove("tabs:window-two", "two", "tabs:main", 1))
+        s.flush()?
+        if s.window_count() != 1 { return Err(errors::new("merging did not close the window")) }
+    }
+    report("tabs", "end", WARMUP + n)
+    s.shutdown()
+    Ok(())
+}
+
+// ---- editor: type, complete, undo and replace in a text area ----
+
+fn editor_view(_m: i64) -> Widget {
+    let mut t = gui::TextInput::new("doc", "", "", gui::InputKind::Area)
+    t.rows = 10
+    t.completion = Some(gui::Completion::local(#[gui::CompletionItem::new("sample", "sample"), gui::CompletionItem::new("samples", "samples")], gui::MatchMode::Prefix))
+    Widget::input(t).grow(1)
+}
+
+fn editor_journey(n: i64) -> Result<(), errors::Error> {
+    gui::services::clipboard::use_memory(true)
+    let mut s = gui::application("Editor journey", "dev.gossamer.gui-journey-editor", || 0, |m: i64, _msg: UiMsg| m, editor_view).size(480, 320).start()?
+    if !s.focus("doc")? { return Err(errors::new("no editor")) }
+    let mut primary = windowing::Mods::default()
+    if gui::input::platform_is_macos() { primary.gui = true } else { primary.ctrl = true }
+    let plain = windowing::Mods::default()
+    for i in 0..(WARMUP + n) {
+        if i == WARMUP { report("editor", "warm", i) }
+        s.type_text("let count = 42\nsam")?
+        s.press(windowing::Key::Escape, plain)?
+        s.press(windowing::Key::A, primary)?
+        s.press(windowing::Key::C, primary)?
+        s.press(windowing::Key::Z, primary)?
+        s.press(windowing::Key::A, primary)?
+        s.press(windowing::Key::Backspace, plain)?
+    }
+    if !s.edit_state(0, "doc").text.is_empty() { return Err(errors::new("the editor kept text between rounds")) }
+    report("editor", "end", WARMUP + n)
+    s.shutdown()
+    Ok(())
+}
+
+fn main() -> Result<(), errors::Error> {
+    let args = env::args()
+    if args.len() < 2 { return Err(errors::new("usage: journeys windows|popups|tabs|editor ITERATIONS")) }
+    let n = args[1].to_i64().ok_or(errors::new("ITERATIONS must be a number"))?
+    let config = path::join(env::temp_dir(), f"gui-journeys-{process::id()}")
+    gui::services::set_config_root(config)
+    defer fs::remove_dir_all(config).unwrap_or(())
+    match args[0] {
+        "windows" => windows_journey(n)
+        "popups" => popups_journey(n)
+        "tabs" => tabs_journey(n)
+        "editor" => editor_journey(n)
+        other => Err(errors::new(f"no journey {other}"))
+    }
+}

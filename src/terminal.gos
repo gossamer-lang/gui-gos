@@ -1,0 +1,200 @@
+// Terminals: a screen with bounded scrollback, an optional program on a
+// native pseudo-terminal, and the widget that shows and drives one. A
+// terminal belongs to the session that opened it and closes with it.
+
+use std::errors
+use std::encoding::json
+
+/// A terminal's screen size and storage limits.
+pub struct Options {
+    pub rows: i64
+    pub cols: i64
+    /// Rows of history kept above the screen.
+    pub scrollback: i64
+    /// The most bytes the screen and its history may hold. The default holds
+    /// the largest screen (256 x 512) with the default history, so the screen
+    /// always follows its view; the session is charged only for the size in
+    /// use.
+    pub byte_limit: i64
+}
+
+impl Default for Options {
+    fn default() -> Options {
+        Options { rows: 24, cols: 80, scrollback: 2_000, byte_limit: 67_108_864 }
+    }
+}
+
+/// A program to run, executed directly rather than through a shell.
+#[derive(Default)]
+pub struct Command {
+    pub program: String
+    pub args: Vec<String>
+    /// The working directory; empty keeps the application's.
+    pub cwd: String
+    /// Variables set for the program on top of the inherited environment.
+    pub env: Vec<(String, String)>
+}
+
+/// A cell position: a row of the visible screen and a column.
+#[derive(Default, PartialEq, Eq)]
+pub struct Cell {
+    pub row: i64
+    pub col: i64
+}
+
+/// What a terminal's program did that the application hears about, as
+/// `UiMsg::Terminal(terminal, event)`.
+#[derive(PartialEq)]
+pub enum Event {
+    /// The program set the window title.
+    Title(String)
+    /// The program rang the bell.
+    Bell
+    /// The program exited with this status (128 + signal when killed).
+    Exited(i64)
+    /// The program could not be waited for.
+    Failed(String)
+    /// The screen could not take the size of its view within its byte limit,
+    /// and keeps the size it has.
+    Refused(String)
+}
+
+/// A terminal's state.
+pub struct Snapshot {
+    pub rows: i64
+    pub cols: i64
+    pub cursor: Cell
+    pub cursor_visible: bool
+    pub alternate_screen: bool
+    /// The visible screen, one line per row.
+    pub text: String
+    pub title: String
+    pub running: bool
+    pub exit: Option<i64>
+    /// Rows the view is scrolled back into history.
+    pub scrolled: i64
+    pub selection: Option<(Cell, Cell)>
+    pub reserved_bytes: i64
+    pub pid: i64
+    pub queued_input: i64
+    pub queued_output: i64
+}
+
+/// The widget showing terminal `terminal`. It fills the space it is given,
+/// and the screen follows that size; `rows` and `cols` are the size it takes
+/// where its parent sets no bound.
+pub struct View {
+    pub id: String
+    pub terminal: i64
+    /// The accessible name; the program's title is its description.
+    pub label: String
+    pub rows: i64
+    pub cols: i64
+    /// The font family; empty takes the bundled IBM Plex Mono, and a family
+    /// that is not installed takes the bundled monospace face.
+    pub font: String
+    /// The text size in points; zero takes 10.
+    pub font_size: f64
+}
+
+/// A terminal handle.
+#[derive(Default, PartialEq, Eq)]
+pub struct Terminal {
+    pub id: i64
+}
+
+enum Answer {
+    Id(i64)
+    Rows(i64)
+    Text(String)
+    Snapshot(Snapshot)
+    Done
+}
+
+fn call(method: String, id: i64, args: String) -> Result<Answer, errors::Error> {
+    let answer = gui_engine::terminal(method, id, args).map_err(|why| errors::new(why))?
+    json::decode::<Answer>(answer)
+}
+
+fn done(answer: Result<Answer, errors::Error>) -> Result<(), errors::Error> {
+    answer.map(|_| ())
+}
+
+impl Terminal {
+    /// Opens a terminal in the running session.
+    pub fn open(options: Options = Options { rows: 24, cols: 80, scrollback: 2_000, byte_limit: 67_108_864 }) -> Result<Terminal, errors::Error> {
+        match call("open", 0, json::encode(options))? {
+            Answer::Id(id) => Ok(Terminal { id: id })
+            _ => Err(errors::new("invalid terminal identity answer"))
+        }
+    }
+
+    /// Runs `command` on the terminal; its output arrives as the session
+    /// runs, and `Event::Exited` reports its end.
+    pub fn spawn(&self, command: Command) -> Result<(), errors::Error> {
+        done(call("spawn", self.id, json::encode(command)))
+    }
+
+    /// Shows `text` as program output: a recorded stream, or output the
+    /// application writes itself.
+    pub fn feed(&self, text: String) -> Result<(), errors::Error> {
+        done(call("feed", self.id, json::encode(text)))
+    }
+
+    /// Sends `text` to the program as typed input.
+    pub fn input(&self, text: String) -> Result<(), errors::Error> {
+        done(call("input", self.id, json::encode(text)))
+    }
+
+    /// Pastes `text`, bracketed when the program asked for bracketed paste.
+    pub fn paste(&self, text: String) -> Result<(), errors::Error> {
+        done(call("paste", self.id, json::encode(text)))
+    }
+
+    pub fn resize(&self, rows: i64, cols: i64) -> Result<(), errors::Error> {
+        done(call("resize", self.id, json::encode((rows, cols))))
+    }
+
+    /// Scrolls `rows` rows back into history (negative moves forward),
+    /// answering how far back the view now is.
+    pub fn scroll(&self, rows: i64) -> Result<i64, errors::Error> {
+        match call("scroll", self.id, json::encode(rows))? {
+            Answer::Rows(n) => Ok(n)
+            _ => Err(errors::new("invalid terminal scroll answer"))
+        }
+    }
+
+    /// Selects from `anchor` to `caret`.
+    pub fn select(&self, anchor: Cell, caret: Cell) -> Result<(), errors::Error> {
+        done(call("select", self.id, json::encode((anchor, caret))))
+    }
+
+    pub fn clear_selection(&self) -> Result<(), errors::Error> {
+        done(call("deselect", self.id, "null"))
+    }
+
+    /// The selected text, empty without a selection.
+    pub fn copy(&self) -> Result<String, errors::Error> {
+        match call("copy", self.id, "null")? {
+            Answer::Text(text) => Ok(text)
+            _ => Err(errors::new("invalid terminal copy answer"))
+        }
+    }
+
+    pub fn snapshot(&self) -> Result<Snapshot, errors::Error> {
+        match call("snapshot", self.id, "null")? {
+            Answer::Snapshot(shown) => Ok(shown)
+            _ => Err(errors::new("invalid terminal snapshot answer"))
+        }
+    }
+
+    /// Ends the program, if any, and releases the terminal.
+    pub fn close(&self) {
+        let _ = call("close", self.id, "null")
+    }
+
+    /// The widget showing this terminal.
+    pub fn view(&self, id: String, label: String, rows: i64 = 24, cols: i64 = 80, font: String = "", font_size: f64 = 0.0) -> crate::Widget {
+        crate::Widget::Terminal(View { id: id, terminal: self.id, label: label, rows: rows, cols: cols, font: font, font_size: font_size })
+    }
+}

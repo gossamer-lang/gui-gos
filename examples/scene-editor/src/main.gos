@@ -1,0 +1,199 @@
+// A small drawing editor: add shapes, select and drag them, resize from the
+// corner handle, pan and zoom the canvas, and export what it shows. Page
+// Down walks the objects aloud, arrows nudge them, Delete removes them and
+// Ctrl+Z undoes.
+
+use std::{env, errors, fs, path, process}
+
+use gui
+use gui::{CrossAlign, Effect, MainAlign, Outcome, UiMsg, Widget}
+use gui::dialogs::request
+use gui::print::{Event, PageSetup, PrintDocument}
+use gui::render::vector::Path
+use gui::scene::{Node, Scene, Shape, Transform}
+
+struct Model {
+    scene: Scene
+    added: i64
+    status: String
+}
+
+fn star() -> Path {
+    let mut p = Path::new()
+    p.move_to(50.0, 0.0)
+    p.line_to(62.0, 35.0)
+    p.line_to(100.0, 38.0)
+    p.line_to(70.0, 60.0)
+    p.line_to(80.0, 98.0)
+    p.line_to(50.0, 75.0)
+    p.line_to(20.0, 98.0)
+    p.line_to(30.0, 60.0)
+    p.line_to(0.0, 38.0)
+    p.line_to(38.0, 35.0)
+    p.close()
+    p
+}
+
+fn init() -> Model {
+    let nodes = #[
+        Node::new("sky", "Sky", Shape::Rect { width: 600.0, height: 120.0, radius: 0.0 }, Transform::at(0.0, 0.0), Some(gui::Color::rgb(200, 225, 250)))
+        Node::new("ground", "Ground", Shape::Rect { width: 600.0, height: 280.0, radius: 0.0 }, Transform::at(0.0, 120.0), Some(gui::Color::rgb(222, 236, 205)))
+        Node::new("sun", "Sun", Shape::Ellipse { width: 70.0, height: 70.0 }, Transform::at(480.0, 20.0), Some(gui::Color::rgb(250, 200, 40)))
+        Node::new("star", "Star", Shape::Path(star()), Transform::at(60.0, 150.0, 20.0), Some(gui::Color::rgb(200, 60, 60)))
+        Node::new("caption", "Caption", Shape::Text { text: "Scene editor", size: 22.0 }, Transform::at(220.0, 160.0))
+    ]
+    Model { scene: Scene::open(nodes).unwrap(), added: 0, status: "Ready" }
+}
+
+fn export_base() -> String {
+    path::join(env::temp_dir(), f"gui-scene-{process::id()}")
+}
+
+fn save_dialog(kind: String, toolkit: bool) {
+    let filter = if kind == "png" { request::FileFilter { name: "PNG images", patterns: #["*.png"] } } else { request::FileFilter { name: "PDF documents", patterns: #["*.pdf"] } }
+    let req = request::save_file(kind, f"Save {kind.to_uppercase()}", f"scene.{kind}", #[filter])
+    gui::perform(Effect::OpenDialog(if toolkit { request::toolkit_file(req) } else { req }))
+}
+
+fn export(m: Model, kind: String, file: String) -> Model {
+    let mut n = m
+    if kind == "png" {
+        n.status = match n.scene.export_png(file, 600, 400) {
+            Ok(_) => "Saved PNG"
+            Err(why) => f"Failed: {why}"
+        }
+    } else {
+        let item = n.scene.print_item(600, 400).unwrap()
+        let document = PrintDocument::open(#[item], PageSetup::default()).unwrap()
+        n.status = match document.export_pdf("Scene", file) {
+            Ok(_) => "Exporting PDF"
+            Err(why) => f"Failed: {why}"
+        }
+    }
+    n
+}
+
+fn update(m: Model, msg: UiMsg) -> Model {
+    let mut n = m
+    match msg {
+        UiMsg::Click(id) => match id {
+            "rect" | "ellipse" => {
+                n.added += 1
+                let name = f"{id} {n.added}"
+                let shape = if id == "rect" { Shape::Rect { width: 90.0, height: 60.0, radius: 8.0 } } else { Shape::Ellipse { width: 80.0, height: 80.0 } }
+                let colors = #[gui::Color::rgb(40, 120, 200), gui::Color::rgb(60, 160, 90), gui::Color::rgb(150, 80, 190), gui::Color::rgb(230, 130, 40)]
+                let node = Node::new(name, name.to_uppercase(), shape, Transform::at(100.0 + n.added as f64 * 30.0, 260.0), Some(colors[n.added % colors.len()]))
+                n.status = match n.scene.add(node) {
+                    Ok(info) => f"{info.nodes} objects"
+                    Err(why) => f"Failed: {why}"
+                }
+            }
+            "undo" => {
+                let _ = n.scene.undo()
+            }
+            "png" => save_dialog("png", false)
+            "pdf" => save_dialog("pdf", false)
+            _ => ()
+        }
+        UiMsg::Dialog(id, outcome) if id == "png" || id == "pdf" => match outcome {
+            Outcome::Paths(paths) => if !paths.is_empty() { n = export(n, id, paths[0]) }
+            // Without a native chooser the toolkit's own file browser asks.
+            Outcome::Unsupported(_) | Outcome::Failed(_) => save_dialog(id, true)
+            _ => ()
+        }
+        UiMsg::Scene(_, info) => n.status = f"{info.nodes} objects, selected: {info.selection.join(", ")}"
+        UiMsg::Print(_, Event::Exported { path, bytes }) => n.status = "Saved PDF"
+        UiMsg::Print(_, Event::Failed(why)) => n.status = f"Failed: {why}"
+        _ => ()
+    }
+    n
+}
+
+fn view(m: Model) -> Widget {
+    Widget::flex(gui::Axis::Vertical, #[
+        Widget::row(#[
+            Widget::button("rect", "Add rectangle")
+            Widget::button("ellipse", "Add ellipse")
+            Widget::button("undo", "Undo")
+            Widget::button("png", "Save PNG")
+            Widget::button("pdf", "Save PDF")
+        ], 8)
+        Widget::label(m.status)
+        m.scene.view("canvas", "Drawing", 600, 400).grow(1)
+    ], 8, MainAlign::Start, CrossAlign::Stretch).padding(12)
+}
+
+fn app() -> gui::App<Model> {
+    gui::application("Scene Editor", "dev.gossamer.gui-scene-editor", init, update, view).size(900, 600).focus("canvas")
+}
+
+fn require(value: bool, why: String) -> Result<(), errors::Error> {
+    if value { Ok(()) } else { Err(errors::new(why)) }
+}
+
+fn await_dump(s: &mut gui::Session, text: String) -> Result<String, errors::Error> {
+    loop {
+        let dump = s.semantics(0).dump()
+        if dump.contains(text) {
+            return Ok(dump)
+        }
+        if dump.contains("Failed:") {
+            return Err(errors::new(dump))
+        }
+        s.step()?
+    }
+}
+
+fn fixture() -> Result<(), errors::Error> {
+    let mut s = app().start()?
+    let first = s.semantics(0).dump()
+    require(first.contains("image \"Sun\"") && first.contains("image \"Star\""), f"objects are not accessible: {first}")?
+    println("objects: every shape is an accessible child of the canvas")
+    s.click("rect")?
+    s.click("ellipse")?
+    require(s.semantics(0).dump().contains("7 objects"), "adding shapes")?
+    let r = s.rect_of("canvas").unwrap()
+    // Scene units are interface units; the offscreen display has a scale of 1.
+    let at = |x: f64, y: f64| -> (i64, i64) { (r.x + x as i64, r.y + y as i64) }
+    let sun_x, sun_y = at(515.0, 55.0)
+    s.click_at(sun_x, sun_y)?
+    await_dump(&mut s, "selected: sun")?
+    s.drag(sun_x, sun_y, sun_x - 100, sun_y + 40)?
+    println("pointer: a click selects the sun and a drag moves it")
+    s.focus("canvas")?
+    s.press(windowing::Key::Home, windowing::Mods::default())?
+    s.press(windowing::Key::PageDown, windowing::Mods::default())?
+    s.press(windowing::Key::PageDown, windowing::Mods::default())?
+    s.advance(2000)?
+    let spoken = s.spoken()
+    require(spoken.len() >= 2 && spoken[spoken.len() - 1] == "Sun, ellipse, 3 of 7", f"spoken: {spoken}")?
+    s.press(windowing::Key::Delete, windowing::Mods::default())?
+    await_dump(&mut s, "6 objects")?
+    let mut primary = windowing::Mods::default()
+    if gui::input::platform_is_macos() { primary.gui = true } else { primary.ctrl = true }
+    s.press(windowing::Key::Z, primary)?
+    await_dump(&mut s, "7 objects")?
+    println("keyboard: Page Down reads objects aloud; Delete and undo restore the sun")
+    s.click("png")?
+    s.answer_file_dialog("png", f"{export_base()}.png")?
+    await_dump(&mut s, "Saved PNG")?
+    let png = fs::read(f"{export_base()}.png")?
+    require(png.len() > 1_000 && png[1] == 80, "not a PNG")?
+    fs::remove_file(f"{export_base()}.png")?
+    s.click("pdf")?
+    s.answer_file_dialog("pdf", f"{export_base()}.pdf")?
+    await_dump(&mut s, "Saved PDF")?
+    fs::remove_file(f"{export_base()}.pdf")?
+    println("export: the canvas saves as PNG and prints to PDF")
+    s.shutdown()
+    Ok(())
+}
+
+fn main() -> Result<(), errors::Error> {
+    if env::args().contains("--fixture") {
+        fixture()?
+        require(gui::app::host::callback_count() == 0, "the scene editor leaked callbacks")?
+        return Ok(())
+    }
+    app().run()
+}

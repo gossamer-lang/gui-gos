@@ -1,0 +1,3 @@
+gos-jit-stats: compiled=3
+gos-jit-stats: compiled=3
+rebound string field transfer: ok

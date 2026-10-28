@@ -1,0 +1,24 @@
+gos 0.75.0; windowing 0.1.0; gui-toolkit 0.1.0
+ok    vm
+ok    jit
+   Compiling gui-toolkit v0.1.0 (/home/daniel/dev/goose-libs/gui-toolkit-gos/rust/gui-toolkit)
+   Compiling gui-toolkit-binding v0.1.0 (/home/daniel/dev/goose-libs/gui-toolkit-gos/rust/binding)
+   Compiling gos-static-5d9cf9aa6e44 v0.0.0 (/tmp/gui-for-goss-screenshots/cache/gossamer/bindings/static-5d9cf9aa6e44)
+note: link against the following native artifacts when linking against this static library. The order and any duplication can be significant on some platforms
+
+note: native-static-libs: -ldl -lm -lgcc_s -lutil -lrt -lpthread -lm -ldl -lc
+
+    Finished `dev` profile [unoptimized] target(s) in 5.22s
+build: 61210920B native executable at ./target/debug/gui-screenshots (target x86_64-unknown-linux-gnu)
+ok    debug
+   Compiling gui-toolkit v0.1.0 (/home/daniel/dev/goose-libs/gui-toolkit-gos/rust/gui-toolkit)
+   Compiling gui-toolkit-binding v0.1.0 (/home/daniel/dev/goose-libs/gui-toolkit-gos/rust/binding)
+   Compiling gos-static-5d9cf9aa6e44 v0.0.0 (/tmp/gui-for-goss-screenshots/cache/gossamer/bindings/static-5d9cf9aa6e44)
+note: link against the following native artifacts when linking against this static library. The order and any duplication can be significant on some platforms
+
+note: native-static-libs: -ldl -lm -lgcc_s -lutil -lrt -lpthread -lm -ldl -lc
+
+    Finished `release` profile [optimized] target(s) in 20.39s
+build: 20593472B native executable at ./target/release/gui-screenshots (target x86_64-unknown-linux-gnu)
+ok    release
+screenshots: every scene matches its golden on all four tiers

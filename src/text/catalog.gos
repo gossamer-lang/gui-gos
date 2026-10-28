@@ -1,0 +1,19 @@
+// A summary of one installed font face.
+
+/// One face of an installed font file.
+#[derive(Debug, Default, PartialEq)]
+pub struct FontRecord {
+    pub path: String
+    /// The face's index in its file (non-zero inside a collection).
+    pub index: i64
+    pub family: String
+    pub style: String
+    pub bold: bool
+    pub italic: bool
+    pub monospace: bool
+    /// Whether the face draws color bitmaps (CBDT) instead of outlines.
+    pub color: bool
+    /// The scalars the face has glyphs for, as inclusive (first, last)
+    /// pairs flattened into one sorted list.
+    pub coverage: Vec<i64>
+}

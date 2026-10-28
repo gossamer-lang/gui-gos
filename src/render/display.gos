@@ -1,0 +1,48 @@
+// display: a retained list of draw operations in local pixels. Custom
+// widgets, charts, and scene canvases describe their pictures with it, so
+// drawing stays testable as data and the renderer stays the only code
+// that touches pixels.
+
+use crate::geometry::Rect
+use crate::render::vector::Path
+use crate::style::color::Color
+use crate::text::layout::{TextStyle}
+
+/// One drawing operation.
+#[derive(PartialEq)]
+pub enum DrawOp {
+    FillRect { rect: Rect, color: Color }
+    RoundRect { rect: Rect, radius: i64, color: Color }
+    Stroke { rect: Rect, radius: i64, width: i64, color: Color }
+    Line { x0: i64, y0: i64, x1: i64, y1: i64, width: f64, color: Color }
+    Circle { cx: i64, cy: i64, r: i64, color: Color }
+    Fill { path: Path, color: Color }
+    StrokePath { path: Path, width: f64, color: Color }
+    /// Text with its line box's top-left at (x, y).
+    Text { x: i64, y: i64, text: String, style: TextStyle, color: Color }
+    Image { rect: Rect, rgba: Vec<u8>, width: i64, height: i64 }
+    /// Restricts the following operations to `rect` until `Unclip`.
+    Clip(Rect)
+    Unclip
+    /// Multiplies the following operations' opacity (0..=255) until `EndOpacity`.
+    Opacity(i64)
+    EndOpacity
+    /// An isolated subtree with translation, scaling or reflection.
+    Layer { ops: Vec<DrawOp>, transform: Transform }
+}
+
+
+/// Axis-aligned subtree transform; negative scales reflect about the origin.
+#[derive(PartialEq)]
+pub struct Transform {
+    pub x: f64
+    pub y: f64
+    pub scale_x: f64
+    pub scale_y: f64
+}
+
+impl Transform {
+    pub fn identity() -> Transform {
+        Transform { x: 0.0, y: 0.0, scale_x: 1.0, scale_y: 1.0 }
+    }
+}

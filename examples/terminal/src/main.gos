@@ -1,0 +1,152 @@
+// A terminal filling its window. It runs the user's shell, or with
+// `--standalone program [args...]` that program; the program's title is the
+// window's, and the window closes when the program exits. Copy, paste and
+// select all are the terminal's own commands.
+
+use std::{env, errors, os}
+
+use gui
+use gui::{UiMsg, Widget}
+use gui::terminal::{Cell, Command, Event, Terminal}
+
+struct Model {
+    terminal: Terminal
+}
+
+fn shell() -> Command {
+    if os::family() == "windows" {
+        Command { program: "cmd.exe", args: #[], cwd: "", env: #[] }
+    } else {
+        let program = env::var("SHELL").unwrap_or("/bin/sh")
+        Command { program: program, args: #[], cwd: "", env: #[] }
+    }
+}
+
+// A short program whose output exercises colors, a title and Unicode: it
+// echoes one line it reads, then exits with status 3 at the next.
+fn demo() -> Command {
+    if os::family() == "windows" {
+        let script = "title demo&echo ready&set /p line=&call echo got:%line%&set /p done=&exit /b 3"
+        Command { program: "cmd.exe", args: #["/d", "/c", script], cwd: "", env: #[] }
+    } else {
+        let script = "printf '\\033]2;demo\\007\\033[1;32mready\\033[0m\\r\\n'; read line; printf 'got:%s\\r\\n' \"$line\"; read done; exit 3"
+        Command { program: "/bin/sh", args: #["-c", script], cwd: "", env: #[] }
+    }
+}
+
+fn init(command: Command) -> Model {
+    let terminal = Terminal::open().unwrap()
+    if let Err(why) = terminal.spawn(command) {
+        eprintln(f"terminal: cannot run {command.program}: {why}")
+        gui::perform(gui::Effect::Quit)
+    }
+    Model { terminal: terminal }
+}
+
+fn update(m: Model, msg: UiMsg) -> Model {
+    match msg {
+        UiMsg::Terminal(id, event) if id == m.terminal.id => match event {
+            Event::Title(title) => gui::perform(gui::Effect::SetTitle("main", if title.is_empty() { "Terminal" } else { title }))
+            Event::Bell => ()
+            Event::Exited(_) => gui::perform(gui::Effect::Quit)
+            Event::Failed(why) => {
+                eprintln(f"terminal: {why}")
+                gui::perform(gui::Effect::Quit)
+            }
+            Event::Refused(why) => eprintln(f"terminal: {why}")
+        }
+        _ => ()
+    }
+    m
+}
+
+fn view(m: Model) -> Widget {
+    m.terminal.view("terminal", "Terminal").grow(1)
+}
+
+fn app(command: Command) -> gui::App<Model> {
+    gui::application("Terminal", "dev.gossamer.gui-terminal", || init(command), update, view)
+        .size(760, 520)
+        .focus("terminal")
+}
+
+fn require(value: bool, why: String) -> Result<(), errors::Error> {
+    if value { Ok(()) } else { Err(errors::new(why)) }
+}
+
+// Steps the session until its accessible screen shows `text`.
+fn await_screen_text(s: &mut gui::Session, text: String) -> Result<(), errors::Error> {
+    while !s.semantics(0).dump().contains(text) {
+        require(s.step()?, f"the session ended before showing {text}")?
+    }
+    Ok(())
+}
+
+// Steps the session until it ends, as it does when its program exits.
+fn await_end(s: &mut gui::Session) -> Result<(), errors::Error> {
+    while s.step()? {}
+    Ok(())
+}
+
+// Drives the window: a live program's title, typed Unicode input, and its
+// exit closing the window.
+fn window_journey() -> Result<(), errors::Error> {
+    let mut s = app(demo()).start()?
+    await_screen_text(&mut s, "ready")?
+    s.type_text("héllo 界")?
+    s.press(windowing::Key::Return, windowing::Mods::default())?
+    await_screen_text(&mut s, "got:héllo 界")?
+    s.press(windowing::Key::Return, windowing::Mods::default())?
+    await_end(&mut s)?
+    s.shutdown()
+    println("window: typed input echoed, and the program's exit closed the window")
+    recorded_stream()?
+    Ok(())
+}
+
+// A recorded stream fed to a second terminal of the same session: history,
+// selection, copying, resizing and release.
+fn recorded_stream() -> Result<(), errors::Error> {
+    let terminal = Terminal::open(gui::terminal::Options { rows: 4, cols: 20, scrollback: 50, byte_limit: 8_388_608 })?
+    let mut stream = "\u{1b}]0;recorded\u{7}"
+    for n in 0..30 {
+        stream += f"\u{1b}[3{n % 8}mline {n:02}\u{1b}[0m\r\n"
+    }
+    stream += "界 end"
+    terminal.feed(stream)?
+    let shown = terminal.snapshot()?
+    require(shown.text.contains("界 end") && shown.title == "recorded", f"recorded stream: {shown.text}")?
+    require(terminal.scroll(10)? == 10 && terminal.snapshot()?.text.contains("line 17"), "history did not scroll")?
+    require(terminal.scroll(1_000)? == 27 && terminal.scroll(-1_000)? == 0, "history is not bounded")?
+    terminal.select(Cell { row: 2, col: 0 }, Cell { row: 2, col: 7 })?
+    let copied = terminal.copy()?
+    require(copied == "line 29", f"copied {copied}")?
+    terminal.resize(10, 30)?
+    let resized = terminal.snapshot()?
+    require(resized.rows == 10 && resized.cols == 30 && resized.selection.is_none(), "resize")?
+    require(terminal.resize(300, 30).is_err(), "an oversized screen was accepted")?
+    terminal.close()
+    require(terminal.snapshot().is_err(), "a closed terminal still answers")?
+    println(f"recorded: title recorded, history 27 rows, copied {copied}, resized 10x30, closed")
+    Ok(())
+}
+
+fn main() -> Result<(), errors::Error> {
+    let args = env::args()
+    if args.contains("--fixture") {
+        window_journey()?
+        require(gui::app::host::callback_count() == 0, "the terminal example leaked callbacks")?
+        return Ok(())
+    }
+    if args.contains("--standalone") {
+        let at = args.position(|a| a == "--standalone").unwrap()
+        let rest = args.skip(at + 1)
+        let command = if rest.is_empty() {
+            shell()
+        } else {
+            Command { program: rest[0], args: rest.skip(1), cwd: "", env: #[] }
+        }
+        return app(command).run()
+    }
+    app(shell()).run()
+}

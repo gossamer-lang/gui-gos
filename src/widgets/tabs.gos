@@ -1,0 +1,220 @@
+// tabs: a window's tab strip and the content of its active tab. The
+// application owns the tab list and which tab is active; the strip reports
+// what the user asked for and the next view shows it. Selecting reports
+// `UiMsg::Tab(id, key)`, a drag reorder reports `UiMsg::Reorder(id, key,
+// index)`, and every other request (close, close others, close to the
+// right, pin, unpin, move left or right, new, reopen, move to a new window)
+// reports `UiMsg::TabAction(id, key, action)`. The `gui.tab.*` commands
+// from `tab_commands` reach the innermost strip around the focus, so the
+// same shortcuts, menus, and palette entries work in every tabbed window.
+
+
+use crate::accessibility::{AccessNode, Role}
+use crate::commands::Command
+use crate::render::icons::Icon
+use crate::style::Theme
+use crate::widgets::Widget
+use crate::widgets::cx::Node
+use crate::widgets::state::StateStore
+
+/// One tab: a stable key, what the strip shows for it, and what it allows.
+#[derive(PartialEq)]
+pub struct TabItem {
+    pub key: String
+    pub title: String
+    /// An icon name from `render::icons`, or "".
+    pub icon: Option<crate::render::icons::Icon>
+    pub tooltip: String
+    /// Unsaved changes: the strip marks the tab.
+    pub dirty: bool
+    /// Work in progress: the strip shows activity.
+    pub busy: bool
+    /// Pinned tabs sit first, show no close button, and refuse close.
+    pub pinned: bool
+    pub closable: bool
+}
+
+impl TabItem {
+    pub fn new(key: String, title: String) -> TabItem {
+        TabItem { key: key, title: title, icon: None, tooltip: String::new(), dirty: false, busy: false, pinned: false, closable: true }
+    }
+
+    pub fn dirty(self, dirty: bool) -> TabItem {
+        let mut t = self
+        t.dirty = dirty
+        t
+    }
+
+    pub fn busy(self, busy: bool) -> TabItem {
+        let mut t = self
+        t.busy = busy
+        t
+    }
+
+    pub fn pinned(self, pinned: bool) -> TabItem {
+        let mut t = self
+        t.pinned = pinned
+        t
+    }
+
+    pub fn closable(self, closable: bool) -> TabItem {
+        let mut t = self
+        t.closable = closable
+        t
+    }
+
+    pub fn icon(self, icon: Icon) -> TabItem {
+        let mut t = self
+        t.icon = Some(icon)
+        t
+    }
+
+    pub fn tooltip(self, tooltip: String) -> TabItem {
+        let mut t = self
+        t.tooltip = tooltip
+        t
+    }
+
+    fn shows_close(&self) -> bool {
+        self.closable && !self.pinned
+    }
+}
+
+/// A tab strip over the content of its active tab.
+#[derive(PartialEq)]
+pub struct Tabs {
+    pub id: String
+    pub items: Vec<TabItem>
+    pub active: String
+    pub content: Widget
+    /// Inactive pages retain interaction state without being laid out or painted.
+    pub pages: Map<String, Widget>
+    /// Shared identity for pages allowed to migrate between windows.
+    pub workspace: String
+    /// Shows a new-tab button after the tabs.
+    pub add_button: bool
+    /// Offers "Move to New Window" in the tab menu.
+    pub detachable: bool
+}
+
+/// The commands a tabbed window offers; add them to `App::commands`.
+pub fn tab_commands() -> Vec<Command> {
+    #[
+        Command::new("gui.tab.new", crate::localization::tr("New Tab")).key("Primary+T").category(crate::localization::tr("Tabs"))
+        Command::new("gui.tab.close", crate::localization::tr("Close Tab")).key("Primary+W").key("Primary+F4").category(crate::localization::tr("Tabs"))
+        Command::new("gui.tab.reopen", crate::localization::tr("Reopen Closed Tab")).key("Primary+Shift+T").category(crate::localization::tr("Tabs"))
+        Command::new("gui.tab.next", crate::localization::tr("Next Tab")).key("Ctrl+Tab").key("Ctrl+PageDown").category(crate::localization::tr("Tabs"))
+        Command::new("gui.tab.previous", crate::localization::tr("Previous Tab")).key("Ctrl+Shift+Tab").key("Ctrl+PageUp").category(crate::localization::tr("Tabs"))
+        Command::new("gui.tab.move-left", crate::localization::tr("Move Tab Left")).key("Ctrl+Shift+PageUp").category(crate::localization::tr("Tabs"))
+        Command::new("gui.tab.move-right", crate::localization::tr("Move Tab Right")).key("Ctrl+Shift+PageDown").category(crate::localization::tr("Tabs"))
+        Command::new("gui.tab.close-others", crate::localization::tr("Close Other Tabs")).category(crate::localization::tr("Tabs"))
+        Command::new("gui.tab.close-right", crate::localization::tr("Close Tabs to the Right")).category(crate::localization::tr("Tabs"))
+        Command::new("gui.tab.detach", crate::localization::tr("Move Tab to New Window")).category(crate::localization::tr("Tabs"))
+        Command::new("gui.tab.select-1", crate::localization::tr("Go to Tab 1")).key("Primary+1").category(crate::localization::tr("Tabs"))
+        Command::new("gui.tab.select-2", crate::localization::tr("Go to Tab 2")).key("Primary+2").category(crate::localization::tr("Tabs"))
+        Command::new("gui.tab.select-3", crate::localization::tr("Go to Tab 3")).key("Primary+3").category(crate::localization::tr("Tabs"))
+        Command::new("gui.tab.select-4", crate::localization::tr("Go to Tab 4")).key("Primary+4").category(crate::localization::tr("Tabs"))
+        Command::new("gui.tab.select-5", crate::localization::tr("Go to Tab 5")).key("Primary+5").category(crate::localization::tr("Tabs"))
+        Command::new("gui.tab.select-6", crate::localization::tr("Go to Tab 6")).key("Primary+6").category(crate::localization::tr("Tabs"))
+        Command::new("gui.tab.select-7", crate::localization::tr("Go to Tab 7")).key("Primary+7").category(crate::localization::tr("Tabs"))
+        Command::new("gui.tab.select-8", crate::localization::tr("Go to Tab 8")).key("Primary+8").category(crate::localization::tr("Tabs"))
+        Command::new("gui.tab.select-last", crate::localization::tr("Go to Last Tab")).key("Primary+9").category(crate::localization::tr("Tabs"))
+    ]
+}
+
+// Part layout of a strip node: two rects per tab (the tab, its close
+// button), then the new-tab button and the overflow button (empty when
+// absent). The content is the node's only child.
+fn tab_part(i: i64) -> i64 { i * 2 }
+fn close_part(i: i64) -> i64 { i * 2 + 1 }
+fn add_part(n: i64) -> i64 { n * 2 }
+fn overflow_part(n: i64) -> i64 { n * 2 + 1 }
+
+
+fn min_width(t: TabItem, theme: Theme) -> i64 {
+    if t.pinned { theme.px(44) } else { theme.px(84) }
+}
+
+fn index_of(t: Tabs, key: String) -> i64 {
+    let mut i = 0
+    while i < t.items.len() {
+        if t.items[i].key == key { return i }
+        i += 1
+    }
+    -1
+}
+
+
+/// The index of the tab a strip-local point is over, or -1.
+fn tab_at(t: Tabs, node: Node, lx: i64, ly: i64) -> i64 {
+    let mut i = 0
+    while i < t.items.len() && tab_part(i) < node.parts.len() {
+        if node.parts[tab_part(i)].contains(lx, ly) { return i }
+        i += 1
+    }
+    -1
+}
+
+
+// The tab-menu rows: (action, label). Pinning toggles; closing is offered
+// only for a closable tab.
+fn menu_rows(t: Tabs, key: String) -> Vec<(String, String)> {
+    let i = index_of(t, key)
+    let mut rows = #[]
+    if i < 0 { return rows }
+    let item = t.items[i]
+    if item.shows_close() { rows.push(("close", crate::localization::tr("Close Tab"))) }
+    if t.items.len() > 1 { rows.push(("close-others", crate::localization::tr("Close Other Tabs"))) }
+    if i + 1 < t.items.len() { rows.push(("close-right", crate::localization::tr("Close Tabs to the Right"))) }
+    rows.push(if item.pinned { ("unpin", crate::localization::tr("Unpin Tab")) } else { ("pin", crate::localization::tr("Pin Tab")) })
+    if i > 0 { rows.push(("move-left", crate::localization::tr("Move Tab Left"))) }
+    if i + 1 < t.items.len() { rows.push(("move-right", crate::localization::tr("Move Tab Right"))) }
+    if t.detachable && t.items.len() > 1 { rows.push(("detach", crate::localization::tr("Move Tab to New Window"))) }
+    rows
+}
+
+fn popup_rows(t: Tabs, st: StateStore) -> Vec<(String, String)> {
+    if st.field(t.id, "popup", "") == "list" {
+        let mut rows = #[]
+        for item in t.items {
+            rows.push((item.key, if item.dirty { f"{item.title} •" } else { item.title }))
+        }
+        rows
+    } else {
+        menu_rows(t, st.field(t.id, "menu-key", ""))
+    }
+}
+
+
+/// The insertion index a drop at strip-local `lx` lands on.
+fn drop_index(t: Tabs, node: Node, lx: i64) -> i64 {
+    let mut i = 0
+    while i < t.items.len() && tab_part(i) < node.parts.len() {
+        let r = node.parts[tab_part(i)]
+        if lx < r.x + r.width / 2 { return i }
+        i += 1
+    }
+    t.items.len() - 1
+}
+
+
+pub fn tabs_semantics(t: Tabs) -> Option<AccessNode> {
+    let mut g = AccessNode::new(Role::Group, String::new())
+    let mut list = AccessNode::control(Role::TabList, t.id, String::new(), "")
+    let mut i = 0
+    while i < t.items.len() {
+        let item = t.items[i]
+        let label = if item.dirty { crate::localization::message("tabs", "{title}, modified", 1, { "title": item.title }) } else { item.title }
+        let mut tab = AccessNode::new(Role::Tab, label)
+        tab.id = f"{t.id}#{item.key}"
+        tab.selected = item.key == t.active
+        tab.actions.push("select")
+        tab.pos_in_set = i + 1
+        tab.set_size = t.items.len()
+        tab.description = item.tooltip
+        list.children.push(tab)
+        i += 1
+    }
+    g.children.push(list)
+    Some(g)
+}

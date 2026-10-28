@@ -1,0 +1,1 @@
+build: 16931160B native executable at tests/wrap/target/release/gui-wrap (target x86_64-unknown-linux-gnu)

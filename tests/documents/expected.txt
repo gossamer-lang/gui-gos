@@ -1,0 +1,4 @@
+diverse edits and immutable snapshots: ok
+diverse save markers, checkpoint and undo restoration: ok
+long-line edits and immutable snapshots: ok
+long-line save markers, checkpoint and undo restoration: ok

@@ -1,0 +1,144 @@
+// Journeys over lists too long for the bytecode VM to measure in reasonable
+// time: a select and a searchable picker with 100,000 choices, driven by the
+// keyboard, and a sorted, filtered view of a million rows that new rows
+// arrive above. Each step prints its time; a wrong outcome fails the run.
+use std::{errors, time}
+use windowing::{Key, Mods}
+use gui
+use gui::{UiMsg, Widget}
+use gui::models::{ModelLog, SortFilter}
+use gui::widgets::collections::{Collection, Row}
+use gui::widgets::completion::CompletionItem
+
+struct Picks {
+    tags: Vec<String>
+    log: Vec<String>
+}
+
+fn update(m: Picks, msg: UiMsg) -> Picks {
+    let mut n = m
+    match msg {
+        UiMsg::Select(id, key) => n.log.push(f"{id}={key}")
+        UiMsg::SelectMany(id, keys) => {
+            n.log.push(f"{id}={keys.join(",")}")
+            n.tags = keys
+        }
+        _ => ()
+    }
+    n
+}
+
+// The messages the choices reported, from the view's log line.
+fn log(s: gui::Session) -> String {
+    let dump = s.semantics(0).dump()
+    let at = dump.find("log ").unwrap_or(0)
+    let rest = dump.substring(at + 4, dump.byte_len())
+    rest.substring(0, rest.find("\"").unwrap_or(rest.byte_len()))
+}
+
+fn step(label: String, t: time::Instant) -> time::Instant {
+    println(f"{label}: {t.elapsed().as_millis()} ms")
+    time::Instant::now()
+}
+
+// A million source rows shown through a filter and a descending sort, with
+// rows that arrived later shown above them.
+struct Feed {
+    view: SortFilter
+    arrived: i64
+    log: ModelLog
+}
+
+fn feed_update(m: Feed, msg: UiMsg) -> Feed {
+    let mut n = m
+    if let UiMsg::Click(id) = msg && id == "arrive" {
+        n.arrived += 1000
+        n.log.inserted(0, 1000)
+    }
+    n
+}
+
+fn feed_view(m: Feed) -> Widget {
+    let arrived = m.arrived
+    let order = m.view
+    let row = |i: i64| if i < arrived { Row::new(f"new{arrived - i}", f"New {arrived - i}") } else { Row::new(f"s{order.source_of(i - arrived)}", f"Source {order.source_of(i - arrived)}") }
+    let list = Collection::new("feed", arrived + order.count(), row).revision(m.log.revision, m.log.changes).label("Feed").rows(8)
+    Widget::column(#[Widget::button("arrive", "New rows"), Widget::Collection(list)], 8).padding(8)
+}
+
+fn rows_shown(s: gui::Session) -> Vec<String> {
+    match s.semantics(0).find("feed") {
+        Some(list) => list.children.map(|n| n.name)
+        None => #[]
+    }
+}
+
+fn million_rows() -> Result<(), errors::Error> {
+    let mut t = time::Instant::now()
+    let view = SortFilter::new(1_000_000, |i| i % 3 != 0, |i| f"{i:07}", false)
+    if view.count() != 666_666 || view.source_of(0) != 999_998 || view.source_of(view.count() - 1) != 1 {
+        return Err(errors::new(f"the sorted, filtered view of a million rows is wrong: {view.count()} rows from {view.source_of(0)}"))
+    }
+    t = step("sort and filter a million rows", t)
+    let mut s = gui::application("Feed", "dev.gossamer.gui-scale-feed", || Feed { view: view, arrived: 0, log: ModelLog::new() }, feed_update, feed_view).size(420, 480).start()?
+    t = step("start with 666,666 rows", t)
+    s.focus("feed")?
+    s.press(Key::End, Mods::default())?
+    let at_end = rows_shown(s)
+    if !at_end.contains("Source 1") {
+        return Err(errors::new(f"End did not reach the last row: {at_end:?}"))
+    }
+    t = step("reach the last row", t)
+    s.press(Key::PageUp, Mods::default())?
+    let before = rows_shown(s)
+    s.click("arrive")?
+    let after = rows_shown(s)
+    if after != before {
+        return Err(errors::new(f"rows arriving above moved the view: {before:?} became {after:?}"))
+    }
+    let _ = step("1,000 rows arrive above the view", t)
+    s.shutdown()
+    println("million-row journey: ok")
+    Ok(())
+}
+
+fn main() -> Result<(), errors::Error> {
+    gui::services::clipboard::use_memory(true)
+    million_rows()?
+    let mut t = time::Instant::now()
+    let many: Vec<CompletionItem> = (0..100_000).map(|i| CompletionItem::new(f"k{i}", f"Item {i}")).collect()
+    let view = |m: Picks| Widget::column(#[
+        Widget::select("fruit", many, "", "Item")
+        Widget::picker("tags", many, m.tags, true, "Tags")
+        Widget::label(f"log {m.log.join(" ")}")
+    ], 8).padding(8)
+    let mut s = gui::application("Scale", "dev.gossamer.gui-scale", || Picks { tags: #[], log: #[] }, update, view).size(420, 360).start()?
+    t = step("start with 100,000 choices", t)
+    s.focus("fruit")?
+    // Open, End reaches the last item and Enter commits it.
+    s.press(Key::Return, Mods::default())?
+    t = step("open the select", t)
+    s.press(Key::End, Mods::default())?
+    s.press(Key::Return, Mods::default())?
+    t = step("choose the last item", t)
+    // Open again, Home then Page Down moves one page; Enter commits.
+    s.press(Key::Return, Mods::default())?
+    s.press(Key::Home, Mods::default())?
+    s.press(Key::PageDown, Mods::default())?
+    s.press(Key::Return, Mods::default())?
+    t = step("page through the select", t)
+    // The picker filters every label; only one matches.
+    s.focus("tags")?
+    s.type_text("99998")?
+    s.press(Key::Return, Mods::default())?
+    t = step("filter the picker", t)
+    let seen = log(s)
+    s.shutdown()
+    let _ = step("shut down", t)
+    let expected = "fruit=k99999 fruit=k7 tags=k99998"
+    if seen != expected {
+        return Err(errors::new(f"100,000-choice journey reported {seen:?}, expected {expected:?}"))
+    }
+    println("100,000-choice journey: ok")
+    Ok(())
+}

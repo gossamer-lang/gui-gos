@@ -1,0 +1,504 @@
+// The standard controls, collections, dialogs, pickers and navigation of
+// gui-gos in one window. Every control is wired to something it changes, and
+// the collections show twenty files as a list, a table, an icon grid and a
+// folder tree.
+use std::{env, errors, fs, path, process}
+use gui
+use gui::{Command, Effect, Icon, TabItem, UiMsg, Widget}
+use gui::dialogs::request
+use gui::widgets::{completion, menus, tabs}
+use gui::widgets::navigation::{Destination, breadcrumb, sidebar, disclosure, toolbar, status_bar}
+use gui::widgets::collections::{Collection, Column, Row, ViewMode}
+use gui::widgets::textinput::{InputKind, TextInput}
+
+struct Model {
+    page: String
+    name: String
+    port: String
+    text_size: String
+    view_mode: String
+    accepted: bool
+    messages: bool
+    mentions: bool
+    reminders: bool
+    volume: f64
+    muted: bool
+    controls_enabled: bool
+    selected: String
+    collapsed: Vec<String>
+    color: gui::ColorPicker
+    date: String
+    clock: String
+    duration: String
+    rtl: bool
+    mailbox: String
+    advanced: bool
+    auto_update: bool
+    status: String
+    /// The appearance switches: theme, density, display scale, text size.
+    theme: String
+    density: String
+    scale: String
+    text: String
+}
+
+fn init() -> Model {
+    Model {
+        page: "controls", name: "", port: "8080", text_size: "medium", view_mode: "list", accepted: false
+        messages: true, mentions: true, reminders: false, volume: 60.0, muted: false, controls_enabled: false
+        selected: "documents", collapsed: #[], color: gui::ColorPicker::new("color", gui::Color::rgba(30, 120, 200, 160))
+        date: "2026-10-18", clock: "12:30:00", duration: "1:00:00", rtl: false, mailbox: "inbox", advanced: false, auto_update: true
+        status: "Ready", theme: "system", density: "normal", scale: "display", text: "1"
+    }
+}
+
+// ---- the files every collection shows ----
+
+struct FileItem {
+    key: String
+    name: String
+    kind: String
+    size: String
+    depth: i64
+    icon: Icon
+}
+
+fn file(key: String, name: String, kind: String, size: String, depth: i64, icon: Icon) -> FileItem {
+    FileItem { key: key, name: name, kind: kind, size: size, depth: depth, icon: icon }
+}
+
+fn files() -> Vec<FileItem> {
+    #[
+        file("documents", "Documents", "Folder", "", 0, Icon::Folder)
+        file("budget", "Budget 2026.ods", "Spreadsheet", "48 KB", 1, Icon::Grid)
+        file("notes", "Meeting notes.txt", "Text", "3 KB", 1, Icon::FileText)
+        file("report", "Quarterly report.pdf", "PDF document", "1.2 MB", 1, Icon::File)
+        file("photos", "Photos", "Folder", "", 0, Icon::Folder)
+        file("beach", "Beach.jpg", "Image", "3.4 MB", 1, Icon::Eye)
+        file("birthday", "Birthday.png", "Image", "2.1 MB", 1, Icon::Eye)
+        file("mountains", "Mountains.jpg", "Image", "4.8 MB", 1, Icon::Eye)
+        file("music", "Music", "Folder", "", 0, Icon::Folder)
+        file("playlist", "Morning playlist.m3u", "Playlist", "1 KB", 1, Icon::List)
+        file("rain", "Rain sounds.ogg", "Audio", "7.9 MB", 1, Icon::Play)
+        file("projects", "Projects", "Folder", "", 0, Icon::Folder)
+        file("website", "website", "Folder", "", 1, Icon::Folder)
+        file("index", "index.html", "Web page", "6 KB", 2, Icon::Globe)
+        file("style", "style.css", "Style sheet", "2 KB", 2, Icon::Code)
+        file("app", "app.js", "Script", "14 KB", 2, Icon::Code)
+        file("backup", "Backup.zip", "Archive", "120 MB", 1, Icon::Lock)
+        file("readme", "README.md", "Text", "2 KB", 1, Icon::FileText)
+        file("downloads", "Downloads", "Folder", "", 0, Icon::Folder)
+        file("installer", "Installer.deb", "Package", "58 MB", 1, Icon::Download)
+    ]
+}
+
+// The files a tree shows: those inside no collapsed folder.
+fn visible_tree(m: Model) -> Vec<FileItem> {
+    let mut out = #[]
+    let mut hidden_below = -1
+    for f in files() {
+        if hidden_below >= 0 && f.depth > hidden_below { continue }
+        hidden_below = -1
+        out.push(f)
+        if f.kind == "Folder" && m.collapsed.contains(f.key) { hidden_below = f.depth }
+    }
+    out
+}
+
+fn file_row(f: FileItem, tree: bool, open: bool) -> Row {
+    let mut row = Row::new(f.key, f.name)
+    row.detail = if f.size.is_empty() { f.kind } else { f"{f.kind}, {f.size}" }
+    row.icon = Some(if f.kind == "Folder" && tree && open { Icon::FolderOpen } else { f.icon })
+    row.cells = #[f.name, f.kind, f.size]
+    if tree {
+        row.depth = f.depth
+        row.expandable = f.kind == "Folder"
+        row.expanded = open
+    }
+    row
+}
+
+fn file_view(m: Model, id: String, mode: String, label: String) -> Widget {
+    let all = if mode == "tree" { visible_tree(m) } else { files() }
+    let collapsed = m.collapsed
+    let list = Collection::new(id, all.len(), |i| file_row(all[i], mode == "tree", !collapsed.contains(all[i].key)))
+        .selected(#[m.selected])
+        .mode(if mode == "grid" { ViewMode::IconGrid } else { ViewMode::List })
+        .columns(if mode == "columns" { #[Column::new("name", "Name", 240), Column::new("kind", "Kind", 160), Column::new("size", "Size", 100)] } else { #[] })
+        .label(label)
+        .rows(if mode == "grid" { 3 } else { 6 })
+        .tree(mode == "tree")
+    Widget::collection(if mode == "list" { list.draggable(file_items) } else { list })
+}
+
+// What dragging list rows out offers: their names, one per line.
+fn file_items(keys: Vec<String>) -> Vec<windowing::DragItem> {
+    let names = files().filter(|f| keys.contains(f.key)).map(|f| f.name).join("\n")
+    #[windowing::DragItem { mime: "text/plain;charset=utf-8", data: names.bytes() }, windowing::DragItem { mime: "text/plain", data: names.bytes() }]
+}
+
+// ---- appearance ----
+
+// Carries out one appearance switch.
+fn appearance(n: Model, id: String, key: String) -> Model {
+    let mut m = n
+    match id {
+        "appearance:theme" => {
+            m.theme = key
+            gui::perform(match key {
+                "light" => Effect::SetTheme(gui::ThemeKind::Light)
+                "dark" => Effect::SetTheme(gui::ThemeKind::Dark)
+                "hc-light" => Effect::SetTheme(gui::ThemeKind::HighContrastLight)
+                "hc-dark" => Effect::SetTheme(gui::ThemeKind::HighContrastDark)
+                _ => Effect::FollowSystemTheme
+            })
+        }
+        "appearance:density" => {
+            m.density = key
+            gui::perform(Effect::SetDensity(match key { "compact" => gui::Density::Compact, "comfortable" => gui::Density::Comfortable, _ => gui::Density::Normal }))
+        }
+        "appearance:scale" => {
+            m.scale = key
+            gui::perform(Effect::SetDisplayScale(key.to_f64()))
+        }
+        "appearance:text" => {
+            m.text = key
+            gui::perform(Effect::SetTextScale(key.to_f64().unwrap_or(1.0)))
+        }
+        _ => ()
+    }
+    m
+}
+
+// The text-size steps the toolbar's Smaller and Larger buttons move through.
+const TEXT_STEPS: [String; 3] = ["1", "1.5", "2"]
+
+fn step_text(m: Model, by: i64) -> Model {
+    let at = TEXT_STEPS.to_vec().position(|s| s == m.text).unwrap_or(0)
+    let next = (at + by).max(0).min(TEXT_STEPS.len() - 1)
+    appearance(m, "appearance:text", TEXT_STEPS[next])
+}
+
+// ---- dialogs ----
+
+fn preference_field() -> request::PreferenceField {
+    request::PreferenceField { key: "name", label: "Display name", kind: request::PreferenceKind::Text, value: "Alex", default: "", help: "Shown to people you share documents with" }
+}
+
+fn open(id: String) {
+    let req = match id {
+        "color" => request::color("color", "Choose a color", gui::Color::rgba(30, 120, 200, 160))
+        "font" => request::font("font", "Choose a font", "DejaVu Sans|Regular|14")
+        "date" => request::date("date", "Choose a date", "2026-10-18", request::DateMode::Date, "2020-01-01", "2030-12-31")
+        "preferences" => request::preferences("preferences", "Preferences", #[request::PreferencePage { key: "general", title: "General", fields: #[preference_field()] }])
+        "wizard" => request::wizard("wizard", "Welcome", #[
+            request::WizardPage { key: "profile", title: "Your profile", description: "Choose the name other people see. You can change it later in Preferences.", fields: #[preference_field()], skip_if: "" }
+            request::WizardPage { key: "finish", title: "All set", description: "Choose Finish to start using the application.", fields: #[], skip_if: "" }
+        ])
+        "info" => request::info("info", "Update available", "Version 2.1 is ready to install. It fixes printing on some laser printers.")
+        "warning" => request::warning("warning", "Low disk space", "Only 2 GB is left on this disk. Delete files you no longer need to keep saving your work.")
+        "error" => request::error("error", "Could not open file", "\u{201C}Quarterly report.pdf\u{201D} could not be opened.", "The file is damaged or is not a PDF document.", true)
+        "unsaved" => request::confirm_unsaved("unsaved", "Meeting notes.txt")
+        "input" => request::prompt("input", "Rename file", "New name", "Meeting notes.txt")
+        "open" => request::toolkit_file(request::open_file("open", "Open file", #[]))
+        "save" => request::toolkit_file(request::save_file("save", "Save file", "Meeting notes.txt", #[]))
+        "folder" => request::toolkit_file(request::select_folder("folder", "Choose a folder"))
+        _ => request::about("about", "Widget showcase", gui::VERSION, "Every standard control in gui-gos, in one window.")
+    }
+    gui::perform(Effect::OpenDialog(req))
+}
+
+// ---- update ----
+
+fn notifications(m: Model) -> gui::CheckState {
+    let on = #[m.messages, m.mentions, m.reminders].filter(|b| b).len()
+    if on == 3 { gui::CheckState::Checked } else if on == 0 { gui::CheckState::Unchecked } else { gui::CheckState::Mixed }
+}
+
+fn port_error(text: String) -> String {
+    match text.trim().to_i64() {
+        Some(n) => if n >= 1 && n <= 65_535 { "" } else { "Enter a port from 1 to 65535" }
+        None => if text.trim().is_empty() { "Enter a port from 1 to 65535" } else { "A port is a whole number" }
+    }
+}
+
+fn update(m: Model, msg: UiMsg) -> Model {
+    let mut n = m
+    n.color.update(msg)
+    match msg {
+        UiMsg::Tab(_, key) => n.page = key
+        UiMsg::Toggle(id, on) => match id {
+            "accept" => n.accepted = on
+            "messages" => n.messages = on
+            "mentions" => n.mentions = on
+            "reminders" => n.reminders = on
+            "mute" => { n.muted = on; n.status = if on { "Muted" } else { f"Volume {n.volume}%" } }
+            "controls-enabled" => n.controls_enabled = on
+            "rtl" => { n.rtl = on; gui::perform(Effect::SetRtl(on)) }
+            "advanced" => n.advanced = on
+            "auto-update" => n.auto_update = on
+            _ => ()
+        }
+        UiMsg::Check(id, state) => if id == "notifications" {
+            let on = state == gui::CheckState::Checked
+            n.messages = on
+            n.mentions = on
+            n.reminders = on
+        }
+        UiMsg::Text(id, text) => match id {
+            "name" => n.name = text
+            "port" => n.port = text
+            _ => ()
+        }
+        UiMsg::Value(id, value) => if id == "volume" || id == "volume-number" { n.volume = value; n.muted = false }
+        UiMsg::Date(id, value) => match id { "date" | "calendar" => n.date = value, "clock" => n.clock = value, "duration" => n.duration = value, _ => () }
+        UiMsg::Choose(id, key) => {
+            if id.starts_with("appearance:") { n = appearance(n, id, key) }
+            if id == "text-size" || id == "text-size-radio" { n.text_size = key }
+            if id == "view-mode" { n.view_mode = key }
+        }
+        UiMsg::Select(id, key) => if id == "sidebar" { n.mailbox = key; n.status = f"Showing {mailbox_name(key)}" } else { n.selected = key }
+        UiMsg::Expand(_, key, open) => if open { n.collapsed = n.collapsed.filter(|k| k != key) } else if !n.collapsed.contains(key) { n.collapsed.push(key) }
+        UiMsg::Dialog(id, outcome) => n.status = f"The {id} dialog closed: {outcome}"
+        UiMsg::DragFinished(_, operation) => n.status = match operation { Some(op) => f"Dropped ({op})", None => "The drag was not dropped" }
+        UiMsg::Task(id, outcome) => if id == "desktop" { n.status = match outcome { gui::TaskOutcome::Failed(why) => f"Could not reach the desktop: {why}", _ => "Notification sent" } }
+        UiMsg::Click(id) => {
+            if id == "install" { n.status = "Installed" }
+            if id == "copy" { gui::perform(Effect::SetClipboard(greeting(n))); n.status = "Copied the greeting" }
+            if id == "send" { n.status = "Message sent" }
+            if id == "smaller" { n = step_text(n, -1) }
+            if id == "larger" { n = step_text(n, 1) }
+            if id.starts_with("crumb#") { n.status = f"Go to {id.substring(6, id.byte_len())}" }
+            if id.starts_with("dialog:") { open(id.substring(7, id.byte_len())) }
+            if id == "desktop:notify" { gui::perform(Effect::Notify { id: "desktop", title: "Export finished", body: "\u{201C}Quarterly report.pdf\u{201D} is ready.", urgency: gui::services::desktop::Urgency::Normal }) }
+            if id == "desktop:tray" { gui::perform(Effect::SetTray { id: "desktop", icon: None, tooltip: "Widget showcase", items: #[menus::item("gallery.about"), menus::MenuItem::Separator, menus::item("gui.quit")] }) }
+            if id == "desktop:untray" { gui::perform(Effect::CloseTray) }
+            if id == "toast" { gui::perform(Effect::Toast(gui::widgets::feedback::Toast::new("saved", "Settings saved").action("undo", "Undo"))) }
+        }
+        UiMsg::Command(id) => match id {
+            "gallery.reset" => return init()
+            "gallery.about" => open("about")
+            "gallery.export-pdf" => n.status = "Exported as PDF"
+            "gallery.export-text" => n.status = "Exported as plain text"
+            "gallery.schedule" => n.status = "Message scheduled for 9:00 tomorrow"
+            _ => ()
+        }
+        _ => ()
+    }
+    n
+}
+
+fn commands(_m: Model) -> Vec<Command> {
+    #[
+        Command::new("gallery.reset", "Reset").key("Primary+R")
+        Command::new("gallery.about", "About Widget showcase").key("Primary+I")
+        Command::new("gallery.export-pdf", "Export as PDF")
+        Command::new("gallery.export-text", "Export as plain text")
+        Command::new("gallery.schedule", "Schedule send")
+    ]
+}
+
+// ---- pages ----
+
+fn greeting(m: Model) -> String {
+    if m.name.trim().is_empty() { "Hello!" } else { f"Hello, {m.name.trim()}!" }
+}
+
+fn controls(m: Model) -> Widget {
+    let sizes = #[completion::CompletionItem::new("small", "Small"), completion::CompletionItem::new("medium", "Medium"), completion::CompletionItem::new("large", "Large")]
+    let mut port = TextInput::new("port", m.port, "8080", InputKind::Line)
+    port.label = "Port"
+    port.error = port_error(m.port)
+    let sample_role = match m.text_size { "small" => gui::TextRole::Small, "large" => gui::TextRole::Heading, _ => gui::TextRole::Body }
+    let on = #[m.messages, m.mentions, m.reminders].filter(|b| b).len()
+    let level = if m.muted { 0.0 } else { m.volume / 100.0 }
+    Widget::scroll("controls-scroll", Widget::column(#[
+        Widget::title("Controls")
+        Widget::heading("Text")
+        Widget::form(#[("Name", Widget::text_field("name", m.name, "Your name")), ("Port", Widget::input(port))]).max_width(420)
+        Widget::text(greeting(m), gui::TextRole::Body, gui::Tone::Accent)
+        Widget::heading("Choices")
+        Widget::form(#[("Text size", Widget::select("text-size", sizes, m.text_size, "Text size"))]).max_width(420)
+        Widget::radio_group("text-size-radio", #[("small", "Small"), ("medium", "Medium"), ("large", "Large")], m.text_size, true)
+        Widget::text("The quick brown fox jumps over the lazy dog.", sample_role, gui::Tone::Normal)
+        Widget::segmented("view-mode", #[("list", "List"), ("grid", "Grid"), ("columns", "Columns")], m.view_mode)
+        file_view(m, "files-preview", m.view_mode, "Files")
+        Widget::heading("Checkboxes")
+        Widget::checkbox("accept", "I accept the license terms", m.accepted)
+        Widget::button("install", "Install").disabled(!m.accepted)
+        Widget::flex(gui::widgets::Axis::Horizontal, #[Widget::tristate("notifications", "All notifications", notifications(m), false), Widget::badge(f"{on}", gui::Tone::Accent, f"{on} of 3 on")], 8, gui::widgets::MainAlign::Start, gui::widgets::CrossAlign::Center)
+        Widget::column(#[Widget::checkbox("messages", "Messages", m.messages), Widget::checkbox("mentions", "Mentions", m.mentions), Widget::checkbox("reminders", "Reminders", m.reminders)], 6).padding_sides(28, 0, 0, 0)
+        Widget::heading("Volume")
+        Widget::form(#[("Volume", Widget::slider("volume", m.volume, 0.0, 100.0, 5.0)), ("Percent", Widget::spin_box("volume-number", m.volume, 0.0, 100.0, 5.0, 0))]).max_width(420)
+        gui::widgets::feedback::progress("level", level)
+        Widget::toggle_button("mute", "Mute", m.muted)
+        Widget::heading("Buttons")
+        Widget::flow(#[
+            Widget::tool_button("copy", Icon::Copy, "Copy the greeting")
+            Widget::menu_button("export", "Export", #[menus::item("gallery.export-pdf"), menus::item("gallery.export-text")])
+            Widget::split_button("send", "Send", #[menus::item("gallery.schedule")])
+        ], 8)
+        states(m)
+    ], 12).padding(16))
+}
+
+// The same kinds of control, enabled or disabled by a switch.
+fn states(m: Model) -> Widget {
+    let off = !m.controls_enabled
+    Widget::column(#[
+        Widget::heading("Enabled and disabled")
+        Widget::switch("controls-enabled", "Enable these controls", m.controls_enabled)
+        Widget::flow(#[Widget::button("sample-button", "Button"), Widget::checkbox("sample-check", "Checkbox", true), Widget::switch("sample-switch", "Switch", true), Widget::slider("sample-slider", 0.4, 0.0, 1.0, 0.1)].map(|w| w.disabled(off)), 12)
+    ], 8)
+}
+
+fn collections(m: Model) -> Widget {
+    Widget::scroll("collections-scroll", Widget::column(#[
+        Widget::title("Collections")
+        Widget::paragraph("The same twenty files four ways. Drag rows out of the list; open and close folders in the tree.")
+        Widget::heading("List")
+        file_view(m, "list", "list", "Files as a list")
+        Widget::heading("Table")
+        file_view(m, "table", "columns", "Files as a table")
+        Widget::heading("Icon grid")
+        file_view(m, "grid", "grid", "Files as icons")
+        Widget::heading("Tree")
+        file_view(m, "tree", "tree", "Files by folder")
+    ], 12).padding(16))
+}
+
+fn dialog_buttons(entries: Vec<(String, String)>) -> Widget {
+    Widget::flow(entries.map(|e| Widget::button(f"dialog:{e.0}", e.1)), 8)
+}
+
+fn dialogs() -> Widget {
+    Widget::scroll("dialogs-scroll", Widget::column(#[
+        Widget::title("Dialogs")
+        Widget::heading("Messages")
+        dialog_buttons(#[("info", "Information"), ("warning", "Warning"), ("error", "Error"), ("unsaved", "Unsaved changes"), ("input", "Rename")])
+        Widget::heading("Files")
+        dialog_buttons(#[("open", "Open file"), ("save", "Save file"), ("folder", "Choose folder")])
+        Widget::heading("Pickers")
+        dialog_buttons(#[("color", "Color"), ("font", "Font"), ("date", "Date")])
+        Widget::heading("Settings")
+        dialog_buttons(#[("preferences", "Preferences"), ("wizard", "First-run setup"), ("about", "About")])
+        Widget::heading("Desktop")
+        Widget::flow(#[Widget::button("toast", "Show toast"), Widget::button("desktop:notify", "Send notification"), Widget::button("desktop:tray", "Show tray icon"), Widget::button("desktop:untray", "Remove tray icon")], 8)
+        drag_card()
+    ], 12).padding(16))
+}
+
+// The file the drag card offers, written when the showcase starts.
+fn drag_file() -> String {
+    path::join(env::temp_dir(), f"gui-showcase-drag-{process::id()}.txt")
+}
+
+// A card that drags its file (and the same text) into another application.
+fn drag_card() -> Widget {
+    let file = drag_file()
+    let items = #[
+        windowing::DragItem { mime: "text/uri-list", data: f"{windowing::instance::file_uri(file)}\r\n".bytes() }
+        windowing::DragItem { mime: "text/plain", data: "Dragged from the widget showcase.".bytes() }
+    ]
+    Widget::column(#[Widget::label("Drag this card into another application"), Widget::muted(path::file_name(file).unwrap_or(file))], 4).padding(12).bordered().radius(8).drag_source("drag-card", items, windowing::DragOperation::Copy)
+}
+
+fn pickers(m: Model) -> Widget {
+    let fields = Widget::form(#[("Date", Widget::date_field("date", m.date)), ("Time", Widget::time_field("clock", m.clock)), ("Duration", Widget::duration_field("duration", m.duration))]).max_width(560)
+    Widget::scroll("pickers-scroll", Widget::column(#[Widget::title("Date, time and color"), fields, Widget::Calendar(gui::Calendar::new("calendar", gui::Date::parse(m.date).unwrap())), Widget::heading("Color"), m.color.view()], 12).padding(16))
+}
+
+fn mailbox_name(key: String) -> String {
+    match key { "sent" => "Sent", "drafts" => "Drafts", "archive" => "Archive", _ => "Inbox" }
+}
+
+fn mailbox(key: String, icon: Icon) -> Destination {
+    let mut d = Destination::new(key, mailbox_name(key))
+    d.icon = Some(icon)
+    d
+}
+
+fn navigation(m: Model) -> Widget {
+    Widget::scroll("navigation-scroll", Widget::column(#[
+        Widget::title("Navigation")
+        breadcrumb("crumb", #[Destination::new("home", "Home"), Destination::new("settings", "Settings"), Destination::new("appearance", "Appearance")], "appearance")
+        toolbar("tools", #[Widget::toggle_button("rtl", "Right to left", m.rtl), Widget::tool_button("smaller", Icon::Minus, "Smaller text"), Widget::tool_button("larger", Icon::Plus, "Larger text")])
+        Widget::heading("Appearance")
+        Widget::form(#[
+            ("Theme", Widget::select("appearance:theme", #[("system", "System"), ("light", "Light"), ("dark", "Dark"), ("hc-light", "High contrast"), ("hc-dark", "High contrast dark")].map(|(k, label)| completion::CompletionItem::new(k, label)), m.theme, "Theme"))
+            ("Density", Widget::segmented("appearance:density", #[("compact", "Compact"), ("normal", "Normal"), ("comfortable", "Comfortable")], m.density))
+            ("Display scale", Widget::segmented("appearance:scale", #[("display", "Display"), ("1", "100%"), ("1.5", "150%"), ("2", "200%")], m.scale))
+            ("Text size", Widget::segmented("appearance:text", #[("1", "100%"), ("1.5", "150%"), ("2", "200%")], m.text))
+        ])
+        Widget::heading("Mail folders")
+        sidebar("sidebar", #[mailbox("inbox", Icon::Download), mailbox("sent", Icon::Upload), mailbox("drafts", Icon::Edit), mailbox("archive", Icon::Bookmark)], m.mailbox)
+        disclosure("advanced", "Advanced options", Widget::checkbox("auto-update", "Install updates automatically", m.auto_update), m.advanced)
+        status_bar("status", m.status)
+    ], 12).padding(16))
+}
+
+fn view(m: Model) -> Widget {
+    let pages = { "controls": controls(m), "collections": collections(m), "dialogs": dialogs(), "pickers": pickers(m), "navigation": navigation(m) }
+    let items = #[TabItem::new("controls", "Controls").closable(false), TabItem::new("collections", "Collections").closable(false), TabItem::new("dialogs", "Dialogs").closable(false), TabItem::new("pickers", "Date and color").closable(false), TabItem::new("navigation", "Navigation").closable(false)]
+    let host = tabs::Tabs { id: "pages", items: items, active: m.page, content: pages.get(m.page).unwrap_or(Widget::Empty), pages: pages, workspace: "", add_button: false, detachable: false }
+    let menu = Widget::menu_bar("menu", #[menus::Menu::new("&View", #[menus::item("gallery.reset"), menus::item("gui.toggle-theme"), menus::item("gui.inspector")]), menus::Menu::new("&Help", #[menus::item("gallery.about")])])
+    Widget::column(#[menu, Widget::Tabs(host).grow(1), Widget::muted(m.status).padding(8)], 0)
+}
+
+fn app() -> gui::App<Model> {
+    gui::application("Widget showcase", "dev.gossamer.widgets-showcase", init, update, view).size(960, 760).min_size(560, 420).commands(commands).icon(gui::AppIcon::drawn(Icon::Grid, 64, gui::Color::rgb(36, 112, 200), gui::Color::white()))
+}
+
+fn main() -> Result<(), errors::Error> {
+    let _ = fs::write(drag_file(), "Dragged from the widget showcase.\n".bytes())
+    defer fs::remove_file(drag_file()).unwrap_or(())
+    if !env::args().contains("--fixture") { return app().run() }
+    let mut s = app().start()?
+    let none = windowing::Mods::default()
+    // Install is offered once the terms are accepted.
+    let Some(install) = s.semantics(0).find("install") else { return Err(errors::new("the Install button is missing")) }
+    if !install.disabled { return Err(errors::new("Install is enabled before the terms are accepted")) }
+    if !s.focus("accept")? { return Err(errors::new("the terms checkbox is not reachable")) }
+    s.press(windowing::Key::Space, none)?
+    if !s.focus("install")? { return Err(errors::new("Install is not reachable after accepting")) }
+    s.press(windowing::Key::Space, none)?
+    if !s.semantics(0).dump().contains("Installed") { return Err(errors::new("Install did not run after accepting")) }
+    // The port field says what is wrong until a valid port is typed.
+    s.focus("port")?
+    let mut primary = windowing::Mods::default()
+    primary.ctrl = true
+    s.press(windowing::Key::A, primary)?
+    s.type_text("80a")?
+    let Some(bad) = s.semantics(0).find("port") else { return Err(errors::new("the port field is missing")) }
+    if !bad.invalid || !bad.description.starts_with("A port is a whole number") { return Err(errors::new(f"80a was not reported: {bad.description}")) }
+    s.press(windowing::Key::A, primary)?
+    s.type_text("443")?
+    let Some(good) = s.semantics(0).find("port") else { return Err(errors::new("the port field is missing")) }
+    if good.invalid { return Err(errors::new(f"443 is still reported invalid: {good.description}")) }
+    // The view switch shows the files in the chosen layout.
+    s.emit(UiMsg::Choose("view-mode", "columns"))
+    s.flush()?
+    if !s.semantics(0).dump().contains("columnheader \"Kind\"") { return Err(errors::new("Columns did not show the files as a table")) }
+    if s.focus("sample-button")? { return Err(errors::new("a disabled control took focus")) }
+    // The list reaches its last file from the keyboard.
+    s.emit(UiMsg::Tab("pages", "collections"))
+    s.flush()?
+    if !s.focus("list")? { return Err(errors::new("the file list is not focusable")) }
+    s.press(windowing::Key::End, none)?
+    if !s.semantics(0).dump().contains("Installer.deb") { return Err(errors::new("End did not reach the last file")) }
+    s.emit(UiMsg::Tab("pages", "dialogs"))
+    s.flush()?
+    if !s.click("dialog:info")? { return Err(errors::new("the Information button is not reachable")) }
+    if s.dialog_ids() != #["info"] { return Err(errors::new("the information dialog did not open")) }
+    s.press(windowing::Key::Escape, none)?
+    if !s.dialog_ids().is_empty() { return Err(errors::new("Escape did not close the dialog")) }
+    // The appearance switches restyle the window as they are chosen.
+    s.emit(UiMsg::Choose("appearance:theme", "hc-dark"))
+    s.emit(UiMsg::Choose("appearance:scale", "2"))
+    s.flush()?
+    let theme = s.window_theme(0)
+    if theme.kind != gui::ThemeKind::HighContrastDark || (theme.scale - 2.0).abs() > 1e-9 { return Err(errors::new(f"appearance switches did not apply: {theme.kind:?} at {theme.scale}")) }
+    s.shutdown()
+    println("showcase: terms enable Install, port validation, view switch, keyboard to the last file, dialog and Escape, appearance switches")
+    Ok(())
+}

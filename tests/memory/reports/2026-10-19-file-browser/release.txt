@@ -1,0 +1,1 @@
+file browser history, hidden files and new folder: ok

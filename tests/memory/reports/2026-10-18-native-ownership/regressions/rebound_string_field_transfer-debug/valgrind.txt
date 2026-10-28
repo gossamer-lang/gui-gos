@@ -1,0 +1,44 @@
+==2744894== Memcheck, a memory error detector
+==2744894== Copyright (C) 2002-2022, and GNU GPL'd, by Julian Seward et al.
+==2744894== Using Valgrind-3.22.0 and LibVEX; rerun with -h for copyright info
+==2744894== Command: /tmp/gui-leak-repros/final-tiers/rebound_string_field_transfer-debug/rebound_string_field_transfer
+==2744894== Parent PID: 2744718
+==2744894== 
+==2744894== 
+==2744894== HEAP SUMMARY:
+==2744894==     in use at exit: 3,584 bytes in 2 blocks
+==2744894==   total heap usage: 904 allocs, 902 frees, 112,716 bytes allocated
+==2744894== 
+==2744894== 1,024 bytes in 1 blocks are still reachable in loss record 1 of 2
+==2744894==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==2744894==    by 0x1BDAF2: <std::sync::once::Once>::call_once_force::<<std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::initialize<<std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::get_or_init<std::io::stdio::stdout::{closure#0}>::{closure#0}, !>::{closure#0}>::{closure#0} (in /tmp/gui-leak-repros/final-tiers/rebound_string_field_transfer-debug/rebound_string_field_transfer)
+==2744894==    by 0x1BAF76: <std::sys::sync::once::futex::Once>::call (in /tmp/gui-leak-repros/final-tiers/rebound_string_field_transfer-debug/rebound_string_field_transfer)
+==2744894==    by 0x1BDA4E: <std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::initialize::<<std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::get_or_init<std::io::stdio::stdout::{closure#0}>::{closure#0}, !> (in /tmp/gui-leak-repros/final-tiers/rebound_string_field_transfer-debug/rebound_string_field_transfer)
+==2744894==    by 0x148F60: gossamer_runtime::c_abi::print::write_terminal_direct (in /tmp/gui-leak-repros/final-tiers/rebound_string_field_transfer-debug/rebound_string_field_transfer)
+==2744894==    by 0x14870A: gossamer_runtime::c_abi::print::write_terminal (in /tmp/gui-leak-repros/final-tiers/rebound_string_field_transfer-debug/rebound_string_field_transfer)
+==2744894==    by 0x14860F: gossamer_runtime::c_abi::print::write_stdout (in /tmp/gui-leak-repros/final-tiers/rebound_string_field_transfer-debug/rebound_string_field_transfer)
+==2744894==    by 0x177AF9: gos_rt_println (in /tmp/gui-leak-repros/final-tiers/rebound_string_field_transfer-debug/rebound_string_field_transfer)
+==2744894==    by 0x12C738: gos_main (in /tmp/gui-leak-repros/final-tiers/rebound_string_field_transfer-debug/rebound_string_field_transfer)
+==2744894==    by 0x12CF68: gos_main_shim (in /tmp/gui-leak-repros/final-tiers/rebound_string_field_transfer-debug/rebound_string_field_transfer)
+==2744894==    by 0x175476: gos_rt_call_main (in /tmp/gui-leak-repros/final-tiers/rebound_string_field_transfer-debug/rebound_string_field_transfer)
+==2744894==    by 0x12CF98: main (in /tmp/gui-leak-repros/final-tiers/rebound_string_field_transfer-debug/rebound_string_field_transfer)
+==2744894== 
+==2744894== 2,560 bytes in 1 blocks are still reachable in loss record 2 of 2
+==2744894==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==2744894==    by 0x15F9B5: std::sync::once::Once::call_once_force::{{closure}} (in /tmp/gui-leak-repros/final-tiers/rebound_string_field_transfer-debug/rebound_string_field_transfer)
+==2744894==    by 0x1BAF76: <std::sys::sync::once::futex::Once>::call (in /tmp/gui-leak-repros/final-tiers/rebound_string_field_transfer-debug/rebound_string_field_transfer)
+==2744894==    by 0x1611CC: std::sync::once_lock::OnceLock<T>::initialize (in /tmp/gui-leak-repros/final-tiers/rebound_string_field_transfer-debug/rebound_string_field_transfer)
+==2744894==    by 0x14E697: gossamer_runtime::c_abi::string::register_heap_string_body (in /tmp/gui-leak-repros/final-tiers/rebound_string_field_transfer-debug/rebound_string_field_transfer)
+==2744894==    by 0x14E38C: gossamer_runtime::c_abi::string::alloc_growable_forced (in /tmp/gui-leak-repros/final-tiers/rebound_string_field_transfer-debug/rebound_string_field_transfer)
+==2744894==    by 0x178628: gos_rt_set_args (in /tmp/gui-leak-repros/final-tiers/rebound_string_field_transfer-debug/rebound_string_field_transfer)
+==2744894==    by 0x12CF89: main (in /tmp/gui-leak-repros/final-tiers/rebound_string_field_transfer-debug/rebound_string_field_transfer)
+==2744894== 
+==2744894== LEAK SUMMARY:
+==2744894==    definitely lost: 0 bytes in 0 blocks
+==2744894==    indirectly lost: 0 bytes in 0 blocks
+==2744894==      possibly lost: 0 bytes in 0 blocks
+==2744894==    still reachable: 3,584 bytes in 2 blocks
+==2744894==         suppressed: 0 bytes in 0 blocks
+==2744894== 
+==2744894== For lists of detected and suppressed errors, rerun with: -s
+==2744894== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)

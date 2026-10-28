@@ -1,0 +1,168 @@
+// Release-native acceptance fixtures. Timers delimit idle observation; no
+// input, blinking caret, animation or accessibility bus runs in that window.
+use std::{env, errors, time}
+use std::sync::Shared
+use gui
+use gui::{Effect, UiMsg, Widget}
+use gui::widgets::collections::{Collection, Column, Row}
+use windowing::{Key, Mods}
+
+fn require(ok: bool, why: String) -> Result<(), errors::Error> {
+    if ok { Ok(()) } else { Err(errors::new(why)) }
+}
+
+fn report(name: String, mut values: Vec<i64>, p95_budget: i64, p99_budget: i64) -> Result<(), errors::Error> {
+    require(!values.is_empty(), f"{name}: no samples")?
+    values.sort()
+    let n = values.len()
+    let p95 = values[(n * 95 + 99) / 100 - 1]
+    let p99 = values[(n * 99 + 99) / 100 - 1]
+    println(f"{name},ns,{n},{p95},{p99},{p95_budget},{p99_budget}")
+    require(p95 <= p95_budget && p99 <= p99_budget, f"{name}: p95 {p95} / {p95_budget} ns, p99 {p99} / {p99_budget} ns")
+}
+
+fn editor(text: String) -> Widget {
+    let mut input = gui::TextInput::new("editor", text, "Source", gui::InputKind::Area)
+    input.mono = true
+    input.wrap = false
+    input.tab_inserts = true
+    input.rows = 20
+    Widget::input(input)
+}
+
+fn update(text: String, msg: UiMsg) -> String {
+    match msg { UiMsg::Text(id, value) if id == "editor" => value, _ => text }
+}
+
+fn start_editor() -> Result<gui::Session, errors::Error> {
+    // Distinct lines prevent a repeated paragraph from dominating cache hits.
+    let source = (0..32).map(|i| f"fn sample_{i}() {{ let count = {i} }} // source\n").collect::<Vec<String>>().join("")
+    gui::application("Performance", "dev.gossamer.gui-perf", || source, update, editor).size(640, 480).start()
+}
+
+fn startup(samples: i64) -> Result<(), errors::Error> {
+    let mut values = #[]
+    for _ in 0..samples {
+        let begin = time::monotonic_nanos()
+        let mut s = start_editor()?
+        values.push(time::monotonic_nanos() - begin)
+        require(s.window_frames(0) > 0, "startup did not present a frame")?
+        s.shutdown()
+    }
+    report("startup", values, 500_000_000, 500_000_000)
+}
+
+fn typing(samples: i64) -> Result<(), errors::Error> {
+    let mut s = start_editor()?
+    defer s.shutdown()
+    require(s.focus("editor")?, "editor did not take focus")?
+    let original = s.edit_state(0, "editor")
+    let expected = original.text.substring(0, original.caret) + "x".repeat(samples) + original.text.substring(original.caret, original.text.byte_len())
+    let mut values = #[]
+    for _ in 0..samples {
+        let begin = time::monotonic_nanos()
+        s.type_text("x")?
+        values.push(time::monotonic_nanos() - begin)
+    }
+    require(s.edit_state(0, "editor").text == expected, "typing lost input")?
+    report("typing", values, 8_000_000, 16_700_000)
+}
+
+fn scroll(samples: i64) -> Result<(), errors::Error> {
+    let row = |i: i64| {
+        let mut r = Row::new(f"{i}", f"Row {i}")
+        r.cells = #[f"Row {i}", f"Value {i * 3}"]
+        r
+    }
+    let table = Collection::new("table", 1_000_000, row).columns(#[Column::new("name", "Name", 240), Column::new("value", "Value", 240)]).rows(12)
+    let mut s = gui::application("Table", "dev.gossamer.gui-perf-table", || 0, |m, _| m, |_| Widget::Collection(table)).size(640, 480).start()?
+    defer s.shutdown()
+    require(s.focus("table")?, "table did not take focus")?
+    let before = s.semantics(0).find("table").unwrap().children.map(|n| n.name)
+    let mut values = #[]
+    for _ in 0..samples {
+        let begin = time::monotonic_nanos()
+        s.press(Key::PageDown, Mods::default())?
+        values.push(time::monotonic_nanos() - begin)
+    }
+    let shown = s.semantics(0).find("table").unwrap().children
+    require(!shown.is_empty() && shown.len() < 32, "table did not bound visible rows")?
+    require(shown.map(|n| n.name) != before, "table did not scroll")?
+    report("scroll", values, 8_000_000, 16_700_000)
+}
+
+fn picker(samples: i64) -> Result<(), errors::Error> {
+    let items: Vec<gui::CompletionItem> = (0..100_000).map(|i| gui::CompletionItem::new(f"k{i}", f"Item {i}")).collect()
+    let mut s = gui::application("Picker", "dev.gossamer.gui-perf-picker", || 0, |m, _| m, |_| Widget::picker("picker", items, #[], true, "Choices")).size(640, 480).start()?
+    defer s.shutdown()
+    require(s.focus("picker")?, "picker did not take focus")?
+    let mut values = #[]
+    for _ in 0..samples {
+        let begin = time::monotonic_nanos()
+        s.press(Key::Down, Mods::default())?
+        values.push(time::monotonic_nanos() - begin)
+        require(!s.popup_owners().is_empty(), "picker did not open")?
+        s.press(Key::Escape, Mods::default())?
+        require(s.popup_owners().is_empty(), "picker did not close")?
+    }
+    report("picker", values, 200_000_000, 250_000_000)
+}
+
+fn resize(samples: i64) -> Result<(), errors::Error> {
+    let mut s = start_editor()?
+    defer s.shutdown()
+    let mut values = #[]
+    for i in 0..samples {
+        let width = 640 + (i % 2) * 64
+        let height = 480 + (i % 2) * 48
+        let begin = time::monotonic_nanos()
+        s.resize_window(0, width, height)?
+        s.inject(windowing::Event::PixelSizeChanged { window: s.window_id(0), width: width, height: height })?
+        values.push(time::monotonic_nanos() - begin)
+        require(s.window_pixel_size(0) == (width, height), "resize did not change surface size")?
+    }
+    report("resize", values, 16_700_000, 33_400_000)
+}
+
+fn idle() -> Result<(), errors::Error> {
+    let mut s = gui::app::start("Idle", "dev.gossamer.gui-perf-idle")?
+    defer s.shutdown()
+    s.open_window("main", "Idle", 320, 200)?
+    gui::perform(Effect::Timer("drain", 0, false))
+    s.flush()?
+    require(s.step()?, "idle window closed during setup")?
+    let done = Shared::new(0)
+    s.set_shell(|msg| { if let UiMsg::Timer(tag) = msg && tag == "finish" { let _ = done.update(|_| 1) }; () }, |_| Widget::Empty, || #[])
+    let frames = s.window_frames(0)
+    gui::perform(Effect::Timer("finish", 60_000, false))
+    s.flush()?
+    let mut wakeups = 0
+    while done.get() == 0 {
+        require(s.step()?, "idle window closed during observation")?
+        wakeups += 1
+    }
+    // The observation deadline is the one expected wakeup.
+    let extra = (wakeups - 1).max(0)
+    println(f"idle,wakeups,1,{extra},{extra},0,0")
+    // Delivering the final timer to the shell rebuilds once; it is outside
+    // the idle interval. Every earlier frame is unexpected.
+    let repaints = (s.window_frames(0) - frames - 1).max(0)
+    require(extra == 0 && repaints == 0, f"idle: {extra} extra wakeups, {repaints} extra frames")
+}
+
+fn main() -> Result<(), errors::Error> {
+    gui::services::clipboard::use_memory(true)
+    let args = env::args()
+    let name = args.last().unwrap_or("")
+    let samples = env::var("GUI_PERF_SAMPLES").unwrap_or("100").to_i64().ok_or(errors::new("GUI_PERF_SAMPLES must be an integer"))?
+    require(samples >= 100, "GUI_PERF_SAMPLES must be at least 100 for tail percentiles")?
+    match name {
+        "startup" => startup(samples)
+        "typing" => typing(samples)
+        "scroll" => scroll(samples)
+        "picker" => picker(samples)
+        "resize" => resize(samples)
+        "idle" => idle()
+        _ => Err(errors::new("expected startup, typing, scroll, picker, resize or idle"))
+    }
+}

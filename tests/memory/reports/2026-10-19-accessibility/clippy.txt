@@ -1,0 +1,12 @@
+   Compiling gossamer-cli v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-cli)
+    Checking gossamer-mir v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-mir)
+    Checking gossamer-codegen-cranelift v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-codegen-cranelift)
+    Checking gossamer-codegen-llvm v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-codegen-llvm)
+    Checking gossamer-interp v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-interp)
+    Checking gossamer-driver v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-driver)
+    Checking xtask v0.74.0 (/home/daniel/dev/gossamer/xtask)
+    Checking gossamer-lsp v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-lsp)
+    Checking gossamer-binding v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-binding)
+    Checking gossamer-playground v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-playground)
+    Checking gossamer-mcp v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-mcp)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 26.87s

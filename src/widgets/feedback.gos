@@ -1,0 +1,190 @@
+// feedback: progress bars (determinate and indeterminate), spinners,
+// status indicators, inline messages and banners, and toasts. Motion is
+// frame-driven only while an animated control is laid out and the theme
+// does not ask for reduced motion; otherwise indeterminate states draw a
+// still pattern and the session schedules no frames.
+
+
+use crate::accessibility::{AccessNode, Role}
+use crate::localization::tr
+use crate::render::icons::Icon
+use crate::widgets::{Tone, Widget}
+use crate::widgets::cx::Node
+
+/// Severity of a status, message, or banner.
+#[derive(PartialEq, Eq)]
+pub enum Level {
+    Info
+    Success
+    Warning
+    Error
+}
+
+fn level_style(l: Level) -> (Icon, Tone, String) {
+    match l {
+        Level::Info => (Icon::Info, Tone::Info, crate::localization::tr("Information"))
+        Level::Success => (Icon::Check, Tone::Success, crate::localization::tr("Success"))
+        Level::Warning => (Icon::Warning, Tone::Warning, crate::localization::tr("Warning"))
+        Level::Error => (Icon::Error, Tone::Danger, crate::localization::tr("Error"))
+    }
+}
+
+/// The feedback controls.
+#[derive(PartialEq)]
+pub enum Feedback {
+    /// `value` 0..1, or negative for indeterminate.
+    Progress { id: String, value: f64, label: String }
+    Spinner { id: String, label: String }
+    Status { level: Level, text: String }
+    /// An inline message or a banner (full width with actions).
+    Message { id: String, level: Level, title: String, text: String, actions: Vec<(String, String)>, dismissible: bool, banner: bool }
+}
+
+/// A progress bar; negative `value` is indeterminate.
+pub fn progress(id: String, value: f64) -> Widget {
+    Widget::Feedback(Feedback::Progress { id: id, value: value, label: String::new() })
+}
+
+pub fn spinner(id: String, label: String) -> Widget {
+    Widget::Feedback(Feedback::Spinner { id: id, label: label })
+}
+
+/// A colored dot with text; the level is also spoken in words.
+pub fn status(level: Level, text: String) -> Widget {
+    Widget::Feedback(Feedback::Status { level: level, text: text })
+}
+
+/// An inline message, e.g. under a form.
+pub fn message(id: String, level: Level, text: String) -> Widget {
+    Widget::Feedback(Feedback::Message { id: id, level: level, title: String::new(), text: text, actions: #[], dismissible: false, banner: false })
+}
+
+/// A full-width banner with actions (`Click(id:action)`) and an optional
+/// dismiss button (`Click(id:dismiss)`).
+pub fn banner(id: String, level: Level, title: String, text: String, actions: Vec<(String, String)>, dismissible: bool) -> Widget {
+    Widget::Feedback(Feedback::Message { id: id, level: level, title: title, text: text, actions: actions, dismissible: dismissible, banner: true })
+}
+
+/// How one `Toast` looks in `toast_layer`: a small banner with its action
+/// and Dismiss. It appears and leaves without motion.
+pub fn toast(id: String, text: String, action: (String, String)) -> Widget {
+    let mut actions = #[]
+    if !action.0.is_empty() { actions.push(action) }
+    banner(id, Level::Info, String::new(), text, actions, true).padding(4)
+}
+
+/// A short message over the window's bottom edge, opened with
+/// `Effect::Toast`. It closes after `duration` ms (the time pauses while the
+/// pointer or focus is on it), reporting `Click(id:timeout)`, or through its
+/// action (`Click(id:action)`) or Dismiss (`Click(id:dismiss)`).
+#[derive(PartialEq)]
+pub struct Toast {
+    pub id: String
+    pub text: String
+    /// (key, label), or empty keys for none.
+    pub action: (String, String)
+    pub duration: i64
+}
+
+impl Toast {
+    pub fn new(id: String, text: String) -> Toast {
+        Toast { id: id, text: text, action: (String::new(), String::new()), duration: 5000 }
+    }
+
+    /// This toast with an action button.
+    pub fn action(self, key: String, label: String) -> Toast {
+        let mut t = self
+        t.action = (key, label)
+        t
+    }
+
+    /// This toast, shown for `ms` milliseconds.
+    pub fn lasting(self, ms: i64) -> Toast {
+        let mut t = self
+        t.duration = ms
+        t
+    }
+}
+
+/// The overlay the session lays over a window showing `toasts`, newest last.
+pub fn toast_layer(toasts: Vec<Toast>) -> Widget {
+    Widget::column(toasts.map(|t| toast(t.id, t.text, t.action).max_width(560)), 8).padding(16).align(0.5, 1.0).pass_through()
+}
+
+impl Feedback {
+    pub fn id(&self) -> String {
+        match self {
+            Feedback::Progress { id, .. } | Feedback::Spinner { id, .. } | Feedback::Message { id, .. } => *id
+            _ => String::new()
+        }
+    }
+
+    pub fn focusable(&self) -> bool {
+        match self {
+            Feedback::Message { actions, dismissible, .. } => !actions.is_empty() || *dismissible
+            _ => false
+        }
+    }
+}
+
+
+// The message's buttons in order: its actions, then Dismiss when it has one.
+// Each reports `Click(id:action)`.
+fn targets(id: String, actions: Vec<(String, String)>, dismissible: bool) -> Vec<String> {
+    let mut out = actions.map(|a| f"{id}:{a.0}")
+    if dismissible { out.push(f"{id}:dismiss") }
+    out
+}
+
+// The button under local (`x`, `y`), or -1; buttons follow the icon and text parts.
+fn button_at(node: Node, count: i64, x: i64, y: i64) -> i64 {
+    let mut i = 0
+    while i < count && 2 + i < node.parts.len() {
+        if node.parts[2 + i].contains(x, y) { return i }
+        i += 1
+    }
+    -1
+}
+
+
+pub fn feedback_semantics(f: Feedback) -> Option<AccessNode> {
+    match f {
+        Feedback::Progress { id, value, label } => {
+            let mut n = AccessNode::new(Role::ProgressBar, label)
+            n.id = id
+            if value >= 0.0 { n.range(0.0, 100.0, (value * 100.0).round()) } else { n.value = "busy" }
+            Some(n)
+        }
+        Feedback::Spinner { id, label } => {
+            let mut n = AccessNode::new(Role::ProgressBar, if label.is_empty() { crate::localization::tr("Working") } else { label })
+            n.id = id
+            n.value = "busy"
+            Some(n)
+        }
+        Feedback::Status { level, text } => {
+            let _, _, word = level_style(level)
+            let mut n = AccessNode::new(Role::Status, f"{word}: {text}")
+            n.live = "polite"
+            Some(n)
+        }
+        Feedback::Message { id, level, title, text, actions, dismissible, .. } => {
+            let _, _, word = level_style(level)
+            let role = if level == Level::Error || level == Level::Warning { Role::Alert } else { Role::Status }
+            let mut n = AccessNode::new(role, if title.is_empty() { f"{word}: {text}" } else { f"{word}: {title}. {text}" })
+            n.id = id
+            n.live = if role == Role::Alert { "assertive" } else { "polite" }
+            n.focusable = !actions.is_empty() || dismissible
+            for (aid, label) in actions {
+                let mut b = AccessNode::control(Role::Button, f"{id}:{aid}", label, "press")
+                b.focusable = false
+                n.children.push(b)
+            }
+            if dismissible {
+                let mut b = AccessNode::control(Role::Button, f"{id}:dismiss", tr("Dismiss"), "press")
+                b.focusable = false
+                n.children.push(b)
+            }
+            Some(n)
+        }
+    }
+}

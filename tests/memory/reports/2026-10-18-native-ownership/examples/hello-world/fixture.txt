@@ -1,0 +1,4 @@
+greeting via Enter: ok
+focus after Tab: cmd:hello.greet
+announced: Hello, Ada!
+quit via Primary+Q: true

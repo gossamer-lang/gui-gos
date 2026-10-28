@@ -1,0 +1,2 @@
+AT-SPI endpoint: :1.2
+Connected to AT-SPI accessibility bus

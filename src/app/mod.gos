@@ -1,0 +1,652 @@
+// app: the session, which runs in the toolkit. Every method call crosses as
+// JSON: the arguments as an array, the answer as the method's value.
+
+use std::errors
+use std::encoding::json
+
+use gui_engine
+use windowing
+use windowing::{Key, Mods}
+
+use crate::accessibility::AccessNode
+use crate::app::{host, wire}
+use crate::commands::Command
+use crate::dialogs::Outcome
+use crate::dialogs::request::{DialogRequest, Modality}
+use crate::editing::EditState
+use crate::geometry::{Rect, Size}
+use crate::services::apps::AppIcon
+use crate::style::Theme
+use crate::widgets::Widget
+use crate::widgets::completion::ChoiceState
+use crate::widgets::cx::UiMsg
+
+/// Last-frame rendering work and retained byte accounting for a window.
+#[derive(Default, PartialEq)]
+pub struct RenderingStats {
+    pub damage_pixels: i64
+    pub rasterized_pixels: i64
+    pub cache_hits: i64
+    pub layer_bytes: i64
+    pub scene_bytes: i64
+    pub gpu_layer_bytes: i64
+}
+
+/// Aggregate reservations and retained-storage diagnostics for all session windows.
+#[derive(Default, PartialEq)]
+pub struct ResourceUsage {
+    pub descriptions: i64
+    pub states: i64
+    pub rendering: i64
+    pub jobs: i64
+    pub messages: i64
+    pub other: i64
+    pub total: i64
+    pub limit: i64
+}
+
+/// What closing a window does.
+#[derive(PartialEq, Eq)]
+pub enum ClosePolicy {
+    /// Close it (the last window ends the session).
+    Close
+    /// Report `UiMsg::CloseRequested(key)` and let the application decide.
+    Ask
+}
+
+/// How a window looks and where it opens.
+#[derive(Default, PartialEq)]
+pub struct WindowStyle {
+    /// No title bar or border, as a run box or a splash screen has.
+    pub frameless: bool
+    /// Opens centered along the top of the primary display's usable area
+    /// rather than where it last was. Wayland places every window itself.
+    pub top_center: bool
+    /// Closes on Escape, ahead of any popup, and when it stops being the
+    /// active window.
+    pub dismissible: bool
+}
+
+/// The posting end of a session's inbox, safe to hand to any goroutine.
+pub struct Mailbox {
+    id: i64
+}
+
+impl Mailbox {
+    /// Delivers `msg` to the session, which receives it between events as
+    /// if a widget had emitted it, and wakes its loop.
+    pub fn post(&self, msg: UiMsg) { let _ = self.try_post(msg) }
+
+    pub fn try_post(&self, msg: UiMsg) -> Result<(), errors::Error> {
+        gui_engine::post(self.id, json::encode(msg)).map_err(failed)
+    }
+
+    pub fn close(&self) { gui_engine::release_mailbox(self.id) }
+}
+
+/// A running toolkit session.
+pub struct Session {
+    id: i64
+}
+
+fn failed(e: String) -> errors::Error {
+    errors::new(e)
+}
+
+// A session answer the toolkit encoded; a mismatch is a toolkit bug.
+fn answer<T>(decoded: Result<T, errors::Error>) -> T {
+    match decoded {
+        Ok(v) => v
+        Err(e) => panic(f"gui: a session answer did not decode: {e}")
+    }
+}
+
+/// Starts a session for application `name`, identified to the desktop as
+/// `app_id`.
+pub fn start(name: String, app_id: String) -> Result<Session, errors::Error> {
+    gui_engine::start(name, app_id).map(|id| Session { id: id }).map_err(failed)
+}
+
+impl Session {
+    fn call(&self, method: String, args: Vec<String>) -> Result<String, errors::Error> {
+        gui_engine::call(self.id, method, f"[{args.join(",")}]").map_err(failed)
+    }
+
+    fn act(&self, method: String, args: Vec<String>) -> Result<(), errors::Error> {
+        self.call(method, args).map(|_| ())
+    }
+
+    // A method whose failure the old in-process session could not report.
+    fn order(&self, method: String, args: Vec<String>) {
+        if let Err(e) = self.call(method, args) {
+            panic(f"gui: {method}: {e}")
+        }
+    }
+
+    /// Gives the session the application: `update` receives each message,
+    /// `view` builds the window named by its key, and `cmds` answers the
+    /// commands the application offers.
+    pub fn set_shell(&mut self, update: Fn(UiMsg), view: Fn(String) -> Widget, cmds: Fn() -> Vec<Command>) {
+        let u = host::keep(|a: String| {
+            update(answer(json::decode::<UiMsg>(a)))
+            "null"
+        })
+        let v = host::keep(|a: String| {
+            let key = wire::text(a)
+            host::begin_view(key)
+            let w = view(key)
+            host::end_view()
+            json::encode(w)
+        })
+        let c = host::keep(|_a: String| json::encode(cmds()))
+        if let Err(e) = gui_engine::shell(self.id, u, v, c) {
+            panic(f"gui: set_shell: {e}")
+        }
+        let disposed = host::keep(|key: String| { host::close_view(wire::text(key)); "null" })
+        if let Err(error) = gui_engine::on_window_disposed(self.id, disposed) { panic(f"gui: window disposal hook: {error}") }
+
+    }
+
+    /// Milliseconds on the session's clock.
+    pub fn now(&self) -> i64 {
+        wire::int(self.call("now", #[]).unwrap_or("0"))
+    }
+
+    pub fn open_window(&mut self, key: String, title: String, width: i64, height: i64) -> Result<(), errors::Error> {
+        self.act("open_window", #[json::encode(key), json::encode(title), f"{width}", f"{height}"])
+    }
+
+    /// Creates window `key` hidden; `show_window` shows it.
+    pub fn prepare_window(&mut self, key: String, title: String, width: i64, height: i64) -> Result<(), errors::Error> {
+        self.act("prepare_window", #[json::encode(key), json::encode(title), f"{width}", f"{height}"])
+    }
+
+    pub fn prepare_window_with(&mut self, key: String, title: String, width: i64, height: i64, style: WindowStyle) -> Result<(), errors::Error> {
+        self.act("prepare_window_with", #[json::encode(key), json::encode(title), f"{width}", f"{height}", json::encode(style)])
+    }
+
+    pub fn show_window(&mut self, key: String) -> Result<(), errors::Error> {
+        self.act("show_window", #[json::encode(key)])
+    }
+
+    /// The icon every window shows.
+    pub fn set_icon(&mut self, icon: AppIcon) -> Result<(), errors::Error> {
+        self.act("set_icon", #[json::encode(icon)])
+    }
+
+    pub fn set_min_size(&mut self, key: String, width: i64, height: i64) -> Result<(), errors::Error> {
+        self.act("set_min_size", #[json::encode(key), f"{width}", f"{height}"])
+    }
+
+    /// Lets window `key`, `height` tall, grow downward while a popup below
+    /// its anchor needs the room.
+    pub fn grow_for_popups(&mut self, key: String, height: i64) -> Result<(), errors::Error> {
+        self.act("grow_for_popups", #[json::encode(key), f"{height}"])
+    }
+
+    pub fn set_close_policy(&mut self, key: String, policy: ClosePolicy) {
+        self.order("set_close_policy", #[json::encode(key), json::encode(policy)])
+    }
+
+    /// Runs until the last window closes.
+    pub fn run(&mut self) -> Result<(), errors::Error> {
+        gui_engine::run(self.id).map_err(failed)
+    }
+
+    /// A mailbox other goroutines post messages through.
+    pub fn mailbox(&self) -> Mailbox {
+        match gui_engine::mailbox(self.id) {
+            Ok(id) => Mailbox { id: id }
+            Err(e) => panic(f"gui: mailbox: {e}")
+        }
+    }
+
+    /// Serves later launches' requests through `listener` (from `launch`):
+    /// opened files arrive as `UiMsg::Open`, and activation raises the main
+    /// window. The session wakes for each request itself.
+    pub fn serve_instance(&mut self, listener: Listener) -> Result<(), errors::Error> {
+        gui_engine::serve_instance(self.id, listener.id).map_err(failed)
+    }
+
+    /// Handles everything that is ready, then waits for and handles one
+    /// event. Answers false when the session should end.
+    pub fn step(&mut self) -> Result<bool, errors::Error> {
+        self.call("step", #[]).map(wire::flag)
+    }
+
+    /// Saves placements, closes windows, and ends the platform session.
+    pub fn shutdown(&mut self) {
+        gui_engine::close(self.id)
+        host::close_all_views()
+    }
+
+    /// Handles one platform event.
+    pub fn handle(&mut self, e: windowing::Event) -> Result<(), errors::Error> {
+        self.act("handle", #[json::encode(e)])
+    }
+
+    pub fn run_command(&mut self, w: i64, id: String) {
+        self.order("run_command", #[f"{w}", json::encode(id)])
+    }
+
+    pub fn set_focus(&mut self, w: i64, id: String) {
+        self.order("set_focus", #[f"{w}", json::encode(id)])
+    }
+
+    /// Announcements made for assistive technology, oldest first.
+    pub fn spoken(&self) -> Vec<String> {
+        wire::texts(self.call("spoken", #[]).unwrap_or("[]"))
+    }
+
+    /// Rebuilds window `w` from the view.
+    pub fn rebuild(&mut self, w: i64) {
+        self.order("rebuild", #[f"{w}"])
+    }
+
+    /// Lets the session hand background jobs to the worker `run` starts.
+    pub fn hold_jobs_for_run(&mut self) {
+        self.order("hold_jobs_for_run", #[])
+    }
+
+    pub fn close_window(&mut self, w: i64) {
+        self.order("close_window", #[f"{w}"])
+    }
+
+    pub fn open_dialog_in(&mut self, w: i64, req: DialogRequest) {
+        self.order("open_dialog_in", #[f"{w}", json::encode(req)])
+    }
+
+    pub fn open_dialog_as(&mut self, w: i64, req: DialogRequest, modality: Modality) {
+        self.order("open_dialog_as", #[f"{w}", json::encode(req), json::encode(modality)])
+    }
+
+    pub fn close_dialog(&mut self, id: String, outcome: Outcome) {
+        self.order("close_dialog", #[json::encode(id), json::encode(outcome)])
+    }
+
+    /// Paints window `w` and presents it.
+    pub fn render(&mut self, w: i64) -> Result<(), errors::Error> {
+        self.act("render", #[f"{w}"])
+    }
+
+    /// The accessibility tree of window `w`.
+    pub fn semantics(&self, w: i64) -> AccessNode {
+        match self.call("semantics", #[f"{w}"]) {
+            Ok(a) => answer(json::decode::<AccessNode>(a))
+            Err(e) => panic(f"gui: semantics: {e}")
+        }
+    }
+
+    pub fn accessibility_status(&self) -> String {
+        wire::text(self.call("accessibility_status", #[]).unwrap_or("\"\""))
+    }
+
+    pub fn accessibility_endpoint(&self) -> String {
+        wire::text(self.call("accessibility_endpoint", #[]).unwrap_or("\"\""))
+    }
+
+    /// The main window's widget tree.
+    pub fn root(&self) -> Widget {
+        match self.call("root", #[]) {
+            Ok(a) => answer(json::decode::<Widget>(a))
+            Err(e) => panic(f"gui: root: {e}")
+        }
+    }
+
+    /// Feeds a platform event in as if it had arrived, then settles.
+    pub fn inject(&mut self, e: windowing::Event) -> Result<(), errors::Error> {
+        self.act("inject", #[json::encode(e)])
+    }
+
+    /// Makes the main window active or inactive.
+    pub fn set_active(&mut self, active: bool) -> Result<(), errors::Error> {
+        self.act("set_active", #[f"{active}"])
+    }
+
+    /// Where widget `id` lies in the main window, in pixels.
+    pub fn rect_of(&self, id: String) -> Option<Rect> {
+        self.call("rect_of", #[json::encode(id)]).ok().filter(|a| !wire::is_null(a)).map(|a| answer(json::decode::<Rect>(a)))
+    }
+
+    /// Clicks widget `id`'s center; false when it is not shown.
+    pub fn click(&mut self, id: String) -> Result<bool, errors::Error> {
+        self.call("click", #[json::encode(id)]).map(wire::flag)
+    }
+
+    pub fn click_at(&mut self, x: i64, y: i64) -> Result<(), errors::Error> {
+        self.act("click_at", #[f"{x}", f"{y}"])
+    }
+
+    pub fn hover(&mut self, x: i64, y: i64) -> Result<(), errors::Error> {
+        self.act("hover", #[f"{x}", f"{y}"])
+    }
+
+    pub fn press_pointer(&mut self, x: i64, y: i64) -> Result<(), errors::Error> {
+        self.act("press_pointer", #[f"{x}", f"{y}"])
+    }
+
+    pub fn release_pointer(&mut self, x: i64, y: i64) -> Result<(), errors::Error> {
+        self.act("release_pointer", #[f"{x}", f"{y}"])
+    }
+
+    pub fn move_pointer(&mut self, x: i64, y: i64, held: bool) -> Result<(), errors::Error> {
+        self.act("move_pointer", #[f"{x}", f"{y}", f"{held}"])
+    }
+
+    pub fn scroll_at(&mut self, x: i64, y: i64, dy: f64) -> Result<(), errors::Error> {
+        self.act("scroll_at", #[f"{x}", f"{y}", json::encode(dy)])
+    }
+
+    /// The cursor the pointer shows.
+    pub fn cursor(&self) -> Option<windowing::SystemCursor> {
+        self.call("cursor", #[]).ok().filter(|a| !wire::is_null(a)).map(|a| answer(json::decode::<windowing::SystemCursor>(a)))
+    }
+
+    /// Drags with the primary button from (`x`, `y`) to (`to_x`, `to_y`).
+    pub fn drag(&mut self, x: i64, y: i64, to_x: i64, to_y: i64) -> Result<(), errors::Error> {
+        self.act("drag", #[f"{x}", f"{y}", f"{to_x}", f"{to_y}"])
+    }
+
+    /// Performs `action` on accessible object `target` of `owner`, as a
+    /// screen reader would.
+    pub fn accessible_action(&mut self, owner: String, target: String, action: String, value: String) -> Result<(), errors::Error> {
+        self.act("accessible_action", #[json::encode(owner), json::encode(target), json::encode(action), json::encode(value)])
+    }
+
+    pub fn hold_key(&mut self, key: Key, mods: Mods, repeat: bool) -> Result<(), errors::Error> {
+        self.act("hold_key", #[json::encode(key), json::encode(mods), f"{repeat}"])
+    }
+
+    pub fn release_key(&mut self, key: Key, mods: Mods) -> Result<(), errors::Error> {
+        self.act("release_key", #[json::encode(key), json::encode(mods)])
+    }
+
+    /// Presses and releases `key` with `mods`.
+    pub fn press(&mut self, key: Key, mods: Mods) -> Result<(), errors::Error> {
+        self.act("press", #[json::encode(key), json::encode(mods)])
+    }
+
+    /// Types `text` into the focused widget.
+    pub fn type_text(&mut self, text: String) -> Result<(), errors::Error> {
+        self.act("type_text", #[json::encode(text)])
+    }
+
+    /// Shows `text` as the input method's uncommitted composition.
+    pub fn compose(&mut self, text: String, cursor: i64) -> Result<(), errors::Error> {
+        self.act("compose", #[json::encode(text), f"{cursor}"])
+    }
+
+    /// Focuses widget `id`; false when it is not shown or not focusable.
+    pub fn focus(&mut self, id: String) -> Result<bool, errors::Error> {
+        self.call("focus", #[json::encode(id)]).map(wire::flag)
+    }
+
+    /// The focused widget's id, or "".
+    pub fn focused(&self) -> String {
+        wire::text(self.call("focused", #[]).unwrap_or("\"\""))
+    }
+
+    /// Moves the session's clock `ms` forward and settles.
+    pub fn advance(&mut self, ms: i64) -> Result<(), errors::Error> {
+        self.act("advance", #[f"{ms}"])
+    }
+
+    /// The ids of the open dialogs, oldest first.
+    pub fn dialog_ids(&self) -> Vec<String> {
+        wire::texts(self.call("dialog_ids", #[]).unwrap_or("[]"))
+    }
+
+    /// Answers the toolkit file browser `id` with `path` as a user would:
+    /// select the name field's text, type the path and choose.
+    pub fn answer_file_dialog(&mut self, id: String, path: String) -> Result<(), errors::Error> {
+        if !self.dialog_ids().contains(id) {
+            return Err(errors::new(f"the {id} file browser is not open: {self.dialog_ids()}"))
+        }
+        let mut all = Mods::default()
+        if crate::input::platform_is_macos() { all.gui = true } else { all.ctrl = true }
+        self.press(Key::A, all)?
+        self.type_text(path)?
+        if !self.click(f"dlg:{id}:action:choose")? {
+            return Err(errors::new(f"the {id} file browser has no choose button"))
+        }
+        Ok(())
+    }
+
+    /// The owner and window of each open popup.
+    pub fn popup_owners(&self) -> Vec<(String, i64)> {
+        wire::items(self.call("popup_owners", #[]).unwrap_or("[]")).map(|p| { let pair = wire::items(p); (wire::text(pair[0]), wire::int(pair[1])) })
+    }
+
+    /// Delivers `m` as if a widget had emitted it.
+    pub fn emit(&mut self, m: UiMsg) {
+        self.order("emit", #[json::encode(m)])
+    }
+
+    /// Settles: delivers messages, applies effects, and repaints.
+    pub fn flush(&mut self) -> Result<(), errors::Error> {
+        self.act("flush", #[])
+    }
+
+    /// Hides a native window without disposing its widgets or changing indices.
+    pub fn hide_window(&mut self, w: i64) -> Result<(), errors::Error> {
+        self.act("hide_window", #[f"{w}"])
+    }
+
+    /// Raises a native window and asks the desktop to give it keyboard focus.
+    pub fn focus_window(&mut self, w: i64) -> Result<(), errors::Error> {
+        self.act("focus_window", #[f"{w}"])
+    }
+
+    /// Activates a launcher after a user request, taking X11 input focus.
+    pub fn activate_window(&mut self, w: i64) -> Result<(), errors::Error> {
+        self.act("activate_window", #[f"{w}"])
+    }
+
+    /// Whether a native window is visible.
+    pub fn window_visible(&self, w: i64) -> bool {
+        wire::flag(self.call("window_visible", #[f"{w}"]).unwrap_or("false"))
+    }
+
+    /// The number of open windows.
+    pub fn window_count(&self) -> i64 {
+        wire::int(self.call("window_count", #[]).unwrap_or("0"))
+    }
+
+    /// Window `w`'s size in device pixels.
+    pub fn window_pixel_size(&self, w: i64) -> (i64, i64) {
+        let pair = wire::items(self.call("window_pixel_size", #[f"{w}"]).unwrap_or("[0,0]"))
+        (wire::int(pair[0]), wire::int(pair[1]))
+    }
+
+    /// Window `w`'s laid-out size in pixels.
+    pub fn window_size(&self, w: i64) -> Size {
+        match self.call("window_size", #[f"{w}"]) {
+            Ok(a) => answer(json::decode::<Size>(a))
+            Err(e) => panic(f"gui: window_size: {e}")
+        }
+    }
+
+    pub fn document(&self, w: i64, id: String) -> crate::editing::document::Document {
+        let handle = self.call("document_handle", #[f"{w}", json::encode(id)]).unwrap_or("0").to_i64().unwrap_or(0)
+        crate::editing::document::Document { id: handle }
+    }
+
+    /// The editing state of text widget `id` in window `w`.
+    pub fn edit_state(&self, w: i64, id: String) -> EditState {
+        match self.call("edit_state", #[f"{w}", json::encode(id)]) {
+            Ok(a) => answer(json::decode::<EditState>(a))
+            Err(e) => panic(f"gui: edit_state: {e}")
+        }
+    }
+
+    /// Where part `part` of widget `id` lies in window `w`, in pixels.
+    pub fn part_rect(&self, w: i64, id: String, part: i64) -> Option<Rect> {
+        self.call("part_rect", #[f"{w}", json::encode(id), f"{part}"]).ok().filter(|a| !wire::is_null(a)).map(|a| answer(json::decode::<Rect>(a)))
+    }
+
+    /// The theme window `w` draws with.
+    pub fn window_theme(&self, w: i64) -> Theme {
+        match self.call("window_theme", #[f"{w}"]) {
+            Ok(a) => answer(json::decode::<Theme>(a))
+            Err(e) => panic(f"gui: window_theme: {e}")
+        }
+    }
+
+    /// Window `w`'s platform id, as its events carry it.
+    pub fn window_id(&self, w: i64) -> windowing::WindowId {
+        (wire::int(self.call("window_id", #[f"{w}"]).unwrap_or("0")) as u32).into()
+    }
+
+    /// Frames window `w` has presented.
+    pub fn window_frames(&self, w: i64) -> i64 {
+        wire::int(self.call("window_frames", #[f"{w}"]).unwrap_or("0"))
+    }
+
+    /// Resizes window `w` to `width` by `height` logical pixels and waits
+    /// for the platform to apply it.
+    pub fn resize_window(&mut self, w: i64, width: i64, height: i64) -> Result<(), errors::Error> {
+        self.act("resize_window", #[f"{w}", f"{width}", f"{height}"])
+    }
+
+    /// The state of the select, picker, or combo `id` in window `w`.
+    pub fn choice_state(&self, w: i64, id: String) -> ChoiceState {
+        match self.call("choice_state", #[f"{w}", json::encode(id)]) {
+            Ok(a) => answer(json::decode::<ChoiceState>(a))
+            Err(e) => panic(f"gui: choice_state: {e}")
+        }
+    }
+
+    /// The open dialog `id`'s draft text and its named values.
+    pub fn dialog_draft(&self, id: String) -> (String, Map<String, String>) {
+        match self.call("dialog_draft", #[json::encode(id)]) {
+            Ok(a) => {
+                let both = wire::items(a)
+                let values = answer(json::parse(both[1]).map_err(|e| errors::wrap(e, "dialog values")))
+                let mut out: Map<String, String> = Map::new()
+                for key in json::keys(values).unwrap_or(#[]) {
+                    out[key] = json::get(values, key).and_then(|v| json::as_str(v)).unwrap_or("")
+                }
+                (wire::text(both[0]), out)
+            }
+            Err(e) => panic(f"gui: dialog_draft: {e}")
+        }
+    }
+
+    /// Recent input and messages, newest last.
+    pub fn log(&self) -> Vec<String> {
+        wire::texts(self.call("log", #[]).unwrap_or("[]"))
+    }
+
+    /// Sets retained-scene and each raster/GPU layer-cache budget, in bytes.
+    pub fn set_render_budgets(&mut self, w: i64, scene_bytes: i64, layer_bytes: i64) -> Result<(), errors::Error> {
+        if scene_bytes < 0 || layer_bytes < 0 { return Err(errors::new("render budgets must be nonnegative")) }
+        self.act("set_render_budgets", #[f"{w}", f"{scene_bytes}", f"{layer_bytes}"])
+    }
+
+    pub fn resource_usage(&self) -> ResourceUsage {
+        match self.call("resource_usage", #[]) {
+            Ok(encoded) => answer(json::decode::<ResourceUsage>(encoded))
+            Err(_) => ResourceUsage::default()
+        }
+    }
+
+    pub fn set_memory_limit(&mut self, bytes: i64) -> Result<(), errors::Error> {
+        self.act("set_memory_limit", #[f"{bytes}"])
+    }
+
+    pub fn rendering_stats(&self, w: i64) -> RenderingStats {
+        match self.call("rendering_stats", #[f"{w}"]) {
+            Ok(a) => answer(json::decode::<RenderingStats>(a))
+            Err(e) => panic(f"gui: rendering_stats: {e}")
+        }
+    }
+
+    /// Repaints window `w` and answers the captured frame's size in pixels.
+    pub fn capture_window(&mut self, w: i64) -> Result<(i64, i64), errors::Error> {
+        let pair = wire::items(self.call("capture_window", #[f"{w}"])?)
+        Ok((wire::int(pair[0]), wire::int(pair[1])))
+    }
+
+    /// Writes the main window's pixels to `file` as PNG.
+    pub fn screenshot(&mut self, file: String) -> Result<(), errors::Error> {
+        self.act("screenshot", #[json::encode(file)])
+    }
+}
+
+/// A claim on an application's single instance; `Session::serve_instance`
+/// takes it.
+pub struct Listener {
+    id: i64
+}
+
+impl Listener {
+    /// Gives up the claim, unless a session serves it.
+    pub fn close(&self) {
+        gui_engine::close_listener(self.id)
+    }
+}
+
+/// How a launch of a single-instance application proceeds.
+pub enum Launch {
+    /// This process is the instance: hand the listener to
+    /// `Session::serve_instance`.
+    Primary(Listener)
+    /// The running instance received this launch's files; exit.
+    Forwarded
+    /// Ownership or forwarding failed. Starting another instance would lose the claim.
+    Failed(String)
+    /// The platform cannot keep one instance; run on its own.
+    Alone
+}
+
+/// Claims the application's single instance, handing `files` (relative
+/// paths resolved against the working directory) to it when another
+/// process already runs.
+pub fn launch(app_id: String, files: Vec<String>) -> Launch {
+    match gui_engine::claim(app_id, json::encode(files)) {
+        Ok(answered) => match answered.to_i64() {
+            Some(id) => Launch::Primary(Listener { id: id })
+            None => if wire::text(answered) == "forwarded" { Launch::Forwarded } else { Launch::Alone }
+        }
+        Err(error) => Launch::Failed(error)
+    }
+}
+
+/// The id of the widget a message is about, or "".
+pub fn msg_id(m: UiMsg) -> String {
+    match m {
+        UiMsg::Click(id) |
+            UiMsg::Toggle(id, _) |
+            UiMsg::Check(id, _) |
+            UiMsg::Choose(id, _) |
+            UiMsg::Text(id, _) | UiMsg::DocumentChanged(id, _, _) |
+            UiMsg::Caret(id, _, _) |
+            UiMsg::Submit(id, _) |
+            UiMsg::Select(id, _) |
+            UiMsg::SelectMany(id, _) |
+            UiMsg::Value(id, _) |
+            UiMsg::Range(id, _, _) |
+            UiMsg::Color(id, _) |
+            UiMsg::Date(id, _) |
+            UiMsg::Tab(id, _) |
+            UiMsg::TabAction(id, _, _) |
+            UiMsg::TabDrop(id, _, _, _) |
+            UiMsg::TabMove(id, _, _, _) |
+            UiMsg::TabDetach(id, _, _, _) |
+            UiMsg::Expand(id, _, _) |
+            UiMsg::Activate(id, _) |
+            UiMsg::CellEdit(id, _, _, _) |
+            UiMsg::Sort(id, _, _) |
+            UiMsg::ColumnResize(id, _, _) |
+            UiMsg::Reorder(id, _, _) |
+            UiMsg::Split(id, _) |
+            UiMsg::DragFinished(id, _) |
+            UiMsg::Dropped(id, _) |
+            UiMsg::CompletionRequest(id, _, _, _) |
+            UiMsg::Custom(id, _) |
+            UiMsg::Listed(id, _, _) |
+            UiMsg::FontsLoaded(id, _) |
+            UiMsg::AppsLoaded(id, _) => id
+        _ => String::new()
+    }
+}

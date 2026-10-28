@@ -1,0 +1,5 @@
+# What tools/package.sh needs beyond project.toml.
+name = "Code Editor"
+app_id = "dev.gossamer.gui-code-editor"
+comment = "Edit source files with highlighting and completion"
+categories = "Development;TextEditor;"

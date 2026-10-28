@@ -1,0 +1,175 @@
+// choices: selection controls with distinct contracts.
+//
+// - `Select` stores one stable item key (or none). Typing selects by
+//   typeahead; the popup's highlight is separate from the committed key;
+//   Enter or a click commits, Escape rolls back, focus stays on the select.
+// - `Picker` (searchable, single or multiple) keeps a query separate from
+//   the selection: filtering never changes what is selected, selected keys
+//   missing from the current items are still shown and removable, and
+//   multiple selections render as tokens removable by keyboard.
+// - `Palette` searches the window's commands and runs the one accepted;
+//   disabled commands are listed but cannot run.
+//
+// Editable combos and autocomplete fields are text inputs with a
+// completion source (`TextInput::completion`, `TextInput::dropdown`).
+
+
+use crate::accessibility::{AccessNode, Role}
+use crate::widgets::completion
+use crate::widgets::completion::{CompletionItem, MatchMode, VISIBLE_ROWS}
+use crate::widgets::cx::Node
+use crate::widgets::state::{StateStore, WState}
+
+/// A non-editable choice of one item.
+#[derive(PartialEq)]
+pub struct Select {
+    pub id: String
+    pub items: Vec<CompletionItem>
+    /// The committed item key, or "".
+    pub selected: String
+    pub placeholder: String
+    pub label: String
+    pub loading: bool
+    pub error: String
+}
+
+/// A searchable picker of one or several items.
+#[derive(PartialEq)]
+pub struct Picker {
+    pub id: String
+    pub items: Vec<CompletionItem>
+    pub selected: Vec<String>
+    pub multiple: bool
+    pub placeholder: String
+    pub label: String
+    pub loading: bool
+    pub error: String
+}
+
+/// A command search list shown inline.
+#[derive(PartialEq)]
+pub struct Palette {
+    pub id: String
+    pub placeholder: String
+}
+
+#[derive(PartialEq)]
+pub enum Choice {
+    One(Select)
+    Pick(Picker)
+    Commands(Palette)
+}
+
+impl Choice {
+    pub fn id(&self) -> String {
+        match self {
+            Choice::One(s) => s.id
+            Choice::Pick(p) => p.id
+            Choice::Commands(p) => p.id
+        }
+    }
+}
+
+fn label_of(items: Vec<CompletionItem>, key: String) -> String {
+    for it in items {
+        if it.key == key { return it.label }
+    }
+    String::new()
+}
+
+fn present(items: Vec<CompletionItem>, key: String) -> bool {
+    items.iter().any(|it| it.key == key)
+}
+
+/// Reconciles an open choice with its source while preserving selection and query.
+pub fn sync_model(ch: Choice, st: &mut StateStore) {
+    let id = ch.id()
+    let mut cs = st.choice(id)
+    if !cs.open { return }
+    let items, loading, error = match ch {
+        Choice::One(s) => (s.items, s.loading, s.error)
+        Choice::Pick(p) => (p.items, p.loading, p.error)
+        Choice::Commands(_) => return
+    }
+    if cs.model_items == items && cs.loading == loading && cs.error == error { return }
+    cs.model_items = items
+    let ready = if loading || !error.is_empty() { #[] } else {
+        match ch {
+            Choice::Pick(p) => picker_items(p, cs.filter)
+            _ => items
+        }
+    }
+    cs.set_items(ready)
+    cs.loading = loading
+    cs.error = error
+    let at = cs.highlight_index()
+    cs.first = cs.first.min((cs.items.len() - VISIBLE_ROWS).max(0))
+    if at >= 0 {
+        if at < cs.first { cs.first = at }
+        if at >= cs.first + VISIBLE_ROWS { cs.first = at - VISIBLE_ROWS + 1 }
+    }
+    st.set(id, WState::Choice(cs))
+}
+
+// ---- select ----
+
+
+/// The palette's entries for `query`: matching commands, enabled first.
+pub fn palette_items(registry: Vec<crate::commands::Command>, query: String) -> Vec<CompletionItem> {
+    let mut items = #[]
+    for c in registry {
+        if !c.visible { continue }
+        let mut it = CompletionItem::new(c.id, c.label)
+        it.detail = c.shortcut_label()
+        it.category = c.category
+        it.disabled = !c.enabled
+        it.score = if c.enabled { 1.0 } else { 0.0 }
+        items.push(it)
+    }
+    completion::rank(items, query, MatchMode::Fuzzy, 200)
+}
+
+
+fn picker_items(p: Picker, filter: String) -> Vec<CompletionItem> {
+    completion::rank(p.items, filter, MatchMode::Substring, 0)
+}
+
+
+pub fn choice_semantics(ch: Choice, node: Node, st: StateStore) -> Option<AccessNode> {
+    match ch {
+        Choice::One(s) => {
+            let mut n = AccessNode::control(Role::ComboBox, s.id, s.label, "open")
+            n.value = label_of(s.items, s.selected)
+            let cs = st.choice(s.id)
+            n.expanded = if cs.open { 1 } else { 0 }
+            if cs.open { n.children.push(completion::list_semantics(cs, f"{s.id}#list", s.label, s.id, s.selected)) }
+            if s.loading { n.description = crate::localization::tr("Loading") }
+            if !s.error.is_empty() { n.description = s.error }
+            Some(n)
+        }
+        Choice::Pick(p) => {
+            let mut n = AccessNode::control(Role::ComboBox, p.id, p.label, "open")
+            n.value = p.selected.map(|k| label_of(p.items, k)).join(", ")
+            let cs = st.choice(p.id)
+            n.expanded = if cs.open { 1 } else { 0 }
+            let mut i = 0
+            for key in p.selected {
+                let label = label_of(p.items, key)
+                let mut tok = AccessNode::new(Role::Button, crate::localization::message("choices", "Remove {item}", 1, { "item": if label.is_empty() { key } else { label } }))
+                tok.id = f"{p.id}#token:{key}"
+                tok.actions.push("press")
+                if i < node.parts.len() { tok.bounds = node.parts[i] }
+                n.children.push(tok)
+                i += 1
+            }
+            Some(n)
+        }
+        Choice::Commands(p) => {
+            let mut n = AccessNode::control(Role::SearchField, p.id, crate::localization::tr("Command search"), "focus")
+            let cs = st.choice(p.id)
+            n.value = cs.filter
+            n.description = crate::localization::message("choices", "{count} commands", cs.items.len(), Map::new())
+            Some(n)
+        }
+    }
+}

@@ -1,0 +1,16 @@
+jit: unsupported decoded local#0 bytecode-only Adt { def: DefId { krate: CrateId(0), local: 0 }, substs: Substs { args: [] } } payloads=[]
+jit: seed-reject decoded (kinds_ok=false unlowerable_local=false goroutine=false unsupported=true recursive_rc_return=false)
+jit: unsupported escaped local#0 bytecode-only JsonValue
+jit: seed-reject escaped (kinds_ok=false unlowerable_local=false goroutine=false unsupported=true recursive_rc_return=false)
+jit: unsupported show local#1 bytecode-only Adt { def: DefId { krate: CrateId(0), local: 0 }, substs: Substs { args: [] } } payloads=[]
+jit: seed-reject show (kinds_ok=false unlowerable_local=false goroutine=false unsupported=true recursive_rc_return=false)
+jit: unsupported enum_text local#1 bytecode-only Adt { def: DefId { krate: CrateId(0), local: 2 }, substs: Substs { args: [] } } payloads=[]
+jit: seed-reject enum_text (kinds_ok=false unlowerable_local=false goroutine=false unsupported=true recursive_rc_return=false)
+jit: unsupported main local#5 bytecode-only JsonValue
+jit: seed-reject main (kinds_ok=true unlowerable_local=false goroutine=false unsupported=true recursive_rc_return=false)
+jit: unsupported __gos_serde_from_json_Holder local#0 bytecode-only Adt { def: DefId { krate: CrateId(0), local: 4294967295 }, substs: Substs { args: [Type(Ty(9)), Type(Ty(12))] } } payloads=[Adt { def: DefId { krate: CrateId(0), local: 0 }, substs: Substs { args: [] } }, DynError]
+jit: seed-reject __gos_serde_from_json_Holder (kinds_ok=false unlowerable_local=false goroutine=false unsupported=true recursive_rc_return=false)
+jit: unsupported __gos_serde_root_0 local#0 bytecode-only Adt { def: DefId { krate: CrateId(0), local: 4294967295 }, substs: Substs { args: [Type(Ty(9)), Type(Ty(12))] } } payloads=[Adt { def: DefId { krate: CrateId(0), local: 0 }, substs: Substs { args: [] } }, DynError]
+jit: seed-reject __gos_serde_root_0 (kinds_ok=false unlowerable_local=false goroutine=false unsupported=true recursive_rc_return=false)
+jit: unsupported __gos_serde_dec_0 local#0 bytecode-only Adt { def: DefId { krate: CrateId(0), local: 0 }, substs: Substs { args: [] } } payloads=[]
+jit: seed-reject __gos_serde_dec_0 (kinds_ok=false unlowerable_local=false goroutine=false unsupported=true recursive_rc_return=false)

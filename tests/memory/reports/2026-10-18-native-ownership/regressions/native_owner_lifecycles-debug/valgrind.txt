@@ -1,0 +1,44 @@
+==2744753== Memcheck, a memory error detector
+==2744753== Copyright (C) 2002-2022, and GNU GPL'd, by Julian Seward et al.
+==2744753== Using Valgrind-3.22.0 and LibVEX; rerun with -h for copyright info
+==2744753== Command: /tmp/gui-leak-repros/final-tiers/native_owner_lifecycles-debug/native_owner_lifecycles
+==2744753== Parent PID: 2744718
+==2744753== 
+==2744753== 
+==2744753== HEAP SUMMARY:
+==2744753==     in use at exit: 3,584 bytes in 2 blocks
+==2744753==   total heap usage: 3,067 allocs, 3,065 frees, 461,102 bytes allocated
+==2744753== 
+==2744753== 1,024 bytes in 1 blocks are still reachable in loss record 1 of 2
+==2744753==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==2744753==    by 0x1CB342: <std::sync::once::Once>::call_once_force::<<std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::initialize<<std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::get_or_init<std::io::stdio::stdout::{closure#0}>::{closure#0}, !>::{closure#0}>::{closure#0} (in /tmp/gui-leak-repros/final-tiers/native_owner_lifecycles-debug/native_owner_lifecycles)
+==2744753==    by 0x1C87C6: <std::sys::sync::once::futex::Once>::call (in /tmp/gui-leak-repros/final-tiers/native_owner_lifecycles-debug/native_owner_lifecycles)
+==2744753==    by 0x1CB29E: <std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::initialize::<<std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::get_or_init<std::io::stdio::stdout::{closure#0}>::{closure#0}, !> (in /tmp/gui-leak-repros/final-tiers/native_owner_lifecycles-debug/native_owner_lifecycles)
+==2744753==    by 0x14D8C0: gossamer_runtime::c_abi::print::write_terminal_direct (in /tmp/gui-leak-repros/final-tiers/native_owner_lifecycles-debug/native_owner_lifecycles)
+==2744753==    by 0x14D06A: gossamer_runtime::c_abi::print::write_terminal (in /tmp/gui-leak-repros/final-tiers/native_owner_lifecycles-debug/native_owner_lifecycles)
+==2744753==    by 0x14CF6F: gossamer_runtime::c_abi::print::write_stdout (in /tmp/gui-leak-repros/final-tiers/native_owner_lifecycles-debug/native_owner_lifecycles)
+==2744753==    by 0x1843B9: gos_rt_println (in /tmp/gui-leak-repros/final-tiers/native_owner_lifecycles-debug/native_owner_lifecycles)
+==2744753==    by 0x12F209: gos_main (in /tmp/gui-leak-repros/final-tiers/native_owner_lifecycles-debug/native_owner_lifecycles)
+==2744753==    by 0x12F6A8: gos_main_shim (in /tmp/gui-leak-repros/final-tiers/native_owner_lifecycles-debug/native_owner_lifecycles)
+==2744753==    by 0x180DD6: gos_rt_call_main (in /tmp/gui-leak-repros/final-tiers/native_owner_lifecycles-debug/native_owner_lifecycles)
+==2744753==    by 0x12F6D8: main (in /tmp/gui-leak-repros/final-tiers/native_owner_lifecycles-debug/native_owner_lifecycles)
+==2744753== 
+==2744753== 2,560 bytes in 1 blocks are still reachable in loss record 2 of 2
+==2744753==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==2744753==    by 0x169BA5: std::sync::once::Once::call_once_force::{{closure}} (in /tmp/gui-leak-repros/final-tiers/native_owner_lifecycles-debug/native_owner_lifecycles)
+==2744753==    by 0x1C87C6: <std::sys::sync::once::futex::Once>::call (in /tmp/gui-leak-repros/final-tiers/native_owner_lifecycles-debug/native_owner_lifecycles)
+==2744753==    by 0x16B4BD: std::sync::once_lock::OnceLock<T>::initialize (in /tmp/gui-leak-repros/final-tiers/native_owner_lifecycles-debug/native_owner_lifecycles)
+==2744753==    by 0x153047: gossamer_runtime::c_abi::string::register_heap_string_body (in /tmp/gui-leak-repros/final-tiers/native_owner_lifecycles-debug/native_owner_lifecycles)
+==2744753==    by 0x152D3C: gossamer_runtime::c_abi::string::alloc_growable_forced (in /tmp/gui-leak-repros/final-tiers/native_owner_lifecycles-debug/native_owner_lifecycles)
+==2744753==    by 0x184CB8: gos_rt_set_args (in /tmp/gui-leak-repros/final-tiers/native_owner_lifecycles-debug/native_owner_lifecycles)
+==2744753==    by 0x12F6C9: main (in /tmp/gui-leak-repros/final-tiers/native_owner_lifecycles-debug/native_owner_lifecycles)
+==2744753== 
+==2744753== LEAK SUMMARY:
+==2744753==    definitely lost: 0 bytes in 0 blocks
+==2744753==    indirectly lost: 0 bytes in 0 blocks
+==2744753==      possibly lost: 0 bytes in 0 blocks
+==2744753==    still reachable: 3,584 bytes in 2 blocks
+==2744753==         suppressed: 0 bytes in 0 blocks
+==2744753== 
+==2744753== For lists of detected and suppressed errors, rerun with: -s
+==2744753== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)

@@ -1,0 +1,188 @@
+   Compiling gossamer-abi v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-abi)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.27s
+     Running unittests src/lib.rs (target/debug/deps/gossamer_abi-ba86275299773350)
+
+running 40 tests
+test c_aggregate::tests::a_layout_round_trips_through_its_spelling ... ok
+test c_aggregate::tests::aapcs64_passes_hfas_in_float_registers ... ok
+test c_aggregate::tests::aapcs64_passes_small_composites_in_words_and_large_ones_by_pointer ... ok
+test c_aggregate::tests::a_union_is_classified_by_every_member ... ok
+test c_aggregate::tests::aapcs64_retires_the_float_registers_for_an_hfa_that_does_not_fit ... ok
+test c_aggregate::tests::riscv_falls_back_to_integer_registers_when_float_ones_run_out ... ok
+test c_aggregate::tests::sysv_classifies_eightbytes ... ok
+test c_aggregate::tests::sysv_passes_a_large_struct_in_memory_and_returns_it_through_sret ... ok
+test c_aggregate::tests::riscv_flattens_float_pairs_and_mixed_pairs ... ok
+test c_aggregate::tests::sysv_returns_a_mixed_struct_in_two_register_classes ... ok
+test c_aggregate::tests::sysv_sends_a_struct_to_memory_when_the_registers_run_out ... ok
+test c_aggregate::tests::win64_passes_power_of_two_sizes_in_a_register_and_others_by_pointer ... ok
+test format_pad::format_pad_tests::a_written_zero_fill_is_not_sign_aware ... ok
+test format_pad::format_pad_tests::omitted_alignment_follows_the_value ... ok
+test format_pad::format_pad_tests::sign_and_radix_prefix_stay_left_of_the_zeros ... ok
+test format_pad::format_pad_tests::zero_flag_outranks_a_written_alignment_on_a_number ... ok
+test format_pad::format_pad_tests::zero_flag_reaches_numbers_only ... ok
+test int_range::int_range_tests::narrow_widths_report_their_own_range ... ok
+test int_range::int_range_tests::sixty_four_bits_report_the_runtime_word ... ok
+test jit_carrier::tests::from_nodes_rejects_malformed_trees ... ok
+test jit_carrier::tests::nested_result_arms_address_each_payload_subtree ... ok
+test registry::combinator_tests::an_undeclared_crossing_has_no_shim ... ok
+test registry::combinator_tests::one_signature_covers_several_crossings ... ok
+test string_layout::tests::header_tags_are_distinct ... ok
+test registry::combinator_tests::no_two_shims_claim_one_crossing ... ok
+test tests::a_word_answering_callback_reads_no_carrier ... ok
+test tests::docs_field_is_non_empty ... ok
+test tests::every_meta_symbol_argument_is_a_declared_pointer ... ok
+test tests::every_element_class_of_a_carrier_combinator_reads_a_carrier ... ok
+test tests::all_names_have_gos_rt_prefix ... ok
+test registry::combinator_tests::callback_combinators_cover_every_element_class ... ok
+test tests::registry_no_duplicates ... ok
+test tests::tier_field_coverage ... ok
+test tests::registry_size_sanity ... ok
+test tests::win64_marshals_fat_i128_across_the_ffi_boundary ... ok
+test types::memory_effect_tests::an_element_read_does_not_claim_argument_memory ... ok
+test tests::registry_is_sorted ... ok
+test tests::void_return_only_for_void_type ... ok
+test registry::combinator_tests::every_declared_crossing_resolves_to_its_own_shim ... ok
+test tests::llvm_declare_round_trips ... ok
+
+test result: ok. 40 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/registry_matches_runtime.rs (target/debug/deps/registry_matches_runtime-331d092eb6ce35a4)
+
+running 3 tests
+test every_string_return_declares_its_ownership ... ok
+test unmodelled_entries_are_all_still_present ... ok
+test every_registry_entry_matches_its_rust_definition ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/skey_by_address.rs (target/debug/deps/skey_by_address-3281f9a3b0b90433)
+
+running 2 tests
+test every_by_address_skey_symbol_is_a_runtime_entry_point ... ok
+test every_content_keyed_call_the_mir_emits_says_how_its_key_crosses ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/gossamer_codegen_llvm-6e6db76e5885c39f)
+
+running 49 tests
+test emit::codegen_partition_tests::quoted_symbols_are_collected_from_module_text ... ok
+test emit::codegen_partition_tests::chunks_follow_source_modules ... ok
+test emit::codegen_partition_tests::default_codegen_jobs_stay_under_the_ceiling ... ok
+test emit::codegen_partition_tests::adding_a_body_leaves_other_modules_chunks_unchanged ... ok
+test emit::codegen_partition_tests::small_program_compiles_as_one_module ... ok
+test emit::codegen_partition_tests::recursive_cycle_across_modules_shares_one_chunk ... ok
+test emit::symbol_audit::symbol_audit_tests::audit_accepts_defined_declared_and_global_symbols ... ok
+test emit::symbol_audit::symbol_audit_tests::audit_ignores_symbols_inside_string_constants_and_comments ... ok
+test emit::thunks::cabi_thunk_tests::a_shape_thunk_wrapper_declares_the_thunks_parameters ... ok
+test emit::symbol_audit::symbol_audit_tests::audit_reports_missing_symbol_with_function_context ... ok
+test emit::thunks::cabi_thunk_tests::a_shape_thunk_callback_is_collected_as_a_site_not_a_handler ... ok
+test emit::thunks::cabi_thunk_tests::a_word_answering_shape_thunk_is_not_a_site ... ok
+test emit::thunks::cabi_thunk_tests::an_env_reached_through_a_binding_is_collected_as_a_cabi_handler ... ok
+test emit::thunks::cabi_thunk_tests::cabi_thunk_calls_the_real_handler_and_bitcasts ... ok
+test emit::thunks::cabi_thunk_tests::cabi_thunk_keeps_each_argument_in_its_own_register_class ... ok
+test emit::thunks::cabi_thunk_tests::cabi_thunk_uses_plain_define_not_linkonce_odr ... ok
+test emit::thunks::cabi_thunk_tests::coff_linkonce_definition_pairs_with_an_any_comdat ... ok
+test emit::thunks::cabi_thunk_tests::non_coff_or_strong_definition_takes_no_comdat ... ok
+test emit::thunks::cabi_thunk_tests::one_word_spawn_stays_on_the_gp_register ... ok
+test emit::thunks::cabi_thunk_tests::spawn_wide_thunk_forwards_slot_zero_and_bitcasts ... ok
+test emit::thunks::cabi_thunk_tests::two_word_spawn_needs_the_win64_forwarding_thunk ... ok
+test emit::thunks::cabi_thunk_tests::walk_dir_visitor_is_collected_as_a_cabi_handler ... ok
+test emit::thunks::shape_validation_tests::accepts_constant_definition ... ok
+test emit::thunks::shape_validation_tests::accepts_extern_global ... ok
+test emit::thunks::shape_validation_tests::accepts_function_declaration ... ok
+test emit::thunks::shape_validation_tests::rejects_bare_identifier ... ok
+test emit::thunks::shape_validation_tests::rejects_random_text ... ok
+test emit::toolchain::host_triple_tests::apple_targets_keep_the_explicit_llvm_release_pipeline ... ok
+test emit::toolchain::host_triple_tests::darwin_llvm_triple_pins_deployment_target ... ok
+test emit::toolchain::host_triple_tests::datalayout_keeps_i128_at_flat_slot_alignment ... ok
+test emit::codegen_partition_tests::object_cache_key_is_the_module_text_under_its_settings ... ok
+test emit::toolchain::host_triple_tests::host_triple_matches_running_os ... ok
+test emit::toolchain::host_triple_tests::loop_idiom_workaround_is_scoped_to_static_musl_without_runtime_mem_routines ... ok
+test emit::toolchain::host_triple_tests::macos_deployment_target_normalizes_for_llvm ... ok
+test emit::toolchain::host_triple_tests::mcpu_cross_target_is_portable_not_host ... ok
+test emit::toolchain::host_triple_tests::mcpu_native_host_uses_host_cpu_unless_reproducible ... ok
+test emit::toolchain::host_triple_tests::prefer_256_bit_only_for_x86_target ... ok
+test emit::toolchain::llvm_version_tests::a_banner_with_no_version_answers_nothing ... ok
+test emit::toolchain::llvm_version_tests::a_major_is_read_from_either_banner_spelling ... ok
+test emit::toolchain::llvm_version_tests::an_unparsed_banner_does_not_look_like_a_mismatch ... ok
+test lower::misc::tests::non_i128_runtime_return_is_never_marshalled ... ok
+test lower::misc::tests::runtime_i128_return_is_marshalled_only_on_windows ... ok
+test lower::misc::tests::user_fn_i128_return_is_not_marshalled_on_windows ... ok
+test lower::tests::header_string_constant_is_not_unnamed_addr ... ok
+test lower::unwind::tests::a_call_line_splits_into_its_parts ... ok
+test lower::unwind::tests::an_argument_keeps_a_parenthesised_attribute_with_its_type ... ok
+test lower::unwind::tests::a_void_call_with_no_arguments_parses ... ok
+test lower::unwind::tests::an_indirect_call_with_an_explicit_type_keeps_its_return_type ... ok
+test emit::codegen_partition_tests::release_imports_small_callees_from_other_chunks_transitively ... ok
+
+test result: ok. 49 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/llvm_major_pin.rs (target/debug/deps/llvm_major_pin-136fc98e6d7974cf)
+
+running 1 test
+test preferred_llvm_major_matches_rustc ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/lower_shapes.rs (target/debug/deps/lower_shapes-46d9155856176dc0)
+
+running 33 tests
+test binop_bitand_i64_emits_and_instruction ... ok
+test binop_shl_i64_emits_shl_instruction ... ok
+test a_direct_callee_reads_its_aggregate_parameters_in_the_callers_storage ... ok
+test binop_bitxor_i64_emits_xor_instruction ... ok
+test binop_shr_i64_emits_ashr_instruction ... ok
+test binop_rem_i64_emits_srem_instruction ... ok
+test binop_div_i64_emits_sdiv_instruction ... ok
+test binop_bitor_i64_emits_or_instruction ... ok
+test a_body_answering_through_caller_storage_builds_its_answer_there ... ok
+test an_aggregate_passed_twice_reaches_the_callee_as_two_copies ... ok
+test binop_mul_i64_emits_mul_instruction ... ok
+test a_carrier_release_calls_the_runtime_only_for_an_arm_that_owns_storage ... ok
+test binop_sub_i64_emits_sub_instruction ... ok
+test binop_add_i64_emits_add_instruction ... ok
+test a_foreign_field_write_at_a_constant_offset_is_an_inline_store ... ok
+test const_int_max_emits_max_literal ... ok
+test const_int_zero_emits_store_i64 ... ok
+test channel_recv_option_uses_status_out_pointer_call ... ok
+test channel_try_recv_option_uses_status_out_pointer_call ... ok
+test fixed_u8_array_uses_packed_native_storage ... ok
+test ir_contains_module_id_header ... ok
+test integer_abs_uses_the_integer_runtime_helper ... ok
+test ir_contains_target_triple ... ok
+test large_fixed_array_local_spills_to_heap_storage ... ok
+test vec_i64_swap_is_inlined ... ok
+test string_map_with_capacity_uses_typed_storage ... ok
+test a_foreign_scalar_of_a_constant_class_is_an_inline_load_or_store ... ok
+test vec_i64_pop_option_is_inlined ... ok
+test native_static_finalizer_is_shared_across_stores_and_functions ... ok
+test a_parameter_the_body_writes_is_copied_into_the_frame ... ok
+test multi_slot_struct_parameter_still_arrives_by_pointer ... ok
+test heap_enum_by_value_parameter_crosses_a_direct_call_as_the_word ... ok
+test boxed_enum_payload_clones_containers_in_the_destination ... ok
+
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/lower_smoke.rs (target/debug/deps/lower_smoke-0c9f0daacb554d23)
+
+running 9 tests
+test llvm_build_error_displays_internal_lowering_bug ... ok
+test llvm_acyclic_backward_numbered_edge_has_no_preemption_poll ... ok
+test llvm_string_len_of_ascii_literal_folds_to_its_scalar_count ... ok
+test llvm_string_len_of_non_ascii_literal_counts_scalars_not_bytes ... ok
+test llvm_dynamic_string_len_reads_the_typed_header_inline ... ok
+test llvm_renders_typed_iterator_mir_as_lazy_runtime_calls ... ok
+test llvm_uncounted_loop_polls_for_preemption_at_its_header ... ok
+test llvm_backend_does_not_expose_unsupported_lowering_contract ... ok
+test llvm_lowers_constant_return_to_object_bytes ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/win64_spawn_abi.rs (target/debug/deps/win64_spawn_abi-e04c249a72db8b1c)
+
+running 1 test
+test win64_spawn_of_a_two_word_callable_goes_through_the_vector_return_thunk ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

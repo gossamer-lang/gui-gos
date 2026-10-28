@@ -1,0 +1,450 @@
+// vector: vector paths and their exact-area anti-aliased rasterisation.
+//
+// A path is a flat command stream (the encoding `text::font` emits for
+// glyph outlines). `Mask::fill` flattens curves, accumulates each edge's
+// signed area per pixel, and integrates the accumulator row by row, so
+// coverage is the exact area of each pixel the shape covers.
+
+use std::math::{ceil, floor, sqrt}
+
+
+/// How overlapping sub-paths combine.
+#[derive(PartialEq, Eq)]
+pub enum FillRule {
+    NonZero
+    EvenOdd
+}
+
+/// A vector path in pixel coordinates (y down) built with the usual
+/// pen commands.
+pub struct Path {
+    pub cmds: Vec<f64>
+}
+
+impl Default for Path {
+    fn default() -> Path {
+        Path {
+            cmds: #[]
+        }
+    }
+}
+
+impl Path {
+    pub fn new() -> Path {
+        Path { cmds: #[] }
+    }
+
+    pub fn move_to(&mut self, x: f64, y: f64) {
+        self.cmds.push(MOVE)
+        self.cmds.push(x)
+        self.cmds.push(y)
+    }
+
+    pub fn line_to(&mut self, x: f64, y: f64) {
+        self.cmds.push(LINE)
+        self.cmds.push(x)
+        self.cmds.push(y)
+    }
+
+    pub fn quad_to(&mut self, cx: f64, cy: f64, x: f64, y: f64) {
+        self.cmds.push(QUAD)
+        self.cmds.push(cx)
+        self.cmds.push(cy)
+        self.cmds.push(x)
+        self.cmds.push(y)
+    }
+
+    pub fn cubic_to(&mut self, c1x: f64, c1y: f64, c2x: f64, c2y: f64, x: f64, y: f64) {
+        self.cmds.push(CUBIC)
+        self.cmds.push(c1x)
+        self.cmds.push(c1y)
+        self.cmds.push(c2x)
+        self.cmds.push(c2y)
+        self.cmds.push(x)
+        self.cmds.push(y)
+    }
+
+    pub fn close(&mut self) {
+        self.cmds.push(CLOSE)
+    }
+
+    /// This path with every point scaled by `s` and moved by (`ox`, `oy`).
+    pub fn scaled(&self, s: f64, ox: f64, oy: f64) -> Path {
+        let mut out = Path::new()
+        let mut i = 0
+        while i < self.cmds.len() {
+            let op = self.cmds[i]
+            out.cmds.push(op)
+            let points = match op {
+                MOVE | LINE => 1
+                QUAD => 2
+                CUBIC => 3
+                _ => 0
+            }
+            let mut k = 0
+            while k < points {
+                out.cmds.push(ox + self.cmds[i + 1 + k * 2] * s)
+                out.cmds.push(oy + self.cmds[i + 2 + k * 2] * s)
+                k += 1
+            }
+            i += 1 + points * 2
+        }
+        out
+    }
+
+    /// A rectangle with corner radius `r` (clamped to half the shorter side).
+    pub fn rounded_rect(x: f64, y: f64, w: f64, h: f64, r: f64) -> Path {
+        let mut p = Path::new()
+        let rr = r.min(w / 2.0).min(h / 2.0).max(0.0)
+        // Cubic quarter circles: k is the standard 4/3 * (sqrt 2 - 1).
+        let k = 0.5522847498 * rr
+        p.move_to(x + rr, y)
+        p.line_to(x + w - rr, y)
+        p.cubic_to(x + w - rr + k, y, x + w, y + rr - k, x + w, y + rr)
+        p.line_to(x + w, y + h - rr)
+        p.cubic_to(x + w, y + h - rr + k, x + w - rr + k, y + h, x + w - rr, y + h)
+        p.line_to(x + rr, y + h)
+        p.cubic_to(x + rr - k, y + h, x, y + h - rr + k, x, y + h - rr)
+        p.line_to(x, y + rr)
+        p.cubic_to(x, y + rr - k, x + rr - k, y, x + rr, y)
+        p.close()
+        p
+    }
+
+    /// An ellipse inscribed in the given box.
+    pub fn ellipse(cx: f64, cy: f64, rx: f64, ry: f64) -> Path {
+        let mut p = Path::new()
+        let kx = 0.5522847498 * rx
+        let ky = 0.5522847498 * ry
+        p.move_to(cx + rx, cy)
+        p.cubic_to(cx + rx, cy + ky, cx + kx, cy + ry, cx, cy + ry)
+        p.cubic_to(cx - kx, cy + ry, cx - rx, cy + ky, cx - rx, cy)
+        p.cubic_to(cx - rx, cy - ky, cx - kx, cy - ry, cx, cy - ry)
+        p.cubic_to(cx + kx, cy - ry, cx + rx, cy - ky, cx + rx, cy)
+        p.close()
+        p
+    }
+
+    /// The path's outline widened into a fillable band `width` pixels
+    /// across, with butt caps and mitred joins kept simple: each
+    /// flattened segment becomes its own quad, which the non-zero rule
+    /// unions.
+    pub fn stroke(&self, width: f64) -> Path {
+        let lines = flatten_with(self.cmds, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, false)
+        let mut out = Path::new()
+        let hw = width / 2.0
+        let mut i = 0
+        while i + 3 < lines.len() {
+            let x0 = lines[i]
+            let y0 = lines[i + 1]
+            let x1 = lines[i + 2]
+            let y1 = lines[i + 3]
+            i += 4
+            let dx = x1 - x0
+            let dy = y1 - y0
+            let len = sqrt(dx * dx + dy * dy)
+            if len <= 0.0 {
+                continue
+            }
+            // Extend each segment by half the width so joins overlap.
+            let ux = dx / len
+            let uy = dy / len
+            let nx = -uy * hw
+            let ny = ux * hw
+            let ax = x0 - ux * hw * 0.5
+            let ay = y0 - uy * hw * 0.5
+            let bx = x1 + ux * hw * 0.5
+            let by = y1 + uy * hw * 0.5
+            out.move_to(ax + nx, ay + ny)
+            out.line_to(bx + nx, by + ny)
+            out.line_to(bx - nx, by - ny)
+            out.line_to(ax - nx, ay - ny)
+            out.close()
+        }
+        out
+    }
+}
+
+/// A coverage mask: one 0..=255 alpha per pixel, `width` wide, placed
+/// with its top-left at (`left`, `top`).
+pub struct Mask {
+    pub left: i64
+    pub top: i64
+    pub width: i64
+    pub height: i64
+    pub coverage: Vec<u8>
+}
+
+impl Default for Mask {
+    fn default() -> Mask {
+        Mask {
+            left: 0
+            top: 0
+            width: 0
+            height: 0
+            coverage: #[]
+        }
+    }
+}
+
+impl Mask {
+    /// Rasterises `cmds` mapped through the affine transform
+    /// `(x, y) -> (a x + c y + e, b x + d y + f)`.
+    pub fn fill(cmds: Vec<f64>, a: f64, b: f64, c: f64, d: f64, e: f64, f: f64, rule: FillRule) -> Mask {
+        let lines = flatten(cmds, a, b, c, d, e, f)
+        if lines.is_empty() {
+            return Mask::default()
+        }
+        let mut minx = 1e18
+        let mut miny = 1e18
+        let mut maxx = -1e18
+        let mut maxy = -1e18
+        let mut i = 0
+        while i < lines.len() {
+            let x = lines[i]
+            let y = lines[i + 1]
+            if x < minx { minx = x }
+            if x > maxx { maxx = x }
+            if y < miny { miny = y }
+            if y > maxy { maxy = y }
+            i += 2
+        }
+        let left = floor(minx) as i64
+        let top = floor(miny) as i64
+        let width = ceil(maxx) as i64 - left + 2
+        let height = ceil(maxy) as i64 - top + 1
+        if width <= 0 || height <= 0 || width * height > 16_000_000 {
+            return Mask::default()
+        }
+        let mut acc = #[0.0; width * height + 1]
+        let ox = left as f64
+        let oy = top as f64
+        i = 0
+        while i + 3 < lines.len() {
+            accumulate(&mut acc, width, height, lines[i] - ox, lines[i + 1] - oy, lines[i + 2] - ox, lines[i + 3] - oy)
+            i += 4
+        }
+        let mut coverage = #[0u8; width * height]
+        let mut sum = 0.0
+        let n = width * height
+        let mut k = 0
+        while k < n {
+            sum += acc[k]
+            let v = match rule {
+                FillRule::NonZero => sum.abs().min(1.0)
+                FillRule::EvenOdd => {
+                    let m = sum.abs() % 2.0
+                    if m > 1.0 { 2.0 - m } else { m }
+                }
+            }
+            coverage[k] = (v * 255.0 + 0.5) as u8
+            k += 1
+        }
+        Mask { left: left, top: top, width: width, height: height, coverage: coverage }
+    }
+}
+
+// Signed-area accumulation of one edge into `acc` (row-major, `w` wide).
+fn accumulate(acc: &mut Vec<f64>, w: i64, h: i64, ax: f64, ay: f64, bx: f64, by: f64) {
+    if ay == by {
+        return
+    }
+    let mut dir = 1.0
+    let mut x0 = ax
+    let mut y0 = ay
+    let mut x1 = bx
+    let mut y1 = by
+    if ay > by {
+        dir = -1.0
+        x0 = bx
+        y0 = by
+        x1 = ax
+        y1 = ay
+    }
+    let dxdy = (x1 - x0) / (y1 - y0)
+    let mut x = x0
+    if y0 < 0.0 {
+        x -= y0 * dxdy
+    }
+    let ystart = if y0 < 0.0 { 0 } else { y0 as i64 }
+    let yend = (ceil(y1) as i64).min(h)
+    let limit = acc.len() as i64
+    let mut y = ystart
+    while y < yend {
+        let line = y * w
+        let dy = (y as f64 + 1.0).min(y1) - (y as f64).max(y0)
+        let xnext = x + dxdy * dy
+        let d = dy * dir
+        let lo = if x < xnext { x } else { xnext }
+        let hi = if x < xnext { xnext } else { x }
+        let lo_floor = floor(lo)
+        let lo_i = (lo_floor as i64).max(0)
+        let hi_ceil = ceil(hi)
+        let hi_i = (hi_ceil as i64).max(0)
+        if hi_i <= lo_i + 1 {
+            let xmf = 0.5 * (x + xnext) - lo_floor
+            add(acc, limit, line + lo_i, d - d * xmf)
+            add(acc, limit, line + lo_i + 1, d * xmf)
+        } else {
+            let s = 1.0 / (hi - lo)
+            let lo_frac = lo - lo_floor
+            let a0 = 0.5 * s * (1.0 - lo_frac) * (1.0 - lo_frac)
+            let hi_frac = hi - hi_ceil + 1.0
+            let am = 0.5 * s * hi_frac * hi_frac
+            add(acc, limit, line + lo_i, d * a0)
+            if hi_i == lo_i + 2 {
+                add(acc, limit, line + lo_i + 1, d * (1.0 - a0 - am))
+            } else {
+                let a1 = s * (1.5 - lo_frac)
+                add(acc, limit, line + lo_i + 1, d * (a1 - a0))
+                let mut xi = lo_i + 2
+                while xi < hi_i - 1 {
+                    add(acc, limit, line + xi, d * s)
+                    xi += 1
+                }
+                let a2 = a1 + (hi_i - lo_i - 3) as f64 * s
+                add(acc, limit, line + hi_i - 1, d * (1.0 - a2 - am))
+            }
+            add(acc, limit, line + hi_i, d * am)
+        }
+        x = xnext
+        y += 1
+    }
+}
+
+fn add(acc: &mut Vec<f64>, limit: i64, at: i64, v: f64) {
+    if at >= 0 && at < limit {
+        acc[at] += v
+    }
+}
+
+/// The path as straight segments `[x0, y0, x1, y1, ..]` after the
+/// affine transform, curves subdivided to within a twentieth of a pixel.
+pub fn flatten(cmds: Vec<f64>, a: f64, b: f64, c: f64, d: f64, e: f64, f: f64) -> Vec<f64> {
+    flatten_with(cmds, a, b, c, d, e, f, true)
+}
+
+/// Like `flatten`, but sub-paths without a `CLOSE` stay open when
+/// `close_open` is false (strokes of polylines).
+pub fn flatten_with(cmds: Vec<f64>, a: f64, b: f64, c: f64, d: f64, e: f64, f: f64, close_open: bool) -> Vec<f64> {
+    let mut out = #[]
+    let mut i = 0
+    let n = cmds.len()
+    let mut sx = 0.0
+    let mut sy = 0.0
+    let mut px = 0.0
+    let mut py = 0.0
+    let mut open = false
+    while i < n {
+        let op = cmds[i]
+        match op {
+            MOVE => {
+                if close_open && open && (px != sx || py != sy) {
+                    push_line(&mut out, px, py, sx, sy)
+                }
+                let x = cmds[i + 1]
+                let y = cmds[i + 2]
+                sx = a * x + c * y + e
+                sy = b * x + d * y + f
+                px = sx
+                py = sy
+                open = true
+                i += 3
+            }
+            LINE => {
+                let x = cmds[i + 1]
+                let y = cmds[i + 2]
+                let nx = a * x + c * y + e
+                let ny = b * x + d * y + f
+                push_line(&mut out, px, py, nx, ny)
+                px = nx
+                py = ny
+                i += 3
+            }
+            QUAD => {
+                let cx0 = a * cmds[i + 1] + c * cmds[i + 2] + e
+                let cy0 = b * cmds[i + 1] + d * cmds[i + 2] + f
+                let x = a * cmds[i + 3] + c * cmds[i + 4] + e
+                let y = b * cmds[i + 3] + d * cmds[i + 4] + f
+                let ddx = px - 2.0 * cx0 + x
+                let ddy = py - 2.0 * cy0 + y
+                let dev = sqrt(ddx * ddx + ddy * ddy)
+                let steps = (1.0 + floor(sqrt(dev * 5.0))) as i64
+                let mut k = 1
+                let mut lx = px
+                let mut ly = py
+                while k <= steps {
+                    let t = k as f64 / steps as f64
+                    let mt = 1.0 - t
+                    let qx = mt * mt * px + 2.0 * mt * t * cx0 + t * t * x
+                    let qy = mt * mt * py + 2.0 * mt * t * cy0 + t * t * y
+                    push_line(&mut out, lx, ly, qx, qy)
+                    lx = qx
+                    ly = qy
+                    k += 1
+                }
+                px = x
+                py = y
+                i += 5
+            }
+            CUBIC => {
+                let c1x = a * cmds[i + 1] + c * cmds[i + 2] + e
+                let c1y = b * cmds[i + 1] + d * cmds[i + 2] + f
+                let c2x = a * cmds[i + 3] + c * cmds[i + 4] + e
+                let c2y = b * cmds[i + 3] + d * cmds[i + 4] + f
+                let x = a * cmds[i + 5] + c * cmds[i + 6] + e
+                let y = b * cmds[i + 5] + d * cmds[i + 6] + f
+                let d1x = px - 2.0 * c1x + c2x
+                let d1y = py - 2.0 * c1y + c2y
+                let d2x = c1x - 2.0 * c2x + x
+                let d2y = c1y - 2.0 * c2y + y
+                let dev = sqrt(d1x * d1x + d1y * d1y).max(sqrt(d2x * d2x + d2y * d2y))
+                let steps = (1.0 + floor(sqrt(dev * 15.0))) as i64
+                let mut k = 1
+                let mut lx = px
+                let mut ly = py
+                while k <= steps {
+                    let t = k as f64 / steps as f64
+                    let mt = 1.0 - t
+                    let qx = mt * mt * mt * px + 3.0 * mt * mt * t * c1x + 3.0 * mt * t * t * c2x + t * t * t * x
+                    let qy = mt * mt * mt * py + 3.0 * mt * mt * t * c1y + 3.0 * mt * t * t * c2y + t * t * t * y
+                    push_line(&mut out, lx, ly, qx, qy)
+                    lx = qx
+                    ly = qy
+                    k += 1
+                }
+                px = x
+                py = y
+                i += 7
+            }
+            _ => {
+                if open && (px != sx || py != sy) {
+                    push_line(&mut out, px, py, sx, sy)
+                }
+                px = sx
+                py = sy
+                open = false
+                i += 1
+            }
+        }
+    }
+    if close_open && open && (px != sx || py != sy) {
+        push_line(&mut out, px, py, sx, sy)
+    }
+    out
+}
+
+fn push_line(out: &mut Vec<f64>, x0: f64, y0: f64, x1: f64, y1: f64) {
+    out.push(x0)
+    out.push(y0)
+    out.push(x1)
+    out.push(y1)
+}
+
+
+// Path commands, each followed by its points.
+pub const MOVE: f64 = 0.0
+pub const LINE: f64 = 1.0
+pub const QUAD: f64 = 2.0
+pub const CUBIC: f64 = 3.0
+pub const CLOSE: f64 = 4.0

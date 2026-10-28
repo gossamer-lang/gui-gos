@@ -1,0 +1,251 @@
+// state: per-widget state that outlives a view rebuild. The application
+// owns values (a field's text, a checkbox's state); the toolkit owns
+// interaction state (caret, selection, scroll offset, open popup, undo
+// history) here, keyed by widget id. Each id carries a generation: an id
+// that leaves the tree for a frame and comes back is a new widget, so
+// late results addressed to the old generation are discarded.
+
+use crate::editing::EditState
+use crate::widgets::collections::CollectionState
+use crate::widgets::completion::ChoiceState
+use crate::widgets::menus::MenuState
+
+/// A widget's identity: its id and the generation it was created in.
+#[derive(PartialEq, Eq)]
+pub struct WidgetId {
+    pub key: String
+    pub generation: i64
+}
+
+impl Default for WidgetId {
+    fn default() -> WidgetId {
+        WidgetId {
+            key: String::new()
+            generation: 0
+        }
+    }
+}
+
+/// Scroll position and scrollbar drag of a scroll area.
+#[derive(PartialEq)]
+pub struct ScrollState {
+    pub x: i64
+    pub y: i64
+    /// Pointer offset into the thumb while dragging it, or -1.
+    pub drag: i64
+    pub drag_horizontal: bool
+}
+
+impl Default for ScrollState {
+    fn default() -> ScrollState {
+        ScrollState {
+            x: 0
+            y: 0
+            drag: 0
+            drag_horizontal: false
+        }
+    }
+}
+
+/// Drag state of sliders, dials, splitters, and similar pointer gestures.
+#[derive(PartialEq)]
+pub struct DragState {
+    pub active: bool
+    /// Which part is dragged (a range slider's low or high thumb).
+    pub part: i64
+    pub start_x: i64
+    pub start_y: i64
+    pub start_value: f64
+}
+
+impl Default for DragState {
+    fn default() -> DragState {
+        DragState {
+            active: false
+            part: 0
+            start_x: 0
+            start_y: 0
+            start_value: 0.0
+        }
+    }
+}
+
+/// One widget's stored state.
+#[derive(PartialEq)]
+pub enum WState {
+    Edit(EditState)
+    Scroll(ScrollState)
+    Drag(DragState)
+    Choice(ChoiceState)
+    Collection(CollectionState)
+    Menu(MenuState)
+    /// Free-form state for custom widgets and small controls.
+    Fields(Map<String, String>)
+}
+
+/// Every stored widget state of one window.
+pub struct StateStore {
+    entries: Map<String, WState>
+    metadata: Map<String, Map<String, String>>
+    generations: Map<String, i64>
+    seen: Set<String>
+    next_generation: i64
+}
+
+impl StateStore {
+    pub fn new() -> StateStore {
+        StateStore { entries: Map::new(), metadata: Map::new(), generations: Map::new(), seen: #{}, next_generation: 1 }
+    }
+
+    pub fn get(&self, id: String) -> Option<WState> {
+        match self.entries.get(id) { Some(state) => Some(state), None => self.metadata.get(id).map(|fields| WState::Fields(fields)) }
+    }
+
+    pub fn set(&mut self, id: String, state: WState) {
+        if id.is_empty() {
+            return
+        }
+        if let WState::Fields(fields) = state { self.metadata[id] = fields } else { self.entries[id] = state }
+    }
+
+    pub fn remove(&mut self, id: String) {
+        let _ = self.entries.remove(id)
+        let _ = self.metadata.remove(id)
+    }
+
+    /// The generation of `id`, assigning one the first time it is seen.
+    pub fn generation(&mut self, id: String) -> i64 {
+        if let Some(g) = self.generations.get(id) {
+            return g
+        }
+        let g = self.next_generation
+        self.next_generation += 1
+        self.generations[id] = g
+        g
+    }
+
+    /// The identity of `id` now.
+    pub fn widget_id(&mut self, id: String) -> WidgetId {
+        WidgetId { key: id, generation: self.generation(id) }
+    }
+
+    /// Whether `wid` still names a live widget of the same generation.
+    pub fn is_live(&self, wid: WidgetId) -> bool {
+        match self.generations.get(wid.key) {
+            Some(g) => g == wid.generation
+            None => false
+        }
+    }
+
+    /// Records that `id` is in this frame's tree.
+    pub fn mark(&mut self, id: String) {
+        if id.is_empty() {
+            return
+        }
+        self.seen.insert(id)
+        let _ = self.generation(id)
+    }
+
+    pub fn begin_frame(&mut self) {
+        self.seen = #{}
+    }
+
+    /// Drops the state and generation of every id not marked this frame and
+    /// answers those ids, so their timers, popups, and tasks can be cancelled.
+    pub fn end_frame(&mut self) -> Vec<String> {
+        let mut gone = #[]
+        for (id, _) in self.generations {
+            if !self.seen.contains(id) {
+                gone.push(id)
+            }
+        }
+        for id in gone {
+            let _ = self.generations.remove(id)
+            let _ = self.entries.remove(id)
+            let _ = self.metadata.remove(id)
+        }
+        gone
+    }
+
+    /// Moves a page's state and generations without recreating its editing history.
+    pub fn transfer_to(&mut self, target: &mut StateStore, ids: Vec<String>) {
+        for id in ids {
+            if let Some(fields) = self.metadata.remove(id) { target.metadata[id] = fields }
+            if let Some(state) = self.entries.remove(id) { target.entries[id] = state }
+            if let Some(generation) = self.generations.remove(id) {
+                target.generations[id] = generation
+                target.next_generation = target.next_generation.max(generation + 1)
+            }
+            self.seen.remove(id)
+            target.seen.insert(id)
+        }
+    }
+
+    pub fn len(&self) -> i64 {
+        let mut count = self.entries.len()
+        for (id, _) in self.metadata { if !self.entries.contains_key(id) { count += 1 } }
+        count
+    }
+
+    // Typed accessors: each answers the default state when none is stored.
+
+    pub fn edit(&self, id: String) -> EditState {
+        match self.entries.get(id) {
+            Some(WState::Edit(s)) => s
+            _ => EditState::default()
+        }
+    }
+
+    pub fn scroll(&self, id: String) -> ScrollState {
+        match self.entries.get(id) {
+            Some(WState::Scroll(s)) => s
+            _ => ScrollState { x: 0, y: 0, drag: -1, drag_horizontal: false }
+        }
+    }
+
+    pub fn drag(&self, id: String) -> DragState {
+        match self.entries.get(id) {
+            Some(WState::Drag(s)) => s
+            _ => DragState::default()
+        }
+    }
+
+    pub fn choice(&self, id: String) -> ChoiceState {
+        match self.entries.get(id) {
+            Some(WState::Choice(s)) => s
+            _ => ChoiceState::default()
+        }
+    }
+
+    pub fn collection(&self, id: String) -> CollectionState {
+        match self.entries.get(id) {
+            Some(WState::Collection(s)) => s
+            _ => CollectionState::default()
+        }
+    }
+
+    pub fn menu(&self, id: String) -> MenuState {
+        match self.entries.get(id) {
+            Some(WState::Menu(s)) => s
+            _ => MenuState::default()
+        }
+    }
+
+    pub fn fields(&self, id: String) -> Map<String, String> {
+        self.metadata.get(id).unwrap_or(Map::new())
+    }
+
+    /// One free-form field of `id`, or `default`.
+    pub fn field(&self, id: String, name: String, default: String) -> String {
+        match self.fields(id).get(name) {
+            Some(v) => v
+            None => default
+        }
+    }
+
+    pub fn set_field(&mut self, id: String, name: String, value: String) {
+        let mut m = self.fields(id)
+        m[name] = value
+        self.set(id, WState::Fields(m))
+    }
+}

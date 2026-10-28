@@ -1,0 +1,114 @@
+use std::errors
+use gui::{UiMsg, Widget}
+use gui::widgets::completion::CompletionItem
+use windowing::{Key, Mods}
+
+#[derive(Default, PartialEq)]
+struct Model {
+    revision: i64
+    selected: String
+    commits: i64
+}
+
+fn update(model: Model, message: UiMsg) -> Model {
+    let mut next = model
+    match message {
+        UiMsg::Click(id) => if id == "change" { next.revision += 1 }
+        UiMsg::Select(_, key) => { next.selected = key; next.commits += 1 }
+        _ => ()
+    }
+    next
+}
+
+fn items(revision: i64) -> Vec<CompletionItem> {
+    let mut result = Widget::items(#[("a", "Duplicate"), ("b", "Duplicate"), ("c", "Other")])
+    if revision >= 1 { result = #[result[2], result[1]] }
+    if revision == 2 { result[0].disabled = true; result[1].disabled = true }
+    if revision >= 3 { result = #[] }
+    result
+}
+
+fn view(model: Model) -> Widget {
+    Widget::column(#[
+        Widget::select("choice", items(model.revision), model.selected, "Choose")
+        Widget::picker("many", items(model.revision), #["a"], true, "Many")
+        Widget::label(f"committed {model.selected} count {model.commits} revision {model.revision}")
+    ], 4).padding(8)
+}
+
+fn press(session: &mut gui::Session, key: Key) {
+    session.press(key, Mods::default()).unwrap()
+}
+
+fn choice_model_journey() -> Result<(), errors::Error> {
+    let mut session = gui::application("Choice model", "dev.gossamer.gui-wrap-choice", || Model::default(), update, view).size(420, 280).start()?
+    assert(session.focus("choice")?)
+    press(&mut session, Key::Return)
+    assert_eq(session.choice_state(0, "choice").highlight, "a")
+    session.mailbox().post(UiMsg::Click("change"))
+    session.flush()?
+    let changed = session.choice_state(0, "choice")
+    assert_eq(changed.highlight, "c")
+    assert_eq(changed.items.map(|item| item.key), #["c", "b"])
+    press(&mut session, Key::Return)
+    assert(session.semantics(0).dump().contains("committed c count 1"))
+    assert(session.focus("choice")?)
+    press(&mut session, Key::Return)
+    session.mailbox().post(UiMsg::Click("change"))
+    session.flush()?
+    assert(session.choice_state(0, "choice").current().is_none())
+    press(&mut session, Key::Return)
+    session.accessible_action("choice", "choice#b", "press", "")?
+    assert(session.semantics(0).dump().contains("committed c count 1"))
+    assert(session.focus("many")?)
+    session.type_text("Dup")?
+    let state = session.choice_state(0, "many")
+    assert_eq(state.filter, "Dup")
+    assert(state.current().is_none())
+    session.mailbox().post(UiMsg::Click("change"))
+    session.flush()?
+    let empty = session.choice_state(0, "many")
+    assert_eq(empty.filter, "Dup")
+    assert(empty.items.is_empty(), session.semantics(0).dump())
+    assert(session.semantics(0).dump().contains("Remove a"))
+    session.shutdown()
+    println("choices: deleted and disabled items cannot commit; filters and missing selections survive")
+    Ok(())
+}
+
+fn transformed_custom_widget() -> Result<(), errors::Error> {
+    let view = |_| Widget::custom(gui::Custom::new(
+        "transformed", gui::accessibility::Role::Canvas, "Transformed layer"
+        |_, _| gui::geometry::Size::new(40, 20)
+        |_, _| #[gui::render::display::DrawOp::Layer {
+            ops: #[gui::render::display::DrawOp::FillRect {
+                rect: gui::geometry::Rect::new(0, 0, 4, 4)
+                color: gui::Color::rgb(255, 0, 0)
+            }]
+            transform: gui::render::display::Transform { x: 20.0, y: 2.0, scale_x: -2.0, scale_y: 2.0 }
+        }]
+        |_| #[]
+    ))
+    let mut session = gui::application("Transformed", "dev.gossamer.gui-wrap-transform", || 0, |m, _| m, view).size(80, 40).start()?
+    session.set_render_budgets(0, 16_384, 4096)?
+    let size = session.capture_window(0)?
+    assert(size.0 > 0 && size.1 > 0)
+    let stats = session.rendering_stats(0)
+    assert(stats.scene_bytes <= 16_384 && stats.layer_bytes <= 4096)
+    session.set_active(false)?
+    assert(session.rendering_stats(0).cache_hits > 0)
+    session.set_render_budgets(0, 0, 0)?
+    session.flush()?
+    assert_eq(session.rendering_stats(0).scene_bytes, 0)
+    let before = session.window_frames(0)
+    session.inject(windowing::Event::RenderReset { window: session.window_id(0) })?
+    assert(session.window_frames(0) > before)
+    session.shutdown()
+    Ok(())
+}
+
+fn main() -> Result<(), errors::Error> {
+    transformed_custom_widget()?
+    choice_model_journey()?
+    Ok(())
+}

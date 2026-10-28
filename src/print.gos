@@ -1,0 +1,249 @@
+// Printing: documents of headings, paragraphs, images, drawings and rich
+// documents laid out on pages; previews; PDF export; and the system's
+// printers. A preview, a PDF and a printed copy come from the same pages.
+// Exports and print jobs run in the background and answer with
+// `UiMsg::Print(job, event)`.
+
+use std::errors
+use std::encoding::json
+
+use crate::render::display::DrawOp
+
+/// A sheet size in points (1/72 inch), portrait.
+#[derive(PartialEq)]
+pub enum Paper {
+    A3
+    A4
+    A5
+    Letter
+    Legal
+    Tabloid
+    Custom { width: f64, height: f64 }
+}
+
+/// Space left blank around the printed area, in points.
+#[derive(PartialEq)]
+pub struct Margins {
+    pub top: f64
+    pub right: f64
+    pub bottom: f64
+    pub left: f64
+}
+
+/// How pages are laid out.
+pub struct PageSetup {
+    pub paper: Paper
+    pub landscape: bool
+    pub margins: Margins
+    /// The body text size in points; headings and code scale from it.
+    pub font_size: f64
+    /// Text centered in the top margin; `{page}` and `{pages}` number it.
+    pub header: String
+    /// Text centered in the bottom margin.
+    pub footer: String
+}
+
+impl Default for PageSetup {
+    fn default() -> PageSetup {
+        PageSetup {
+            paper: Paper::A4
+            landscape: false
+            margins: Margins { top: 54.0, right: 54.0, bottom: 54.0, left: 54.0 }
+            font_size: 11.0
+            header: ""
+            footer: "Page {page} of {pages}"
+        }
+    }
+}
+
+/// One piece of a printable document, laid out top to bottom.
+pub enum Item {
+    Heading { text: String, level: i64 }
+    Paragraph { text: String }
+    /// Monospace text whose lines are kept as written.
+    Code { text: String }
+    Quote { text: String }
+    ListItem { text: String, marker: String, depth: i64 }
+    /// A PNG file at `width` points wide (0 fits its natural size).
+    Image { path: String, width: f64, alt: String }
+    Pixels { rgba: Vec<u8>, width: i64, height: i64, alt: String }
+    /// Drawing operations in a `width` x `height` box, scaled to the page.
+    Drawing { ops: Vec<DrawOp>, width: f64, height: f64 }
+    /// A rich document's content.
+    Rich(i64)
+    Rule
+    Spacer(f64)
+    PageBreak
+}
+
+/// How a document prints.
+pub struct PrintOptions {
+    /// The printer; empty names the system default.
+    pub destination: String
+    /// The CUPS server; empty uses the system's.
+    pub server: String
+    pub copies: i64
+    /// Page ranges such as `1-3,5`; empty prints every page.
+    pub pages: String
+    pub title: String
+}
+
+impl Default for PrintOptions {
+    fn default() -> PrintOptions {
+        PrintOptions { destination: "", server: "", copies: 1, pages: "", title: "Document" }
+    }
+}
+
+/// Where a job's pages go.
+pub enum Target {
+    Pdf(String)
+    Printer(PrintOptions)
+}
+
+/// What a print or export job reports.
+#[derive(PartialEq)]
+pub enum Event {
+    /// The document was laid out on this many pages.
+    Paginated(i64)
+    Exported { path: String, bytes: i64 }
+    /// The printer's spooler accepted the job under this id.
+    Submitted { job: String, pages: i64 }
+    Failed(String)
+    Cancelled
+}
+
+/// A printer the system offers.
+#[derive(PartialEq)]
+pub struct Destination {
+    pub name: String
+    pub default: bool
+}
+
+/// A print or export running in the background.
+#[derive(Default, PartialEq, Eq)]
+pub struct Job {
+    pub id: i64
+}
+
+/// The widget showing one page of a print document.
+pub struct PagePreview {
+    pub id: String
+    pub document: i64
+    /// The page shown, from 1.
+    pub page: i64
+    /// Pixels per point at the window's scale of 1.
+    pub scale: f64
+}
+
+/// What a job prints.
+enum Source {
+    Items(Vec<Item>, PageSetup)
+    Document(i64)
+}
+
+enum Answer {
+    Id(i64)
+    Pages(i64)
+    Text(String)
+    Destinations(Vec<Destination>)
+    Done
+}
+
+fn call(method: String, args: String) -> Result<Answer, errors::Error> {
+    let answer = gui_engine::printing(method, args).map_err(|why| errors::new(why))?
+    json::decode::<Answer>(answer)
+}
+
+fn started(answer: Answer) -> Result<Job, errors::Error> {
+    match answer {
+        Answer::Id(id) => Ok(Job { id: id })
+        _ => Err(errors::new("invalid print answer"))
+    }
+}
+
+fn pages_of(answer: Answer) -> Result<i64, errors::Error> {
+    match answer {
+        Answer::Pages(n) => Ok(n)
+        _ => Err(errors::new("invalid print answer"))
+    }
+}
+
+/// A document laid out on pages, kept native for previewing, exporting and
+/// printing. It closes with its session.
+#[derive(Default, PartialEq, Eq)]
+pub struct PrintDocument {
+    pub id: i64
+}
+
+impl PrintDocument {
+    /// Lays `items` out with `setup`.
+    pub fn open(items: Vec<Item>, setup: PageSetup) -> Result<PrintDocument, errors::Error> {
+        match call("open", json::encode((items, setup)))? {
+            Answer::Id(id) => Ok(PrintDocument { id: id })
+            _ => Err(errors::new("invalid print answer"))
+        }
+    }
+
+    /// Lays the document out again with `setup`, answering its page count.
+    pub fn set_setup(&self, setup: PageSetup) -> Result<i64, errors::Error> {
+        pages_of(call("setup", json::encode((self.id, setup)))?)
+    }
+
+    pub fn page_count(&self) -> Result<i64, errors::Error> {
+        pages_of(call("count", json::encode(self.id))?)
+    }
+
+    /// The text page `page` (from 1) shows, line by line.
+    pub fn page_text(&self, page: i64) -> Result<String, errors::Error> {
+        match call("text", json::encode((self.id, page)))? {
+            Answer::Text(text) => Ok(text)
+            _ => Err(errors::new("invalid print answer"))
+        }
+    }
+
+    /// The widget showing page `page` at `scale` pixels per point.
+    pub fn preview(&self, id: String, page: i64, scale: f64 = 1.0) -> crate::Widget {
+        crate::Widget::PagePreview(PagePreview { id: id, document: self.id, page: page, scale: scale })
+    }
+
+    /// Starts writing the pages to a PDF at `path` in the background.
+    pub fn export_pdf(&self, title: String, path: String) -> Result<Job, errors::Error> {
+        started(call("start", json::encode((Source::Document(self.id), title, Target::Pdf(path))))?)
+    }
+
+    /// Starts sending the pages to a printer in the background.
+    pub fn print_document(&self, options: PrintOptions) -> Result<Job, errors::Error> {
+        let title = options.title
+        started(call("start", json::encode((Source::Document(self.id), title, Target::Printer(options))))?)
+    }
+
+    pub fn close(&self) {
+        let _ = call("close", json::encode(self.id))
+    }
+}
+
+/// Starts laying out `items` and writing them to a PDF at `path` in the
+/// background, for documents not kept open.
+pub fn export_pdf(items: Vec<Item>, setup: PageSetup, title: String, path: String) -> Result<Job, errors::Error> {
+    started(call("start", json::encode((Source::Items(items, setup), title, Target::Pdf(path))))?)
+}
+
+impl Job {
+    /// Stops the job; a document the spooler already holds is withdrawn.
+    pub fn cancel(&self) -> Result<(), errors::Error> {
+        call("cancel", json::encode(self.id)).map(|_| ())
+    }
+}
+
+/// Withdraws a job a printer's spooler accepted earlier.
+pub fn withdraw(server: String, spooled: String) -> Result<(), errors::Error> {
+    call("withdraw", json::encode((server, spooled))).map(|_| ())
+}
+
+/// The printers `server` offers; "" asks the system's.
+pub fn destinations(server: String = "") -> Result<Vec<Destination>, errors::Error> {
+    match call("destinations", json::encode(server))? {
+        Answer::Destinations(list) => Ok(list)
+        _ => Err(errors::new("invalid print answer"))
+    }
+}

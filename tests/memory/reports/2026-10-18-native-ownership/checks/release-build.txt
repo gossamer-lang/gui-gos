@@ -1,0 +1,10 @@
+   Compiling gossamer-runtime v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-runtime)
+   Compiling gossamer-cli v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-cli)
+   Compiling gossamer-codegen-cranelift v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-codegen-cranelift)
+   Compiling gossamer-sched v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-sched)
+   Compiling gossamer-std v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-std)
+   Compiling gossamer-driver v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-driver)
+   Compiling gossamer-interp v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-interp)
+   Compiling gossamer-lsp v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-lsp)
+   Compiling gossamer-mcp v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-mcp)
+    Finished `release` profile [optimized] target(s) in 4m 58s

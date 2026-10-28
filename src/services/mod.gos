@@ -1,0 +1,311 @@
+// services: desktop services behind toolkit-level calls: per-application
+// storage directories, versioned settings with atomic writes, window
+// placement memory, system appearance, and opening URLs or revealing
+// files. Each call reports failure as a value; none blocks the UI thread
+// on anything slower than a local file.
+
+use gui_engine
+use std::{env, errors, fs, path, process}
+use std::encoding::json
+use windowing
+
+/// The directory an application keeps its settings in, created on demand:
+/// `$XDG_CONFIG_HOME/<app>` (default `~/.config/<app>`) on Linux,
+/// `~/Library/Application Support/<app>` on macOS, `%APPDATA%\<app>` on
+/// Windows.
+pub fn config_dir(app_id: String) -> String {
+    let base = if CONFIG_ROOT.is_empty() { config_base() } else { CONFIG_ROOT }
+    path::join(base, sanitize(app_id))
+}
+
+// Replaces the platform default when set.
+static mut CONFIG_ROOT: String = ""
+
+/// Keeps every application's settings and caches under `root` instead of the
+/// platform defaults, for tests and portable installs; "" restores them.
+pub fn set_config_root(root: String) {
+    CONFIG_ROOT = root
+    gui_engine::set_config_root(root)
+}
+
+/// Points this test process's settings at a new empty directory, so a test
+/// neither reads nor writes the user's configuration; answers the directory.
+#[cfg(test)]
+pub fn private_test_config() -> String {
+    let root = path::join(env::temp_dir(), f"gui-gos-test-config-{process::id()}")
+    let _ = fs::remove_dir_all(root)
+    set_config_root(root)
+    root
+}
+
+/// Removes a directory made by `private_test_config`.
+#[cfg(test)]
+pub fn remove_test_config(root: String) {
+    set_config_root("")
+    let _ = fs::remove_dir_all(root)
+}
+
+#[cfg(target_os = "linux")]
+fn config_base() -> String {
+    let xdg = env::var("XDG_CONFIG_HOME").unwrap_or("")
+    if !xdg.is_empty() { return xdg }
+    path::join(env::home_dir().unwrap_or("/tmp"), ".config")
+}
+
+#[cfg(target_os = "macos")]
+fn config_base() -> String {
+    path::join(env::home_dir().unwrap_or("/tmp"), "Library/Application Support")
+}
+
+#[cfg(target_os = "windows")]
+fn config_base() -> String {
+    let appdata = env::var("APPDATA").unwrap_or("")
+    if !appdata.is_empty() { return appdata }
+    env::home_dir().unwrap_or("C:\\")
+}
+
+/// The directory an application keeps rebuildable data in, which callers
+/// create: `$XDG_CACHE_HOME/<app>` (default `~/.cache/<app>`) on Linux,
+/// `~/Library/Caches/<app>` on macOS, `%LOCALAPPDATA%\<app>` on Windows; under
+/// `<root>/cache` when `set_config_root` gave a root.
+pub fn cache_dir(app_id: String) -> String {
+    let base = if CONFIG_ROOT.is_empty() { cache_base() } else { path::join(CONFIG_ROOT, "cache") }
+    path::join(base, sanitize(app_id))
+}
+
+#[cfg(target_os = "linux")]
+fn cache_base() -> String {
+    let xdg = env::var("XDG_CACHE_HOME").unwrap_or("")
+    if !xdg.is_empty() { return xdg }
+    path::join(env::home_dir().unwrap_or("/tmp"), ".cache")
+}
+
+#[cfg(target_os = "macos")]
+fn cache_base() -> String {
+    path::join(env::home_dir().unwrap_or("/tmp"), "Library/Caches")
+}
+
+#[cfg(target_os = "windows")]
+fn cache_base() -> String {
+    let local = env::var("LOCALAPPDATA").unwrap_or("")
+    if !local.is_empty() { return local }
+    config_base()
+}
+
+// App ids become one directory name.
+fn sanitize(app_id: String) -> String {
+    let mut out = String::new()
+    for c in app_id {
+        if c.is_alphanumeric() || c == '.' || c == '-' || c == '_' { out.push(c) } else { out.push('_') }
+    }
+    if out.is_empty() { "gui-gos-app" } else { out }
+}
+
+/// Writes `bytes` to `file` atomically: a sibling temporary file is
+/// written and synced, then renamed over the destination, so a crash
+/// leaves either the old or the new contents.
+pub fn write_atomic(file: String, bytes: Vec<u8>) -> Result<(), errors::Error> {
+    let dir = match path::parent(file) {
+        Some(d) => d
+        None => String::new()
+    }
+    if !dir.is_empty() {
+        fs::create_dir_all(dir)?
+    }
+    let tmp = f"{file}.tmp-{process::id()}"
+    if let Err(e) = stage(tmp, bytes) {
+        let _ = fs::remove_file(tmp)
+        return Err(errors::wrap(e, f"writing {tmp}"))
+    }
+    if let Err(e) = fs::rename(tmp, file) {
+        let _ = fs::remove_file(tmp)
+        return Err(errors::wrap(e, f"replacing {file}"))
+    }
+    fs::sync_dir(if dir.is_empty() { "." } else { dir }).map_err(|e| errors::wrap(e, f"syncing the directory of {file}"))
+}
+
+// Writes all of `bytes` to a new `file` and flushes it to storage.
+fn stage(file: String, bytes: Vec<u8>) -> Result<(), errors::Error> {
+    let f = fs::create(file)?
+    defer f.close()
+    let mut at = 0
+    while at < bytes.len() {
+        let n = f.write_bytes(bytes[at..bytes.len()])?
+        if n <= 0 {
+            return Err(errors::new("the file accepted no more bytes"))
+        }
+        at += n
+    }
+    f.sync_all()
+}
+
+/// A versioned settings document: a schema version and string values.
+/// Loading migrates older versions through `migrate`; an unreadable file
+/// is reported, never silently replaced.
+#[derive(PartialEq)]
+pub struct Settings {
+    pub version: i64
+    pub values: Map<String, String>
+}
+
+impl Default for Settings {
+    fn default() -> Settings {
+        Settings {
+            version: 0
+            values: Map::new()
+        }
+    }
+}
+
+impl Settings {
+    pub fn get(&self, key: String, default: String) -> String {
+        match self.values.get(key) {
+            Some(v) => v
+            None => default
+        }
+    }
+
+    pub fn set(&mut self, key: String, value: String) {
+        self.values[key] = value
+    }
+
+    pub fn remove(&mut self, key: String) {
+        let _ = self.values.remove(key)
+    }
+
+    pub fn get_list(&self, key: String) -> Vec<String> {
+        match self.values.get(key) {
+            Some(text) => match json::decode::<StringList>(text) {
+                Ok(v) => v.items
+                Err(_) => #[]
+            }
+            None => #[]
+        }
+    }
+
+    pub fn set_list(&mut self, key: String, items: Vec<String>) {
+        self.values[key] = json::encode(StringList { items: items })
+    }
+}
+
+/// A list value stored inside one setting.
+#[derive(PartialEq)]
+pub struct StringList {
+    pub items: Vec<String>
+}
+
+impl Default for StringList {
+    fn default() -> StringList {
+        StringList {
+            items: #[]
+        }
+    }
+}
+
+/// Where `name` settings live for `app_id`.
+pub fn settings_path(app_id: String, name: String) -> String {
+    path::join(config_dir(app_id), f"{name}.json")
+}
+
+/// Loads settings; a missing file answers empty settings at `version`.
+/// Older files pass through `migrate(old_version, settings)`.
+pub fn load_settings(file: String, version: i64, migrate: Fn(i64, Settings) -> Settings) -> Result<Settings, errors::Error> {
+    let text = match fs::read_to_string(file) {
+        Ok(t) => t
+        Err(_) => return Ok(Settings { version: version, values: Map::new() })
+    }
+    let parsed = json::decode::<Settings>(text).map_err(|e| errors::wrap(e, f"reading settings {file}"))?
+    if parsed.version > version {
+        return Err(errors::new(f"settings {file} were written by a newer version ({parsed.version} > {version})"))
+    }
+    if parsed.version < version {
+        let mut migrated = migrate(parsed.version, parsed)
+        migrated.version = version
+        return Ok(migrated)
+    }
+    Ok(parsed)
+}
+
+pub fn save_settings(file: String, settings: Settings) -> Result<(), errors::Error> {
+    write_atomic(file, json::encode(settings).bytes())
+}
+
+/// The placement to restore a window to: position in native logical units,
+/// size in interface units (pixels at scale 1).
+#[derive(PartialEq, Eq)]
+pub struct WindowPlacement {
+    pub x: i64
+    pub y: i64
+    pub width: i64
+    pub height: i64
+    pub maximized: bool
+}
+
+impl Default for WindowPlacement {
+    fn default() -> WindowPlacement {
+        WindowPlacement {
+            x: 0
+            y: 0
+            width: 0
+            height: 0
+            maximized: false
+        }
+    }
+}
+
+/// The placement saved for one window of `app_id`, if any.
+pub fn load_window_placement(app_id: String, window: String) -> Option<WindowPlacement> {
+    let file = path::join(config_dir(app_id), f"window-{sanitize(window)}.json")
+    let text = fs::read_to_string(file).ok()?
+    let p = json::decode::<WindowPlacement>(text).ok()?
+    if p.width <= 0 || p.height <= 0 {
+        return None
+    }
+    Some(p)
+}
+
+pub fn save_window_placement(app_id: String, window: String, placement: WindowPlacement) -> Result<(), errors::Error> {
+    let file = path::join(config_dir(app_id), f"window-{sanitize(window)}.json")
+    write_atomic(file, json::encode(placement).bytes())
+}
+
+/// The desktop's contrast, motion, accent and text-size preferences; each is
+/// `None` where the platform does not say.
+pub fn system_preferences() -> windowing::system::Preferences {
+    windowing::system::preferences()
+}
+
+/// The desktop's light/dark preference, when it states one.
+pub fn system_prefers_dark() -> Option<bool> {
+    match windowing::system::theme() {
+        windowing::system::Theme::Dark => Some(true)
+        windowing::system::Theme::Light => Some(false)
+        _ => None
+    }
+}
+
+/// Opens `url` in the user's default handler. Only http, https, mailto,
+/// and file URLs are passed on; anything else is refused, so text typed
+/// by a user can never become a command.
+pub fn open_url(url: String) -> Result<(), errors::Error> {
+    let lower = url.to_lowercase()
+    if !(lower.starts_with("http://") || lower.starts_with("https://") || lower.starts_with("mailto:") || lower.starts_with("file://")) {
+        return Err(errors::new(f"refusing to open {url}: only http, https, mailto, and file URLs are opened"))
+    }
+    windowing::system::open_url(url)
+}
+
+/// Shows `file` in the platform file manager.
+pub fn reveal(file: String) -> Result<(), errors::Error> {
+    windowing::system::reveal(file)
+}
+
+/// The user's preferred locales, most preferred first (`en-US` style).
+pub fn locales() -> Vec<String> {
+    match windowing::system::locales() {
+        Ok(list) => list.map(|l| match l.country { Some(c) => f"{l.language}-{c}", None => l.language })
+        Err(_) => #["en-US"]
+    }
+}
+
+pub mod work

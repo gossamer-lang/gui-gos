@@ -1,0 +1,1 @@
+build: 11831456B native executable at ./target/release/gui-code-editor (target x86_64-unknown-linux-gnu)

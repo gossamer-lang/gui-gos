@@ -1,0 +1,5 @@
+name = "Rich Editor"
+app_id = "dev.gossamer.gui-rich-editor"
+comment = "Edit structured documents and preview Markdown or HTML"
+categories = "Office;WordProcessor;"
+icon = false

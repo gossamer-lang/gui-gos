@@ -1,0 +1,189 @@
+// Headless screenshot tests: each scene renders offscreen at scale 1 with the
+// bundled fonts only, and its pixels must equal the golden PNG exactly.
+// `GUI_SCREENSHOT_UPDATE=1` writes the goldens instead; a mismatch writes the
+// actual image beside the report and fails.
+//
+//     gos run . [golden-dir] [report-dir]
+
+use std::{env, errors, fs, path}
+use std::encoding::base64
+use std::image
+
+use gui
+use gui::{Effect, UiMsg, Widget}
+use gui::style::ThemeKind
+use gui::widgets::menus
+use windowing
+
+// One scene: its name, theme, direction, view, and what to do before the capture.
+struct Scene {
+    name: String
+    theme: ThemeKind
+    rtl: bool
+    width: i64
+    height: i64
+    view: Fn(i64) -> Widget
+    prepare: Prepare
+}
+
+// What a scene does to its session before the capture.
+#[derive(PartialEq, Eq)]
+enum Prepare {
+    Nothing
+    SelectAll
+    OpenMenu
+    OpenDialog
+}
+
+fn prepare(kind: Prepare, s: &mut gui::Session) -> Result<(), errors::Error> {
+    match kind {
+        Prepare::Nothing => Ok(())
+        Prepare::SelectAll => select_all(s)
+        Prepare::OpenMenu => open_menu(s)
+        Prepare::OpenDialog => open_dialog(s)
+    }
+}
+
+fn controls(_m: i64) -> Widget {
+    let choices = #[gui::CompletionItem::new("s", "Small"), gui::CompletionItem::new("m", "Medium")]
+    Widget::column(#[
+        Widget::title("Controls")
+        Widget::row(#[Widget::button("plain", "Button"), Widget::primary_button("primary", "Primary"), Widget::danger_button("danger", "Delete"), Widget::button("off", "Disabled").disabled(true)], 8)
+        Widget::row(#[Widget::checkbox("on", "Checked", true), Widget::checkbox("no", "Unchecked", false), Widget::switch("sw", "Switch", true)], 12)
+        Widget::text_field("field", "Text field", "Placeholder")
+        Widget::select("size", choices, "m", "Size")
+        Widget::slider("level", 0.6, 0.0, 1.0, 0.1)
+        gui::widgets::feedback::progress("progress", 0.35)
+    ], 10).padding(12)
+}
+
+fn text(_m: i64) -> Widget {
+    Widget::column(#[
+        Widget::heading("Text")
+        Widget::paragraph("Wrapped text flows onto the next line when the width runs out, keeping words whole.")
+        Widget::label("Combining: e\u{301} a\u{308} n\u{303}")
+        Widget::label("Greek \u{3A9}\u{3BC}\u{3AD}\u{3B3}\u{3B1}, Cyrillic \u{416}\u{443}\u{43A}")
+        Widget::label("Mixed direction: abc \u{5D0}\u{5D1}\u{5D2} 123")
+        Widget::text("let mono = \"monospace\" // code", gui::TextRole::Mono, gui::Tone::Normal)
+        Widget::muted("Muted secondary text")
+    ], 8).padding(12)
+}
+
+fn selected(_m: i64) -> Widget {
+    Widget::column(#[Widget::text_field("field", "select this text", ""), Widget::text_area("area", "first line\nsecond line\nthird", 3)], 8).padding(12)
+}
+
+fn select_all(s: &mut gui::Session) -> Result<(), errors::Error> {
+    let _ = s.focus("field")?
+    let mut primary = windowing::Mods::default()
+    primary.ctrl = true
+    s.press(windowing::Key::A, primary)
+}
+
+fn menu(_m: i64) -> Widget {
+    Widget::column(#[Widget::menu_bar("menu", #[menus::Menu::new("&File", #[menus::item("gui.command-palette"), menus::MenuItem::Separator, menus::item("gui.quit")]), menus::Menu::new("&View", #[menus::item("gui.toggle-theme")])]), Widget::label("Content")], 0)
+}
+
+fn open_menu(s: &mut gui::Session) -> Result<(), errors::Error> {
+    s.press(windowing::Key::F10, windowing::Mods::default())?
+    s.press(windowing::Key::Down, windowing::Mods::default())
+}
+
+fn dialog(_m: i64) -> Widget {
+    Widget::column(#[Widget::label("Behind the dialog")], 0).padding(12)
+}
+
+fn open_dialog(s: &mut gui::Session) -> Result<(), errors::Error> {
+    gui::perform(Effect::OpenDialog(gui::dialogs::request::confirm("ask", "Replace file?", "A file with this name already exists.", "Replace", true)))
+    s.flush()
+}
+
+fn table(_m: i64) -> Widget {
+    let columns = #[gui::widgets::collections::Column::new("name", "Name", 140), gui::widgets::collections::Column::new("size", "Size", 80)]
+    let list = gui::widgets::collections::Collection::new("files", 1000, |i| {
+        let mut r = gui::widgets::collections::Row::new(f"r{i}", f"File {i}")
+        r.cells = #[r.label, f"{i * 3} KB"]
+        r
+    })
+    Widget::collection(list.selected(#["r1"]).columns(columns).sorted_by("name", true).label("Files").rows(5)).padding(8)
+}
+
+fn scenes() -> Vec<Scene> {
+    #[
+        Scene { name: "controls-light", theme: ThemeKind::Light, rtl: false, width: 480, height: 320, view: controls, prepare: Prepare::Nothing }
+        Scene { name: "controls-dark", theme: ThemeKind::Dark, rtl: false, width: 480, height: 320, view: controls, prepare: Prepare::Nothing }
+        Scene { name: "controls-rtl", theme: ThemeKind::Light, rtl: true, width: 480, height: 320, view: controls, prepare: Prepare::Nothing }
+        Scene { name: "controls-high-contrast", theme: ThemeKind::HighContrastLight, rtl: false, width: 480, height: 320, view: controls, prepare: Prepare::Nothing }
+        Scene { name: "text", theme: ThemeKind::Light, rtl: false, width: 400, height: 270, view: text, prepare: Prepare::Nothing }
+        Scene { name: "selection", theme: ThemeKind::Light, rtl: false, width: 320, height: 200, view: selected, prepare: Prepare::SelectAll }
+        Scene { name: "menu", theme: ThemeKind::Light, rtl: false, width: 480, height: 200, view: menu, prepare: Prepare::OpenMenu }
+        Scene { name: "dialog", theme: ThemeKind::Light, rtl: false, width: 480, height: 300, view: dialog, prepare: Prepare::OpenDialog }
+        Scene { name: "table", theme: ThemeKind::Light, rtl: false, width: 320, height: 220, view: table, prepare: Prepare::Nothing }
+    ]
+}
+
+fn pixels_of_png(file: String) -> Result<(i64, i64, Vec<u8>), errors::Error> {
+    let bytes = fs::read(file)?
+    let img = image::decode_base64(base64::encode(bytes))
+    if img == 0 { return Err(errors::new(f"{file} is not a PNG")) }
+    defer { let _ = image::release(img) }
+    Ok((image::width(img), image::height(img), image::to_rgba_bytes(img)))
+}
+
+// Renders `scene` into the PNG file `file`.
+fn render(scene: Scene, file: String) -> Result<(), errors::Error> {
+    let mut s = gui::application(scene.name, f"dev.gossamer.gui-screenshot-{scene.name}", || 0, |m: i64, _msg: UiMsg| m, scene.view).size(scene.width, scene.height).start()?
+    // Goldens are drawn at 100% text with motion allowed, whatever the desktop prefers.
+    gui::perform(Effect::SetTheme(scene.theme))
+    gui::perform(Effect::SetTextScale(1.0))
+    gui::perform(Effect::SetReducedMotion(false))
+    gui::perform(Effect::SetRtl(scene.rtl))
+    s.flush()?
+    prepare(scene.prepare, &mut s)?
+    s.screenshot(file)?
+    s.shutdown()
+    Ok(())
+}
+
+fn main() -> Result<(), errors::Error> {
+    gui::text::fonts::use_system_fonts(false)
+    let args = env::args()
+    let golden = if args.len() > 0 { args[0] } else { "golden" }
+    let report = if args.len() > 1 { args[1] } else { env::temp_dir() }
+    let update = env::var("GUI_SCREENSHOT_UPDATE").unwrap_or("") == "1"
+    let config = path::join(report, "screenshot-config")
+    gui::services::set_config_root(config)
+    let mut failures = 0
+    for scene in scenes() {
+        let file = path::join(golden, f"{scene.name}.png")
+        if update {
+            render(scene, file)?
+            println(f"{scene.name}: written")
+            continue
+        }
+        let actual = path::join(report, f"{scene.name}-actual.png")
+        render(scene, actual)?
+        let width, height, pixels = pixels_of_png(actual)?
+        let w, h, expected = pixels_of_png(file)?
+        if w != width || h != height {
+            println(f"{scene.name}: size {width}x{height}, golden {w}x{h}")
+            failures += 1
+            continue
+        }
+        let mut differing = 0
+        let mut i = 0
+        while i < expected.len() {
+            if expected[i] != pixels[i] || expected[i + 1] != pixels[i + 1] || expected[i + 2] != pixels[i + 2] { differing += 1 }
+            i += 4
+        }
+        if differing == 0 {
+            let _ = fs::remove_file(actual)
+            println(f"{scene.name}: matches")
+        } else {
+            println(f"{scene.name}: {differing} pixels differ (actual: {actual})")
+            failures += 1
+        }
+    }
+    let _ = fs::remove_dir_all(config)
+    if failures > 0 { Err(errors::new(f"{failures} screenshots differ")) } else { Ok(()) }
+}

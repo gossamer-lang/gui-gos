@@ -1,0 +1,439 @@
+// Build a fresh native artifact and package its actual output and requirements.
+// Usage: tools/package.sh APP_DIR [OUT]
+use std::{env, errors, fs, os, path, process}
+use std::archive::zip
+use std::crypto::sha256
+use std::encoding::{json, toml}
+use std::process::{Command, Stdio}
+
+const LICENSES: [String; 4] = ["dejavu-fonts.txt", "ibm-plex-mono.txt", "sdl3-zlib.txt", "pulldown-cmark.txt"]
+const PNG_SIGNATURE: [u8; 8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
+
+struct LinuxPackages {
+    ubuntu: Vec<String>
+    debian: Vec<String>
+    fedora: Vec<String>
+}
+
+struct Runtime {
+    modules: Vec<String>
+    linux: LinuxPackages
+}
+
+/// The runtime manifest a package carries in its notices directory.
+struct Metadata {
+    schema: i64
+    name: String
+    app_id: String
+    version: String
+    executable: String
+    platform: String
+    architecture: String
+    binary_sha256: String
+    runtime: Runtime
+    gossamer: String
+    project_sha256: String
+    linked_libraries: Option<Vec<String>>
+}
+
+#[cfg(target_os = "linux")]
+fn target() -> String { "linux" }
+
+#[cfg(target_os = "macos")]
+fn target() -> String { "macos" }
+
+#[cfg(windows)]
+fn target() -> String { "windows" }
+
+fn fail(message: String) -> errors::Error { errors::new(f"package: {message}") }
+
+/// A name that is safe as a file name and a shell word.
+fn safe(value: String) -> bool {
+    let mut first = true
+    for c in value {
+        let ok = c.is_ascii_alphanumeric() || (!first && (c == '.' || c == '_' || c == '-'))
+        if !ok {
+            return false
+        }
+        first = false
+    }
+    !first
+}
+
+fn has_control(value: String) -> bool { value.chars().any(|c| (c as i64) < 32) }
+
+fn toml_value(file: String) -> Result<json::Value, errors::Error> {
+    Ok(json::parse(toml::to_json(fs::read_to_string(file)?)?)?)
+}
+
+fn field(value: json::Value, key: String) -> Option<json::Value> { json::get(value, key) }
+
+fn text(value: json::Value, key: String) -> String {
+    field(value, key).and_then(|v| json::as_str(v)).unwrap_or("")
+}
+
+fn digest(file: String) -> Result<String, errors::Error> { Ok(sha256::hex(fs::read(file)?)) }
+
+fn absolute(p: String) -> Result<String, errors::Error> {
+    if path::is_absolute(p) {
+        return Ok(path::normalize(p))
+    }
+    Ok(path::normalize(path::join(env::current_dir()?, p)))
+}
+
+fn which(tool: String) -> bool {
+    let separator = if os::family() == "windows" { ";" } else { ":" }
+    env::var("PATH").unwrap_or("").split(separator).any(|dir| !dir.is_empty() && fs::is_file(path::join(dir, tool)))
+}
+
+/// Runs `command` to completion, failing with `what` unless it exits 0.
+fn require(command: Command, what: String) -> Result<(), errors::Error> {
+    let code = command.status()?
+    if code != 0 {
+        return Err(fail(f"{what} exited with status {code}"))
+    }
+    Ok(())
+}
+
+/// Follows declared local dependencies, including optional native modules.
+fn visit(directory: String, visited: &mut Vec<String>, modules: &mut Vec<String>) -> Result<(), errors::Error> {
+    let directory = fs::canonicalize(directory)?
+    if visited.contains(directory) {
+        return Ok(())
+    }
+    visited.push(directory)
+    let manifest = toml_value(path::join(directory, "project.toml"))?
+    let identity = field(manifest, "project").map(|p| text(p, "id")).unwrap_or("")
+    if identity.ends_with("/gui-webview") && !modules.contains("webview") {
+        modules.push("webview")
+    }
+    if let Some(dependencies) = field(manifest, "dependencies") {
+        for key in json::keys(dependencies).unwrap_or(#[]) {
+            let relative = field(dependencies, key).and_then(|d| field(d, "path")).and_then(|v| json::as_str(v))
+            if let Some(relative) = relative {
+                visit(path::join(directory, relative), visited, modules)?
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The distribution packages each optional runtime module needs, as
+/// (module, Ubuntu and Debian packages, Fedora packages).
+const MODULE_PACKAGES: [(String, [String; 2], [String; 2]); 2] = [
+    ("webview", ["libwebkit2gtk-4.1-0", "libgtk-3-0"], ["webkit2gtk4.1", "gtk3"])
+    ("media", ["gstreamer1.0-plugins-base", "gstreamer1.0-plugins-good"], ["gstreamer1-plugins-base", "gstreamer1-plugins-good"])
+]
+
+/// The modules the application reaches through its dependencies, plus the
+/// ones `packaging.toml` declares with `runtime = [..]` because the toolkit
+/// loads them at run time.
+fn runtime_requirements(app: String, declared: Vec<String>) -> Result<Runtime, errors::Error> {
+    let mut visited = #[]
+    let mut modules = #[]
+    visit(app, &mut visited, &mut modules)?
+    for module in declared {
+        if !MODULE_PACKAGES.iter().any(|(name, _, _)| name == module) {
+            return Err(fail(f"unknown runtime module {module:?} in packaging.toml"))
+        }
+        if !modules.contains(module) {
+            modules.push(module)
+        }
+    }
+    modules.sort()
+    let mut debian_family = #["libx11-6", "libwayland-client0"]
+    let mut fedora = #["libX11", "libwayland-client"]
+    for (name, debs, rpms) in MODULE_PACKAGES {
+        if modules.contains(name) {
+            debian_family.extend(debs.to_vec())
+            fedora.extend(rpms.to_vec())
+        }
+    }
+    Ok(Runtime {
+        modules: modules
+        linux: LinuxPackages { ubuntu: debian_family, debian: debian_family, fedora: fedora }
+    })
+}
+
+fn write_text(file: String, contents: String) -> Result<(), errors::Error> {
+    fs::write(file, contents.bytes())?
+    Ok(())
+}
+
+fn xml(value: String) -> String { value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;") }
+
+/// The bundle's Info.plist, keys sorted as Apple's tools write them.
+fn info_plist(entries: Vec<(String, String)>, high_resolution: bool) -> String {
+    let mut rows = entries
+    rows.sort()
+    let mut out = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+    out += "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n"
+    out += "<plist version=\"1.0\">\n<dict>\n"
+    for (key, value) in rows {
+        out += f"\t<key>{xml(key)}</key>\n\t<string>{xml(value)}</string>\n"
+        if key == "LSMinimumSystemVersion" && high_resolution {
+            out += "\t<key>NSHighResolutionCapable</key>\n\t<true/>\n"
+        }
+    }
+    out += "</dict>\n</plist>\n"
+    out
+}
+
+fn collect_files(dir: String, files: &mut Vec<String>) -> Result<(), errors::Error> {
+    for entry in fs::read_dir(dir)? {
+        if entry.is_dir {
+            collect_files(entry.path, files)?
+        } else if entry.is_file {
+            files.push(entry.path)
+        }
+    }
+    Ok(())
+}
+
+fn build_package() -> Result<(), errors::Error> {
+    let args = env::args()
+    if args.len() != 1 && args.len() != 2 {
+        return Err(fail("usage: tools/package.sh APP_DIR [OUT]"))
+    }
+    let gui = path::parent(path::parent(fs::canonicalize(env::program_name())?).unwrap_or("")).unwrap_or("")
+    let app = fs::canonicalize(args[0])?
+    let out = absolute(if args.len() == 2 { args[1] } else { "dist" })?
+    let packaging = toml_value(path::join(app, "packaging.toml"))?
+    let Some(project) = field(toml_value(path::join(app, "project.toml"))?, "project") else {
+        return Err(fail("project.toml has no [project] table"))
+    }
+    let name = text(packaging, "name")
+    let app_id = text(packaging, "app_id")
+    let version = text(project, "version")
+    let id = text(project, "id")
+    let exe = id.split("/").last().unwrap_or(id)
+    for (label, value) in #[("name", name), ("app_id", app_id), ("version", version), ("exe", exe)] {
+        if value.is_empty() || has_control(value) {
+            return Err(fail(f"invalid {label}"))
+        }
+    }
+    for value in #[app_id, version, exe] {
+        if !safe(value) {
+            return Err(fail(f"invalid package identifier: {value:?}"))
+        }
+    }
+    if name.contains("/") || name.contains("\\") || name == "." || name == ".." {
+        return Err(fail("package display name contains a path separator"))
+    }
+    let platform = target()
+    let arch = if os::arch() == "arm64" { "aarch64" } else { os::arch() }
+    let gos = env::var("GOS").unwrap_or("gos")
+    fs::create_dir_all(out)?
+    let stage = fs::temp_dir("gui-package-")?
+    defer fs::remove_dir_all(stage)
+    let build = path::join(stage, "build")
+    // The build's own output goes to stderr, so stdout carries only the
+    // artifact's path.
+    let mut builder = Command::new(gos)
+        .args(#["build", "--release", ".", "--out-dir", build])
+        .dir(app)
+        .stdout(Stdio::Piped)
+        .spawn()?
+    while let Some(line) = builder.read_stdout_line()? {
+        eprintln(line)
+    }
+    let built = builder.wait()?
+    if built != 0 {
+        return Err(fail(f"gos build exited with status {built}"))
+    }
+    let binary_name = if platform == "windows" { exe + ".exe" } else { exe }
+    let binary = path::join(build, binary_name)
+    if !fs::is_file(binary) {
+        return Err(fail(f"fresh build did not produce {binary}"))
+    }
+    let icon = path::join(stage, "icon.png")
+    let wants_icon = field(packaging, "icon").and_then(|v| json::as_bool(v)).unwrap_or(true)
+    if wants_icon {
+        require(
+            Command::new(binary).env("GUI_EXPORT_ICON", icon).env("SDL_VIDEO_DRIVER", "offscreen").dir(stage).stdout(Stdio::Null)
+            "icon export"
+        )?
+        if !fs::is_file(icon) {
+            return Err(fail("application did not export its declared icon"))
+        }
+    }
+    let mut declared = #[]
+    if let Some(list) = field(packaging, "runtime").and_then(|v| json::as_array(v)) {
+        for entry in list {
+            let Some(module) = json::as_str(entry) else {
+                return Err(fail("packaging.toml runtime entries must be strings"))
+            }
+            declared.push(module)
+        }
+    }
+    let mut metadata = Metadata {
+        schema: 1
+        name: name
+        app_id: app_id
+        version: version
+        executable: exe
+        platform: platform
+        architecture: arch
+        binary_sha256: digest(binary)?
+        runtime: runtime_requirements(app, declared)?
+        gossamer: process::run(gos, #["--version"])?.stdout.trim()
+        project_sha256: digest(path::join(app, "project.toml"))?
+        linked_libraries: None
+    }
+    if platform == "linux" {
+        let linked = process::run("ldd", #[binary])?.stdout
+        if linked.contains("not found") {
+            return Err(fail(f"unresolved native dependencies:\n{linked}"))
+        }
+        metadata.linked_libraries = Some(linked.lines())
+    }
+    let base = f"{exe}-{version}-{platform}-{arch}"
+    let package_name = if platform == "macos" { name + ".app" } else { base }
+    let bundle = path::join(stage, package_name)
+    let bin_dir = if platform == "linux" {
+        path::join(bundle, "bin")
+    } else if platform == "macos" {
+        path::join(bundle, "Contents/MacOS")
+    } else {
+        bundle
+    }
+    let notices = if platform == "linux" {
+        path::join(bundle, f"share/doc/{exe}")
+    } else if platform == "macos" {
+        path::join(bundle, "Contents/Resources/notices")
+    } else {
+        path::join(bundle, "notices")
+    }
+    fs::create_dir_all(bin_dir)?
+    fs::create_dir_all(notices)?
+    let installed = path::join(bin_dir, binary_name)
+    fs::copy(binary, installed)?
+    if os::family() == "unix" {
+        fs::set_permissions(installed, 0o755)?
+    }
+    for license in LICENSES {
+        fs::copy(path::join(gui, f"licenses/{license}"), path::join(notices, license))?
+    }
+    fs::copy(path::join(path::parent(gui).unwrap_or(""), "windowing-gos/LICENSE"), path::join(notices, "apache-2.0.txt"))?
+    write_text(path::join(notices, "package.json"), json::encode_pretty(metadata) + "\n")?
+    write_text(
+        path::join(notices, "README.txt")
+        f"{name} {version}\nSDL 3.4.10 is built from sdl3-src and statically linked.\nDejaVu fonts are embedded. See accompanying licenses.\nNative optional-module/runtime requirements are recorded in package.json.\n"
+    )?
+    let has_icon = fs::is_file(icon)
+    let artifact = if platform == "linux" {
+        let desktop = path::join(bundle, f"share/applications/{app_id}.desktop")
+        fs::create_dir_all(path::parent(desktop).unwrap_or(""))?
+        let mut fields = #[("Type", "Application"), ("Name", name), ("Exec", exe)]
+        if has_icon {
+            fields.push(("Icon", app_id))
+        }
+        fields.push(("Terminal", "false"))
+        fields.push(("StartupWMClass", app_id))
+        for (key, label) in #[("comment", "Comment"), ("categories", "Categories")] {
+            let value = text(packaging, key)
+            if has_control(value) {
+                return Err(fail(f"invalid desktop {key}"))
+            }
+            if !value.is_empty() {
+                fields.push((label, value))
+            }
+        }
+        let mut entry = "[Desktop Entry]\n"
+        for (key, value) in fields {
+            entry += f"{key}={value}\n"
+        }
+        write_text(desktop, entry)?
+        if has_icon {
+            let data = fs::read(icon)?
+            if data.len() < 24 || data[0..8] != PNG_SIGNATURE.to_vec() {
+                return Err(fail("application exported an invalid PNG icon"))
+            }
+            let be = |at: i64| (data[at] as i64) << 24 | (data[at + 1] as i64) << 16 | (data[at + 2] as i64) << 8 | data[at + 3] as i64
+            let width = be(16)
+            let height = be(20)
+            if width != height || width < 1 || width > 4096 {
+                return Err(fail("application icon must be square and at most 4096 pixels"))
+            }
+            let destination = path::join(bundle, f"share/icons/hicolor/{width}x{height}/apps/{app_id}.png")
+            fs::create_dir_all(path::parent(destination).unwrap_or(""))?
+            fs::copy(icon, destination)?
+        }
+        let template = fs::read_to_string(path::join(gui, "tools/package-install.sh"))?
+        fs::write_mode(path::join(bundle, "install.sh"), template.replace("@@EXE@@", exe).replace("@@APP_ID@@", app_id).bytes(), 0o755)?
+        if which("desktop-file-validate") {
+            require(Command::new("desktop-file-validate").arg(desktop), "desktop-file-validate")?
+        }
+        // tar keeps the executable modes the package's files need.
+        let archive = path::join(out, f"{base}.tar.gz")
+        require(Command::new("tar").args(#["-czf", archive, "-C", stage, package_name]), "tar")?
+        archive
+    } else if platform == "macos" {
+        let resources = path::join(bundle, "Contents/Resources")
+        let mut info = #[
+            ("CFBundleIdentifier", app_id)
+            ("CFBundleName", name)
+            ("CFBundleDisplayName", name)
+            ("CFBundleExecutable", exe)
+            ("CFBundlePackageType", "APPL")
+            ("CFBundleShortVersionString", version)
+            ("CFBundleVersion", version)
+            ("LSMinimumSystemVersion", "11.0")
+        ]
+        if has_icon {
+            let iconset = path::join(stage, "AppIcon.iconset")
+            fs::create_dir_all(iconset)?
+            for size in #[16, 32, 128, 256, 512] {
+                for density in #[1, 2] {
+                    let suffix = if density == 2 { "@2x" } else { "" }
+                    let pixels = f"{size * density}"
+                    require(
+                        Command::new("sips").args(#["-z", pixels, pixels, icon, "--out", path::join(iconset, f"icon_{size}x{size}{suffix}.png")]).stdout(Stdio::Null)
+                        "sips"
+                    )?
+                }
+            }
+            require(Command::new("iconutil").args(#["-c", "icns", iconset, "-o", path::join(resources, "AppIcon.icns")]), "iconutil")?
+            info.push(("CFBundleIconFile", "AppIcon"))
+        }
+        let plist = path::join(bundle, "Contents/Info.plist")
+        write_text(plist, info_plist(info, true))?
+        require(Command::new("plutil").args(#["-lint", plist]), "plutil")?
+        require(Command::new("codesign").args(#["--force", "--sign", "-", bundle]), "codesign")?
+        require(Command::new("codesign").args(#["--verify", "--deep", "--strict", bundle]), "codesign --verify")?
+        let archive = path::join(out, f"{name}.app.zip")
+        if fs::exists(archive) {
+            fs::remove_file(archive)?
+        }
+        require(Command::new("ditto").args(#["-c", "-k", "--keepParent", bundle, archive]), "ditto")?
+        let destination = path::join(out, package_name)
+        if fs::exists(destination) {
+            fs::remove_dir_all(destination)?
+        }
+        require(Command::new("ditto").args(#[bundle, destination]), "ditto")?
+        archive
+    } else {
+        let mut files = #[]
+        collect_files(bundle, &mut files)?
+        files.sort()
+        let mut entries = #[]
+        for file in files {
+            let relative = file.substring(stage.byte_len() + 1, file.byte_len()).replace("\\", "/")
+            entries.push((relative, fs::read(file)?))
+        }
+        let archive = path::join(out, f"{base}.zip")
+        fs::write(archive, zip::write(entries)?)?
+        archive
+    }
+    let artifact_name = path::file_name(artifact).unwrap_or(artifact)
+    write_text(path::join(out, artifact_name + ".sha256"), f"{digest(artifact)?}  {artifact_name}\n")?
+    println(artifact)
+    Ok(())
+}
+
+fn main() {
+    if let Err(e) = build_package() {
+        eprintln(f"{e}")
+        process::exit(1)
+    }
+}

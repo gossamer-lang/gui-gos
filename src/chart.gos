@@ -1,0 +1,194 @@
+// Charts: series of points on scaled axes with legends, hover values, pan
+// and zoom, keyboard reading of points and an accessible summary. Series
+// may grow from any goroutine; each keeps at most its capacity, dropping
+// its oldest points, and the window repaints as data arrives.
+
+use std::errors
+use std::encoding::json
+
+/// How values map to an axis.
+#[derive(PartialEq)]
+pub enum Scale {
+    Linear
+    /// Base-10 logarithmic; only positive values show.
+    Log
+    /// Seconds since 1970-01-01 UTC, labelled as dates and times.
+    Time
+    /// Whole-number positions naming these categories.
+    Category(Vec<String>)
+}
+
+#[derive(PartialEq)]
+pub struct Axis {
+    pub label: String
+    pub scale: Scale
+}
+
+/// How a series draws.
+#[derive(PartialEq, Eq)]
+pub enum Kind { Line, Area, Bar, Scatter }
+
+/// A series' name, look and point capacity.
+pub struct SeriesStyle {
+    pub name: String
+    pub kind: Kind
+    /// None picks the palette color for the series' position.
+    pub color: Option<crate::Color>
+    /// The most points kept; appends beyond it drop the oldest.
+    pub capacity: i64
+}
+
+impl SeriesStyle {
+    pub fn named(name: String, kind: Kind = Kind::Line, capacity: i64 = 100_000) -> SeriesStyle {
+        SeriesStyle { name: name, kind: kind, color: None, capacity: capacity }
+    }
+}
+
+/// A chart's title, axes and legend.
+pub struct Spec {
+    pub title: String
+    pub x: Axis
+    pub y: Axis
+    pub legend: bool
+}
+
+impl Spec {
+    pub fn titled(title: String, x: Axis = Axis { label: "", scale: Scale::Linear }, y: Axis = Axis { label: "", scale: Scale::Linear }) -> Spec {
+        Spec { title: title, x: x, y: y, legend: true }
+    }
+}
+
+/// The visible ranges.
+#[derive(PartialEq)]
+pub struct Window {
+    pub x0: f64
+    pub x1: f64
+    pub y0: f64
+    pub y1: f64
+}
+
+/// A point picked by the pointer, reported as `UiMsg::ChartPoint`.
+#[derive(PartialEq)]
+pub struct Hit {
+    pub series: i64
+    pub name: String
+    pub index: i64
+    pub x: f64
+    pub y: f64
+}
+
+/// The widget showing chart `chart` at about `width` x `height`.
+pub struct View {
+    pub id: String
+    pub chart: i64
+    pub label: String
+    pub width: i64
+    pub height: i64
+}
+
+enum Answer {
+    Id(i64)
+    Window(Window)
+    Rows(Vec<(String, String, String)>)
+    Text(String)
+    Item(crate::print::Item)
+    Done
+}
+
+/// A chart handle; it closes with its session.
+#[derive(Default, PartialEq, Eq)]
+pub struct Chart {
+    pub id: i64
+}
+
+fn call(method: String, id: i64, args: String) -> Result<Answer, errors::Error> {
+    let answer = gui_engine::chart(method, id, args).map_err(|why| errors::new(why))?
+    json::decode::<Answer>(answer)
+}
+
+fn done(answer: Result<Answer, errors::Error>) -> Result<(), errors::Error> {
+    answer.map(|_| ())
+}
+
+impl Chart {
+    pub fn open(spec: Spec) -> Result<Chart, errors::Error> {
+        match call("open", 0, json::encode(spec))? {
+            Answer::Id(id) => Ok(Chart { id: id })
+            _ => Err(errors::new("invalid chart answer"))
+        }
+    }
+
+    /// Adds a series, answering its index.
+    pub fn add_series(&self, style: SeriesStyle, points: Vec<(f64, f64)> = #[]) -> Result<i64, errors::Error> {
+        match call("add_series", self.id, json::encode((style, points)))? {
+            Answer::Id(index) => Ok(index)
+            _ => Err(errors::new("invalid chart answer"))
+        }
+    }
+
+    pub fn set_points(&self, series: i64, points: Vec<(f64, f64)>) -> Result<(), errors::Error> {
+        done(call("set_points", self.id, json::encode((series, points))))
+    }
+
+    /// Appends points from any goroutine; the window repaints.
+    pub fn append(&self, series: i64, points: Vec<(f64, f64)>) -> Result<(), errors::Error> {
+        done(call("append", self.id, json::encode((series, points))))
+    }
+
+    pub fn set_hidden(&self, series: i64, hidden: bool) -> Result<(), errors::Error> {
+        done(call("set_hidden", self.id, json::encode((series, hidden))))
+    }
+
+    pub fn zoom_to(&self, window: Window) -> Result<(), errors::Error> {
+        done(call("zoom_to", self.id, json::encode(window)))
+    }
+
+    /// Fits the view to the data again.
+    pub fn fit(&self) -> Result<(), errors::Error> {
+        done(call("fit", self.id, "null"))
+    }
+
+    pub fn window(&self) -> Result<Window, errors::Error> {
+        match call("window", self.id, "null")? {
+            Answer::Window(window) => Ok(window)
+            _ => Err(errors::new("invalid chart answer"))
+        }
+    }
+
+    /// The data as (series, x, y) text rows, at most `limit` per series.
+    pub fn table(&self, limit: i64 = 1_000) -> Result<Vec<(String, String, String)>, errors::Error> {
+        match call("table", self.id, json::encode(limit))? {
+            Answer::Rows(rows) => Ok(rows)
+            _ => Err(errors::new("invalid chart answer"))
+        }
+    }
+
+    /// A text summary of the series and their ranges.
+    pub fn summary(&self) -> Result<String, errors::Error> {
+        match call("summary", self.id, "null")? {
+            Answer::Text(text) => Ok(text)
+            _ => Err(errors::new("invalid chart answer"))
+        }
+    }
+
+    pub fn export_png(&self, path: String, width: i64, height: i64) -> Result<(), errors::Error> {
+        done(call("export_png", self.id, json::encode((path, width, height))))
+    }
+
+    /// The chart as a printable drawing, for `gui::print` documents.
+    pub fn print_item(&self, width: i64 = 480, height: i64 = 300) -> Result<crate::print::Item, errors::Error> {
+        match call("drawing", self.id, json::encode((width, height)))? {
+            Answer::Item(item) => Ok(item)
+            _ => Err(errors::new("invalid chart answer"))
+        }
+    }
+
+    /// The widget showing the chart.
+    pub fn view(&self, id: String, label: String, width: i64 = 600, height: i64 = 400) -> crate::Widget {
+        crate::Widget::Chart(View { id: id, chart: self.id, label: label, width: width, height: height })
+    }
+
+    pub fn close(&self) {
+        let _ = call("close", self.id, "null")
+    }
+}

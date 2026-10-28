@@ -1,0 +1,61 @@
+// A directory listing as the file dialogs receive it.
+
+/// One entry of a folder.
+#[derive(Debug, PartialEq)]
+pub struct DirEntry {
+    pub path: String
+    pub name: String
+    pub directory: bool
+    /// Bytes, for files.
+    pub size: i64
+    /// When it last changed, in milliseconds since the Unix epoch; 0 when unknown.
+    pub modified_ms: i64
+}
+
+/// The order of a listing; folders always come first.
+#[derive(Debug, PartialEq, Eq)]
+pub enum SortBy {
+    /// Case-insensitive name, ties by exact name.
+    Name
+    Size
+    /// File name extension, then name.
+    Kind
+    /// Last change, oldest first.
+    Modified
+}
+
+/// A request for one folder's entries, answered by `UiMsg::Listed(owner,
+/// request, listing)`.
+#[derive(Debug, PartialEq)]
+pub struct ListRequest {
+    /// The widget or dialog the answer is for.
+    pub owner: String
+    /// Distinguishes this request from the owner's earlier ones, so a late
+    /// answer to a superseded request can be dropped.
+    pub request: i64
+    pub directory: String
+    /// Include names starting with a dot.
+    pub hidden: bool
+    /// Only folders, for folder pickers.
+    pub folders_only: bool
+    /// Glob patterns files must match (`*.txt`, `*`); empty keeps every file.
+    pub patterns: Vec<String>
+    /// Only entries whose name starts with this text (case-insensitive).
+    pub prefix: String
+    pub sort: SortBy
+    pub ascending: bool
+    pub limit: i64
+}
+
+/// What a listing found.
+#[derive(Debug, PartialEq)]
+pub struct Listing {
+    /// The folder read, made absolute and canonical.
+    pub directory: String
+    /// At most the request's `limit` entries, in order.
+    pub entries: Vec<DirEntry>
+    /// How many entries matched before the limit applied.
+    pub total: i64
+    /// Why the folder could not be read; "" on success.
+    pub error: String
+}

@@ -1,0 +1,224 @@
+// Docking: panes arranged in tab groups and splits across a main window and
+// floating windows. An application keeps a `Layout` in its model, folds the
+// toolkit's messages into it with `handle`, and builds each window's widgets
+// with `view`. Groups share the dock's workspace, so a pane keeps its widget
+// state as it moves between groups and windows. The layout itself lives on
+// the native side as its saved form, which is also what persists.
+
+use std::encoding::json
+use std::errors
+
+use crate::commands::Command
+
+/// Where a pane lands relative to a group.
+#[derive(PartialEq, Eq)]
+pub enum Zone { Left, Right, Top, Bottom, Center }
+
+/// A tab dropped on a dock group, reported as `UiMsg::Dock(dock, drop)`.
+#[derive(PartialEq)]
+pub struct Drop {
+    pub pane: String
+    /// The tab strip id of the group it landed on.
+    pub group: String
+    pub zone: Zone
+}
+
+/// A window of its own holding part of the layout.
+#[derive(PartialEq)]
+pub struct Floating {
+    pub window: String
+    pub x: i64
+    pub y: i64
+    pub width: i64
+    pub height: i64
+}
+
+/// What handling a message changed beyond the layout itself.
+#[derive(PartialEq)]
+pub enum Change {
+    /// The view should show the new layout.
+    Layout
+    /// A floating window needs opening.
+    Opened(Floating)
+    /// The floating window with this key closed.
+    Closed(String)
+    /// The user closed this pane; the application releases its content.
+    PaneClosed(String)
+    /// Keyboard focus belongs on this group's tab strip, showing this pane.
+    Focus { strip: String, pane: String }
+}
+
+/// A pane's tab title and content.
+pub struct Pane {
+    pub title: String
+    pub content: crate::Widget
+    pub closable: bool
+}
+
+/// A dock's arrangement.
+#[derive(Default, PartialEq, Eq)]
+pub struct Layout {
+    state: String
+}
+
+enum Answer {
+    Layout(json::Value)
+    Changed(json::Value, Vec<Change>)
+    Restored(json::Value, Vec<String>)
+    Text(String)
+    Group(Option<i64>)
+    Pane(Option<String>)
+    Panes(Vec<String>)
+    View(crate::Widget)
+}
+
+fn call_result(method: String, args: String) -> Result<Answer, String> {
+    let answer = gui_engine::dock(method, args)?
+    Ok(json::decode::<Answer>(answer).unwrap_or_else(|why| panic(f"gui: dock {method} answer: {why}")))
+}
+
+fn call(method: String, args: String) -> Answer {
+    let answer = gui_engine::dock(method, args).unwrap_or_else(|why| panic(f"gui: dock {method}: {why}"))
+    json::decode::<Answer>(answer).unwrap_or_else(|why| panic(f"gui: dock {method} answer: {why}"))
+}
+
+fn layout_of(value: json::Value) -> Layout {
+    Layout { state: json::render(value) }
+}
+
+impl Layout {
+    /// One group holding `panes` in the main window.
+    pub fn new(panes: Vec<String>) -> Layout {
+        match call("new", json::encode(panes)) {
+            Answer::Layout(value) => layout_of(value)
+            _ => panic("gui: invalid dock answer")
+        }
+    }
+
+    /// Restores a saved layout for the panes the application has now,
+    /// repairing what it must; an unreadable save starts over. Answers the
+    /// repairs made.
+    pub fn restore(source: String, known: Vec<String>) -> (Layout, Vec<String>) {
+        match call("restore", json::encode((source, known))) {
+            Answer::Restored(value, repairs) => (layout_of(value), repairs)
+            _ => panic("gui: invalid dock answer")
+        }
+    }
+
+    /// The form to persist and later `restore`.
+    pub fn save(&self) -> String {
+        self.state
+    }
+
+    fn apply(&mut self, answer: Answer) -> Vec<Change> {
+        match answer {
+            Answer::Changed(value, changes) => {
+                self.state = json::render(value)
+                changes
+            }
+            Answer::Layout(value) => {
+                self.state = json::render(value)
+                #[Change::Layout]
+            }
+            _ => panic("gui: invalid dock answer")
+        }
+    }
+
+    /// Folds a toolkit message about dock `dock` into the layout: tab
+    /// activation, reordering, moves between windows, detaching, edge and
+    /// center drops, split ratios and floating windows closing.
+    pub fn handle(&mut self, dock: String, msg: crate::UiMsg) -> Vec<Change> {
+        let args = f"[{self.state},{json::encode(dock)},{json::encode(msg)}]"
+        self.apply(call("handle", args))
+    }
+
+    /// Runs a `dock.*` keyboard command of dock `dock` on the focused pane.
+    pub fn command(&mut self, dock: String, pane: String, command: String) -> Vec<Change> {
+        let args = f"[{self.state},{json::encode(dock)},{json::encode(pane)},{json::encode(command)}]"
+        self.apply(call("command", args))
+    }
+
+    /// Places `pane` against group `group` at `zone`.
+    pub fn place(&mut self, pane: String, group: i64, zone: Zone) -> Vec<Change> {
+        let args = f"[{self.state},{json::encode(pane)},{group},{json::encode(zone)}]"
+        self.apply(call("place", args))
+    }
+
+    /// Gives the group holding `pane` this share (0 to 1) of the split it
+    /// sits in.
+    pub fn set_share(&mut self, pane: String, share: f64) -> Result<(), errors::Error> {
+        match call_result("set_share", f"[{self.state},{json::encode(pane)},{share}]") {
+            Ok(answer) => {
+                let _ = self.apply(answer)
+                Ok(())
+            }
+            Err(why) => Err(errors::new(why))
+        }
+    }
+
+    /// Docks a new pane among the main window's first group of tabs.
+    pub fn add(&mut self, pane: String) {
+        let _ = self.apply(call("add", f"[{self.state},{json::encode(pane)}]"))
+    }
+
+    /// Records where a floating window is, so a restored layout reopens it there.
+    pub fn place_window(&mut self, window: String, x: i64, y: i64, width: i64, height: i64) {
+        let args = f"[{self.state},{json::encode(window)},{x},{y},{width},{height}]"
+        let _ = self.apply(call("place_window", args))
+    }
+
+    /// Every pane, main window first, in tab order.
+    pub fn panes(&self) -> Vec<String> {
+        match call("panes", self.state) {
+            Answer::Panes(panes) => panes
+            _ => panic("gui: invalid dock answer")
+        }
+    }
+
+    /// The group holding `pane`.
+    pub fn group_of(&self, pane: String) -> Option<i64> {
+        match call("group_of", f"[{self.state},{json::encode(pane)}]") {
+            Answer::Group(group) => group
+            _ => panic("gui: invalid dock answer")
+        }
+    }
+
+    /// The active pane of the next (or previous) group, across windows.
+    pub fn next_group(&self, pane: String, backward: bool = false) -> Option<String> {
+        match call("next_group", f"[{self.state},{json::encode(pane)},{backward}]") {
+            Answer::Pane(pane) => pane
+            _ => panic("gui: invalid dock answer")
+        }
+    }
+
+    /// The widgets of dock `dock` in `window`: "" names the main window.
+    pub fn view(&self, dock: String, window: String, panes: Vec<(String, Pane)>) -> crate::Widget {
+        let mut entries = #[]
+        for (key, pane) in panes {
+            entries.push(f"[{json::encode(key)},{{\"title\":{json::encode(pane.title)},\"content\":{json::encode(pane.content)},\"closable\":{pane.closable}}}]")
+        }
+        let args = f"[{self.state},{json::encode(dock)},{json::encode(window)},[{entries.join(",")}]]"
+        match call("view", args) {
+            Answer::View(widget) => widget
+            _ => panic("gui: invalid dock answer")
+        }
+    }
+}
+
+/// The tab strip id of `group` in dock `dock`.
+pub fn group_strip(dock: String, group: i64) -> String {
+    f"{dock}:group:{group}"
+}
+
+/// The dock keyboard commands; add them to the application's commands and
+/// pass each `UiMsg::Command` to `Layout::command`.
+pub fn commands() -> Vec<Command> {
+    #[
+        Command::new("dock.move-left", "Move Pane Left").key("Primary+Alt+Left").category("Dock")
+        Command::new("dock.move-right", "Move Pane Right").key("Primary+Alt+Right").category("Dock")
+        Command::new("dock.move-up", "Move Pane Up").key("Primary+Alt+Up").category("Dock")
+        Command::new("dock.move-down", "Move Pane Down").key("Primary+Alt+Down").category("Dock")
+        Command::new("dock.detach", "Move Pane to New Window").category("Dock")
+        Command::new("dock.reattach", "Return Pane to Main Window").category("Dock")
+    ]
+}

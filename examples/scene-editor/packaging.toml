@@ -1,0 +1,5 @@
+name = "Scene Editor"
+app_id = "dev.gossamer.gui-scene-editor"
+comment = "Draw and arrange shapes on a pannable, zoomable canvas"
+categories = "Graphics;VectorGraphics;"
+icon = false

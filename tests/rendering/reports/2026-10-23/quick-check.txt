@@ -1,0 +1,1231 @@
+gos 0.75.0; windowing 0.1.0; gui-toolkit 0.1.0
+fmt: every source formatted
+Checking .
+warning[GL0041]: closure `|x| f(x)` can be replaced with `f`
+  --> ./src/app/wire.gos:50:18
+    50 |     items(a).map(|x| text(x))
+       |                  ^^^^^^^^^^^
+  = note: lint: redundant_closure
+  = help: pass the function directly
+
+warning[GL0002]: unused import `layout`
+  --> ./src/render/display.gos:9:1
+     9 | use crate::text::layout
+       | ^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `Color`
+  --> ./src/render/icons.gos:7:1
+     7 | use crate::style::color::Color
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `base64`
+  --> ./src/services/apps.gos:10:1
+    10 | use std::encoding::base64
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `image`
+  --> ./src/services/apps.gos:11:1
+    11 | use std::image
+       | ^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `ceil`
+  --> ./src/widgets/buttons.gos:8:1
+     8 | use std::math::ceil
+       | ^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `Key`
+  --> ./src/widgets/buttons.gos:9:1
+     9 | use windowing::{Key, MouseButton}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `MouseButton`
+  --> ./src/widgets/buttons.gos:9:1
+     9 | use windowing::{Key, MouseButton}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Constraints`
+  --> ./src/widgets/buttons.gos:12:1
+    12 | use crate::geometry::{Constraints, Rect, Size}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Rect`
+  --> ./src/widgets/buttons.gos:12:1
+    12 | use crate::geometry::{Constraints, Rect, Size}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `layout`
+  --> ./src/widgets/buttons.gos:16:1
+    16 | use crate::text::layout
+       | ^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `Event`
+  --> ./src/widgets/buttons.gos:17:1
+    17 | use crate::widgets::cx::{CheckState, Event, Node, Placement, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Placement`
+  --> ./src/widgets/buttons.gos:17:1
+    17 | use crate::widgets::cx::{CheckState, Event, Node, Placement, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `UiMsg`
+  --> ./src/widgets/buttons.gos:17:1
+    17 | use crate::widgets::cx::{CheckState, Event, Node, Placement, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `menus`
+  --> ./src/widgets/buttons.gos:18:1
+    18 | use crate::widgets::menus
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `WState`
+  --> ./src/widgets/buttons.gos:21:1
+    21 | use crate::widgets::state::{StateStore, WState}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `ceil`
+  --> ./src/widgets/choices.gos:16:1
+    16 | use std::math::ceil
+       | ^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `Key`
+  --> ./src/widgets/choices.gos:17:1
+    17 | use windowing::{Key, MouseButton}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `MouseButton`
+  --> ./src/widgets/choices.gos:17:1
+    17 | use windowing::{Key, MouseButton}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Constraints`
+  --> ./src/widgets/choices.gos:20:1
+    20 | use crate::geometry::{Constraints, Rect, Size}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Rect`
+  --> ./src/widgets/choices.gos:20:1
+    20 | use crate::geometry::{Constraints, Rect, Size}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Size`
+  --> ./src/widgets/choices.gos:20:1
+    20 | use crate::geometry::{Constraints, Rect, Size}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Icon`
+  --> ./src/widgets/choices.gos:21:1
+    21 | use crate::render::icons::Icon
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `TextRole`
+  --> ./src/widgets/choices.gos:22:1
+    22 | use crate::style::{Theme, TextRole}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Theme`
+  --> ./src/widgets/choices.gos:22:1
+    22 | use crate::style::{Theme, TextRole}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `layout`
+  --> ./src/widgets/choices.gos:23:1
+    23 | use crate::text::layout
+       | ^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `Event`
+  --> ./src/widgets/choices.gos:26:1
+    26 | use crate::widgets::cx::{Event, Node, Placement, PopupRequest, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Placement`
+  --> ./src/widgets/choices.gos:26:1
+    26 | use crate::widgets::cx::{Event, Node, Placement, PopupRequest, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `PopupRequest`
+  --> ./src/widgets/choices.gos:26:1
+    26 | use crate::widgets::cx::{Event, Node, Placement, PopupRequest, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `UiMsg`
+  --> ./src/widgets/choices.gos:26:1
+    26 | use crate::widgets::cx::{Event, Node, Placement, PopupRequest, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `ceil`
+  --> ./src/widgets/collections.gos:19:1
+    19 | use std::math::ceil
+       | ^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `Key`
+  --> ./src/widgets/collections.gos:21:1
+    21 | use windowing::{Key, MouseButton}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `MouseButton`
+  --> ./src/widgets/collections.gos:21:1
+    21 | use windowing::{Key, MouseButton}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `AccessNode`
+  --> ./src/widgets/collections.gos:23:1
+    23 | use crate::accessibility::{AccessNode, Role}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Role`
+  --> ./src/widgets/collections.gos:23:1
+    23 | use crate::accessibility::{AccessNode, Role}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Constraints`
+  --> ./src/widgets/collections.gos:25:1
+    25 | use crate::geometry::{Constraints, Rect, Size, UNBOUNDED}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Rect`
+  --> ./src/widgets/collections.gos:25:1
+    25 | use crate::geometry::{Constraints, Rect, Size, UNBOUNDED}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Size`
+  --> ./src/widgets/collections.gos:25:1
+    25 | use crate::geometry::{Constraints, Rect, Size, UNBOUNDED}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `UNBOUNDED`
+  --> ./src/widgets/collections.gos:25:1
+    25 | use crate::geometry::{Constraints, Rect, Size, UNBOUNDED}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `ModelLog`
+  --> ./src/widgets/collections.gos:26:1
+    26 | use crate::models::{position_after, ModelChange, ModelLog}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Icon`
+  --> ./src/widgets/collections.gos:27:1
+    27 | use crate::render::icons::Icon
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `TextRole`
+  --> ./src/widgets/collections.gos:28:1
+    28 | use crate::style::{Theme, TextRole}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Color`
+  --> ./src/widgets/collections.gos:29:1
+    29 | use crate::style::color::Color
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `layout`
+  --> ./src/widgets/collections.gos:30:1
+    30 | use crate::text::layout
+       | ^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `Event`
+  --> ./src/widgets/collections.gos:32:1
+    32 | use crate::widgets::cx::{Event, Node, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Node`
+  --> ./src/widgets/collections.gos:32:1
+    32 | use crate::widgets::cx::{Event, Node, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `UiMsg`
+  --> ./src/widgets/collections.gos:32:1
+    32 | use crate::widgets::cx::{Event, Node, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Key`
+  --> ./src/widgets/colorpicker.gos:4:1
+     4 | use windowing::{Key, MouseButton}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `MouseButton`
+  --> ./src/widgets/colorpicker.gos:4:1
+     4 | use windowing::{Key, MouseButton}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Constraints`
+  --> ./src/widgets/colorpicker.gos:6:1
+     6 | use crate::geometry::{Constraints, Rect, Size}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Event`
+  --> ./src/widgets/colorpicker.gos:9:1
+     9 | use crate::widgets::cx::{Event, Node, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Node`
+  --> ./src/widgets/colorpicker.gos:9:1
+     9 | use crate::widgets::cx::{Event, Node, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `StateStore`
+  --> ./src/widgets/colorpicker.gos:10:1
+    10 | use crate::widgets::state::{StateStore, WState}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `WState`
+  --> ./src/widgets/colorpicker.gos:10:1
+    10 | use crate::widgets::state::{StateStore, WState}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `fnv`
+  --> ./src/widgets/completion.gos:20:1
+    20 | use std::hash::fnv
+       | ^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `ceil`
+  --> ./src/widgets/completion.gos:21:1
+    21 | use std::math::ceil
+       | ^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `Key`
+  --> ./src/widgets/completion.gos:23:1
+    23 | use windowing::Key
+       | ^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `Rect`
+  --> ./src/widgets/completion.gos:26:1
+    26 | use crate::geometry::{Rect, Size}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Size`
+  --> ./src/widgets/completion.gos:26:1
+    26 | use crate::geometry::{Rect, Size}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Icon`
+  --> ./src/widgets/completion.gos:27:1
+    27 | use crate::render::icons::Icon
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `TextRole`
+  --> ./src/widgets/completion.gos:28:1
+    28 | use crate::style::{Theme, TextRole}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Theme`
+  --> ./src/widgets/completion.gos:28:1
+    28 | use crate::style::{Theme, TextRole}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `layout`
+  --> ./src/widgets/completion.gos:30:1
+    30 | use crate::text::layout
+       | ^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `ceil`
+  --> ./src/widgets/containers.gos:8:1
+     8 | use std::math::ceil
+       | ^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `Key`
+  --> ./src/widgets/containers.gos:10:1
+    10 | use windowing::{Key, MouseButton}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `MouseButton`
+  --> ./src/widgets/containers.gos:10:1
+    10 | use windowing::{Key, MouseButton}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `UNBOUNDED`
+  --> ./src/widgets/containers.gos:13:1
+    13 | use crate::geometry::{Constraints, Insets, Rect, Size, UNBOUNDED}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Icon`
+  --> ./src/widgets/containers.gos:14:1
+    14 | use crate::render::icons::Icon
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `TextRole`
+  --> ./src/widgets/containers.gos:15:1
+    15 | use crate::style::TextRole
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `layout`
+  --> ./src/widgets/containers.gos:16:1
+    16 | use crate::text::layout
+       | ^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `Visibility`
+  --> ./src/widgets/containers.gos:17:1
+    17 | use crate::widgets::{Axis, CrossAlign, MainAlign, Modifiers, Visibility, Widget}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Event`
+  --> ./src/widgets/containers.gos:18:1
+    18 | use crate::widgets::cx::{Event, Node, Placement, PopupRequest, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Placement`
+  --> ./src/widgets/containers.gos:18:1
+    18 | use crate::widgets::cx::{Event, Node, Placement, PopupRequest, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `PopupRequest`
+  --> ./src/widgets/containers.gos:18:1
+    18 | use crate::widgets::cx::{Event, Node, Placement, PopupRequest, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `UiMsg`
+  --> ./src/widgets/containers.gos:18:1
+    18 | use crate::widgets::cx::{Event, Node, Placement, PopupRequest, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Theme`
+  --> ./src/widgets/cx.gos:15:1
+    15 | use crate::style::Theme
+       | ^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `StateStore`
+  --> ./src/widgets/cx.gos:17:1
+    17 | use crate::widgets::state::StateStore
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `ceil`
+  --> ./src/widgets/display.gos:5:1
+     5 | use std::math::ceil
+       | ^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `Key`
+  --> ./src/widgets/display.gos:6:1
+     6 | use windowing::Key
+       | ^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `Constraints`
+  --> ./src/widgets/display.gos:10:1
+    10 | use crate::geometry::{Constraints, Rect, Size}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Rect`
+  --> ./src/widgets/display.gos:10:1
+    10 | use crate::geometry::{Constraints, Rect, Size}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Size`
+  --> ./src/widgets/display.gos:10:1
+    10 | use crate::geometry::{Constraints, Rect, Size}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `clipboard`
+  --> ./src/widgets/display.gos:11:1
+    11 | use crate::services::clipboard
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `layout`
+  --> ./src/widgets/display.gos:14:1
+    14 | use crate::text::layout
+       | ^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `buttons`
+  --> ./src/widgets/display.gos:16:1
+    16 | use crate::widgets::{buttons, Tone}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Event`
+  --> ./src/widgets/display.gos:17:1
+    17 | use crate::widgets::cx::{Event, Node, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Node`
+  --> ./src/widgets/display.gos:17:1
+    17 | use crate::widgets::cx::{Event, Node, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `UiMsg`
+  --> ./src/widgets/display.gos:17:1
+    17 | use crate::widgets::cx::{Event, Node, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `WState`
+  --> ./src/widgets/display.gos:18:1
+    18 | use crate::widgets::state::{StateStore, WState}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `cos`
+  --> ./src/widgets/feedback.gos:7:1
+     7 | use std::math::{cos, sin}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `sin`
+  --> ./src/widgets/feedback.gos:7:1
+     7 | use std::math::{cos, sin}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Key`
+  --> ./src/widgets/feedback.gos:8:1
+     8 | use windowing::{Key, MouseButton}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `MouseButton`
+  --> ./src/widgets/feedback.gos:8:1
+     8 | use windowing::{Key, MouseButton}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Constraints`
+  --> ./src/widgets/feedback.gos:11:1
+    11 | use crate::geometry::{Constraints, Rect, Size}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Rect`
+  --> ./src/widgets/feedback.gos:11:1
+    11 | use crate::geometry::{Constraints, Rect, Size}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Size`
+  --> ./src/widgets/feedback.gos:11:1
+    11 | use crate::geometry::{Constraints, Rect, Size}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `TextRole`
+  --> ./src/widgets/feedback.gos:14:1
+    14 | use crate::style::TextRole
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `layout`
+  --> ./src/widgets/feedback.gos:15:1
+    15 | use crate::text::layout
+       | ^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `Event`
+  --> ./src/widgets/feedback.gos:17:1
+    17 | use crate::widgets::cx::{Event, Node, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `UiMsg`
+  --> ./src/widgets/feedback.gos:17:1
+    17 | use crate::widgets::cx::{Event, Node, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `StateStore`
+  --> ./src/widgets/feedback.gos:18:1
+    18 | use crate::widgets::state::StateStore
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `ceil`
+  --> ./src/widgets/menus.gos:15:1
+    15 | use std::math::ceil
+       | ^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `Key`
+  --> ./src/widgets/menus.gos:16:1
+    16 | use windowing::{Key, MouseButton}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `MouseButton`
+  --> ./src/widgets/menus.gos:16:1
+    16 | use windowing::{Key, MouseButton}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Constraints`
+  --> ./src/widgets/menus.gos:20:1
+    20 | use crate::geometry::{Constraints, Rect, Size}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Rect`
+  --> ./src/widgets/menus.gos:20:1
+    20 | use crate::geometry::{Constraints, Rect, Size}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Size`
+  --> ./src/widgets/menus.gos:20:1
+    20 | use crate::geometry::{Constraints, Rect, Size}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `TextRole`
+  --> ./src/widgets/menus.gos:22:1
+    22 | use crate::style::{Theme, TextRole}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `layout`
+  --> ./src/widgets/menus.gos:23:1
+    23 | use crate::text::layout
+       | ^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `Event`
+  --> ./src/widgets/menus.gos:25:1
+    25 | use crate::widgets::cx::{command, Event, Node, Placement, PopupRequest}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Placement`
+  --> ./src/widgets/menus.gos:25:1
+    25 | use crate::widgets::cx::{command, Event, Node, Placement, PopupRequest}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `PopupRequest`
+  --> ./src/widgets/menus.gos:25:1
+    25 | use crate::widgets::cx::{command, Event, Node, Placement, PopupRequest}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `WState`
+  --> ./src/widgets/menus.gos:26:1
+    26 | use crate::widgets::state::{StateStore, WState}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Rect`
+  --> ./src/widgets/mod.gos:21:1
+    21 | use crate::geometry::{Constraints, Insets, Rect, Size, UNBOUNDED}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Event`
+  --> ./src/widgets/mod.gos:27:1
+    27 | use crate::widgets::cx::{CheckState, Event, Node, PopupRequest, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Node`
+  --> ./src/widgets/mod.gos:27:1
+    27 | use crate::widgets::cx::{CheckState, Event, Node, PopupRequest, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `atan2`
+  --> ./src/widgets/numeric.gos:8:1
+     8 | use std::math::{atan2, ceil, cos, floor, sin}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `ceil`
+  --> ./src/widgets/numeric.gos:8:1
+     8 | use std::math::{atan2, ceil, cos, floor, sin}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `cos`
+  --> ./src/widgets/numeric.gos:8:1
+     8 | use std::math::{atan2, ceil, cos, floor, sin}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `sin`
+  --> ./src/widgets/numeric.gos:8:1
+     8 | use std::math::{atan2, ceil, cos, floor, sin}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `MouseButton`
+  --> ./src/widgets/numeric.gos:9:1
+     9 | use windowing::{Key, MouseButton}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Constraints`
+  --> ./src/widgets/numeric.gos:13:1
+    13 | use crate::geometry::{Constraints, Rect, Size}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Rect`
+  --> ./src/widgets/numeric.gos:13:1
+    13 | use crate::geometry::{Constraints, Rect, Size}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Icon`
+  --> ./src/widgets/numeric.gos:14:1
+    14 | use crate::render::icons::Icon
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `TextRole`
+  --> ./src/widgets/numeric.gos:15:1
+    15 | use crate::style::{Theme, TextRole}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `layout`
+  --> ./src/widgets/numeric.gos:16:1
+    16 | use crate::text::layout
+       | ^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `Event`
+  --> ./src/widgets/numeric.gos:17:1
+    17 | use crate::widgets::cx::{Event, Node, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Node`
+  --> ./src/widgets/numeric.gos:17:1
+    17 | use crate::widgets::cx::{Event, Node, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `UiMsg`
+  --> ./src/widgets/numeric.gos:17:1
+    17 | use crate::widgets::cx::{Event, Node, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `WState`
+  --> ./src/widgets/numeric.gos:18:1
+    18 | use crate::widgets::state::{StateStore, WState}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `ceil`
+  --> ./src/widgets/tabs.gos:11:1
+    11 | use std::math::ceil
+       | ^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `Key`
+  --> ./src/widgets/tabs.gos:12:1
+    12 | use windowing::{Key, MouseButton}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `MouseButton`
+  --> ./src/widgets/tabs.gos:12:1
+    12 | use windowing::{Key, MouseButton}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Constraints`
+  --> ./src/widgets/tabs.gos:16:1
+    16 | use crate::geometry::{Constraints, Rect, Size}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Rect`
+  --> ./src/widgets/tabs.gos:16:1
+    16 | use crate::geometry::{Constraints, Rect, Size}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Size`
+  --> ./src/widgets/tabs.gos:16:1
+    16 | use crate::geometry::{Constraints, Rect, Size}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `TextRole`
+  --> ./src/widgets/tabs.gos:18:1
+    18 | use crate::style::{Theme, TextRole}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `layout`
+  --> ./src/widgets/tabs.gos:19:1
+    19 | use crate::text::layout
+       | ^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `Event`
+  --> ./src/widgets/tabs.gos:21:1
+    21 | use crate::widgets::cx::{Event, Node, Placement, PopupRequest, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Placement`
+  --> ./src/widgets/tabs.gos:21:1
+    21 | use crate::widgets::cx::{Event, Node, Placement, PopupRequest, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `PopupRequest`
+  --> ./src/widgets/tabs.gos:21:1
+    21 | use crate::widgets::cx::{Event, Node, Placement, PopupRequest, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `UiMsg`
+  --> ./src/widgets/tabs.gos:21:1
+    21 | use crate::widgets::cx::{Event, Node, Placement, PopupRequest, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Key`
+  --> ./src/widgets/temporal.gos:4:1
+     4 | use windowing::{Key, MouseButton}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `MouseButton`
+  --> ./src/widgets/temporal.gos:4:1
+     4 | use windowing::{Key, MouseButton}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Constraints`
+  --> ./src/widgets/temporal.gos:6:1
+     6 | use crate::geometry::{Constraints, Rect, Size}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Rect`
+  --> ./src/widgets/temporal.gos:6:1
+     6 | use crate::geometry::{Constraints, Rect, Size}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Size`
+  --> ./src/widgets/temporal.gos:6:1
+     6 | use crate::geometry::{Constraints, Rect, Size}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `TextRole`
+  --> ./src/widgets/temporal.gos:7:1
+     7 | use crate::style::{TextRole, Theme}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Theme`
+  --> ./src/widgets/temporal.gos:7:1
+     7 | use crate::style::{TextRole, Theme}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `layout`
+  --> ./src/widgets/temporal.gos:8:1
+     8 | use crate::text::layout::{self}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Event`
+  --> ./src/widgets/temporal.gos:9:1
+     9 | use crate::widgets::cx::{Event, Node, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `UiMsg`
+  --> ./src/widgets/temporal.gos:9:1
+     9 | use crate::widgets::cx::{Event, Node, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `ceil`
+  --> ./src/widgets/textinput.gos:7:1
+     7 | use std::math::{ceil, floor}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `MouseButton`
+  --> ./src/widgets/textinput.gos:9:1
+     9 | use windowing::{Key, MouseButton}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Constraints`
+  --> ./src/widgets/textinput.gos:14:1
+    14 | use crate::geometry::{Constraints, Rect, Size}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Size`
+  --> ./src/widgets/textinput.gos:14:1
+    14 | use crate::geometry::{Constraints, Rect, Size}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `clipboard`
+  --> ./src/widgets/textinput.gos:16:1
+    16 | use crate::services::clipboard
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `layout`
+  --> ./src/widgets/textinput.gos:18:1
+    18 | use crate::text::layout
+       | ^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `ScalarIndex`
+  --> ./src/widgets/textinput.gos:20:1
+    20 | use crate::text::offsets::ScalarIndex
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove the `use` declaration
+
+warning[GL0002]: unused import `ChoiceState`
+  --> ./src/widgets/textinput.gos:22:1
+    22 | use crate::widgets::completion::{ChoiceState, Completion, CompletionItem, Source}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Event`
+  --> ./src/widgets/textinput.gos:23:1
+    23 | use crate::widgets::cx::{Event, Node, Placement, PopupRequest, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `Placement`
+  --> ./src/widgets/textinput.gos:23:1
+    23 | use crate::widgets::cx::{Event, Node, Placement, PopupRequest, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `PopupRequest`
+  --> ./src/widgets/textinput.gos:23:1
+    23 | use crate::widgets::cx::{Event, Node, Placement, PopupRequest, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0002]: unused import `UiMsg`
+  --> ./src/widgets/textinput.gos:23:1
+    23 | use crate::widgets::cx::{Event, Node, Placement, PopupRequest, UiMsg}
+       | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: lint: unused_import
+  = help: remove it from the `use` list
+
+warning[GL0040]: large integer literal `16384` is hard to scan without underscores
+  --> ./tests/wrap/src/main.gos:93:35
+    93 |     session.set_render_budgets(0, 16384, 4096)?
+       |                                   ^^^^^
+  = note: lint: large_unreadable_literal
+  = help: insert `_` as thousands separators, e.g. `16_384`
+
+warning[GL0040]: large integer literal `16384` is hard to scan without underscores
+  --> ./tests/wrap/src/main.gos:97:33
+    97 |     assert(stats.scene_bytes <= 16384 && stats.layer_bytes <= 4096)
+       |                                 ^^^^^
+  = note: lint: large_unreadable_literal
+  = help: insert `_` as thousands separators, e.g. `16_384`
+
+lint: 166 warning(s), 0 error(s)
+check: ok (959 items typed)
+Checking ./examples/application-launcher
+lint: 0 warning(s), 0 error(s)
+check: ok (874 items typed)
+Checking ./examples/code-editor
+lint: 0 warning(s), 0 error(s)
+check: ok (909 items typed)
+Checking ./examples/hello-world
+lint: 0 warning(s), 0 error(s)
+check: ok (867 items typed)
+Checking ./examples/widgets-showcase
+lint: 0 warning(s), 0 error(s)
+check: ok (894 items typed)
+Checking ./modules/webview
+lint: 0 warning(s), 0 error(s)
+check: ok (889 items typed)
+Checking ./tests/perf
+lint: 0 warning(s), 0 error(s)
+check: ok (869 items typed)
+Checking ./tests/memory/journeys
+lint: 0 warning(s), 0 error(s)
+check: ok (877 items typed)
+Checking ./tests/wrap
+warning[GL0040]: large integer literal `16384` is hard to scan without underscores
+  --> ./src/main.gos:93:35
+    93 |     session.set_render_budgets(0, 16384, 4096)?
+       |                                   ^^^^^
+  = note: lint: large_unreadable_literal
+  = help: insert `_` as thousands separators, e.g. `16_384`
+
+warning[GL0040]: large integer literal `16384` is hard to scan without underscores
+  --> ./src/main.gos:97:33
+    97 |     assert(stats.scene_bytes <= 16384 && stats.layer_bytes <= 4096)
+       |                                 ^^^^^
+  = note: lint: large_unreadable_literal
+  = help: insert `_` as thousands separators, e.g. `16_384`
+
+lint: 2 warning(s), 0 error(s)
+warning[GL0040]: large integer literal `16384` is hard to scan without underscores
+  --> ./src/main.gos:93:35
+    93 |     session.set_render_budgets(0, 16384, 4096)?
+       |                                   ^^^^^
+  = note: lint: large_unreadable_literal
+  = help: insert `_` as thousands separators, e.g. `16_384`
+
+warning[GL0040]: large integer literal `16384` is hard to scan without underscores
+  --> ./src/main.gos:97:33
+    97 |     assert(stats.scene_bytes <= 16384 && stats.layer_bytes <= 4096)
+       |                                 ^^^^^
+  = note: lint: large_unreadable_literal
+  = help: insert `_` as thousands separators, e.g. `16_384`
+
+check: ok (867 items typed)
+Checking ./tests/parity
+lint: 0 warning(s), 0 error(s)
+check: ok (873 items typed)
+Checking ./tests/scale
+lint: 0 warning(s), 0 error(s)
+check: ok (871 items typed)
+Checking ./tests/toolkit-platform
+lint: 0 warning(s), 0 error(s)
+check: ok (866 items typed)
+Checking ./tests/screenshots
+lint: 0 warning(s), 0 error(s)
+check: ok (875 items typed)

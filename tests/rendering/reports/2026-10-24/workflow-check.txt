@@ -1,0 +1,5 @@
+actionlint: PASS
+linux: gui-gos, windowing-gos, gui-toolkit-gos, gossamer-sdk
+cross: gui-gos, windowing-gos, gui-toolkit-gos, gossamer-sdk
+native: gui-gos, windowing-gos, gui-toolkit-gos, gossamer-sdk
+real-linux: gui-gos, windowing-gos, gui-toolkit-gos, gossamer-sdk

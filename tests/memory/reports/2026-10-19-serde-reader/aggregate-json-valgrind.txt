@@ -1,0 +1,88 @@
+==793336== Memcheck, a memory error detector
+==793336== Copyright (C) 2002-2022, and GNU GPL'd, by Julian Seward et al.
+==793336== Using Valgrind-3.22.0 and LibVEX; rerun with -h for copyright info
+==793336== Command: /tmp/gui-settings-repro/fixed-raw/settings-raw
+==793336== Parent PID: 793293
+==793336== 
+==793336== 
+==793336== HEAP SUMMARY:
+==793336==     in use at exit: 4,211 bytes in 17 blocks
+==793336==   total heap usage: 288 allocs, 271 frees, 88,117 bytes allocated
+==793336== 
+==793336== 48 bytes in 3 blocks are indirectly lost in loss record 1 of 7
+==793336==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==793336==    by 0x1AF31C: alloc::raw_vec::RawVecInner<A>::finish_grow (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x1AF119: alloc::raw_vec::RawVec<T,A>::grow_one (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x1AC565: gossamer_core::json::Parser::parse_value (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x1A89B8: gossamer_core::json::validate_to_tape (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x19FAF3: gos_rt_serde_rd_json (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x140C71: gos_main (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x19AB79: gos_rt_call_main (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x1412A8: main (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336== 
+==793336== 51 bytes in 3 blocks are indirectly lost in loss record 2 of 7
+==793336==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==793336==    by 0x160569: gossamer_runtime::c_abi::json::GosJson::parsed (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x19FB2F: gos_rt_serde_rd_json (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x140C71: gos_main (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x19AB79: gos_rt_call_main (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x1412A8: main (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336== 
+==793336== 144 bytes in 3 blocks are indirectly lost in loss record 3 of 7
+==793336==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==793336==    by 0x1A88BB: gossamer_core::json::validate_to_tape (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x19FAF3: gos_rt_serde_rd_json (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x140C71: gos_main (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x19AB79: gos_rt_call_main (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x1412A8: main (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336== 
+==793336== 312 bytes in 3 blocks are indirectly lost in loss record 4 of 7
+==793336==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==793336==    by 0x160755: gossamer_runtime::c_abi::json::GosJson::parsed (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x19FB2F: gos_rt_serde_rd_json (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x140C71: gos_main (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x19AB79: gos_rt_call_main (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x1412A8: main (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336== 
+==793336== 627 (72 direct, 555 indirect) bytes in 3 blocks are definitely lost in loss record 5 of 7
+==793336==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==793336==    by 0x160A27: gossamer_runtime::c_abi::json::json_box (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x1607BC: gossamer_runtime::c_abi::json::GosJson::parsed (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x19FB2F: gos_rt_serde_rd_json (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x140C71: gos_main (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x19AB79: gos_rt_call_main (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x1412A8: main (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336== 
+==793336== 1,024 bytes in 1 blocks are still reachable in loss record 6 of 7
+==793336==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==793336==    by 0x1D02FD: <std::sync::once::Once>::call_once_force::<<std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::initialize<<std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::get_or_init<std::io::stdio::stdout::{closure#0}>::{closure#0}, !>::{closure#0}>::{closure#0} (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x1D4DF6: <std::sys::sync::once::futex::Once>::call (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x1BE891: <std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::initialize::<<std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::get_or_init<std::io::stdio::stdout::{closure#0}>::{closure#0}, !> (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x1E3C8A: std::io::stdio::stdout (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x162B4B: gossamer_runtime::c_abi::print::write_terminal_direct (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x1625E8: gossamer_runtime::c_abi::print::write_terminal (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x162513: gossamer_runtime::c_abi::print::write_stdout (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x19E12A: gos_rt_println (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x14111B: gos_main (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x19AB79: gos_rt_call_main (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x1412A8: main (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336== 
+==793336== 2,560 bytes in 1 blocks are still reachable in loss record 7 of 7
+==793336==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==793336==    by 0x17C9A0: std::sync::once::Once::call_once_force::{{closure}} (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x1D4DF6: <std::sys::sync::once::futex::Once>::call (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x17E295: std::sync::once_lock::OnceLock<T>::initialize (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x168155: gossamer_runtime::c_abi::string::register_heap_string_body (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x167E27: gossamer_runtime::c_abi::string::alloc_growable_forced (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x1A2332: gos_rt_set_args (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336==    by 0x141299: main (in /tmp/gui-settings-repro/fixed-raw/settings-raw)
+==793336== 
+==793336== LEAK SUMMARY:
+==793336==    definitely lost: 72 bytes in 3 blocks
+==793336==    indirectly lost: 555 bytes in 12 blocks
+==793336==      possibly lost: 0 bytes in 0 blocks
+==793336==    still reachable: 3,584 bytes in 2 blocks
+==793336==         suppressed: 0 bytes in 0 blocks
+==793336== 
+==793336== For lists of detected and suppressed errors, rerun with: -s
+==793336== ERROR SUMMARY: 5 errors from 5 contexts (suppressed: 0 from 0)

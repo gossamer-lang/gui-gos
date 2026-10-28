@@ -1,0 +1,5 @@
+name = "Terminal"
+app_id = "dev.gossamer.gui-terminal"
+comment = "Run programs in a terminal, standalone or embedded in a window"
+categories = "System;TerminalEmulator;"
+icon = false

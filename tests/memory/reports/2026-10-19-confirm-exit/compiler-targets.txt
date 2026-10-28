@@ -1,0 +1,217 @@
+   Compiling gossamer-cli v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-cli)
+   Compiling tempfile v3.27.0
+   Compiling gossamer-interp v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-interp)
+   Compiling gossamer-mir v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-mir)
+   Compiling insta v1.48.0
+   Compiling gossamer-codegen-llvm v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-codegen-llvm)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 16.41s
+     Running tests/host_runtime_library.rs (target/debug/deps/host_runtime_library-a5db115109bfac85)
+
+running 3 tests
+test a_host_runtime_library_is_a_static_archive_alone ... ok
+test a_host_runtime_archive_defines_only_its_entry_points ... ok
+test a_host_runs_a_host_runtime_library_on_its_one_runtime ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.36s
+
+     Running tests/tier_parity.rs (target/debug/deps/tier_parity-44512cd212557ade)
+
+running 92 tests
+test common::tests::native_executable_name_uses_the_platform_suffix ... ok
+test common::tests::ntstatus_names_access_violation ... ok
+test common::tests::ntstatus_names_stack_overflow ... ok
+test common::tests::ntstatus_unknown_code_is_none ... ok
+test common::tests::signal_names_segv_and_abort ... ok
+test evidence_ledger_tests::every_cited_fixture_is_registered_for_tier_parity ... ok
+test go_stdlib_spawn_is_async_across_tiers ... ok
+test http_diagnostics_transport_consumer_parity_across_tiers ... ok
+test http3_serve_err_binding_parity_across_tiers ... ok
+test http_bare_handler_parity_across_tiers ... ok
+test http_client_cookie_jar_parity_across_tiers ... ok
+test http_client_verbs_parity_across_tiers ... ok
+test http_bare_aliases_parity_across_tiers ... ok
+test http_form_file_parity_across_tiers ... ok
+test http_middleware_compose_parity_across_tiers ... ok
+test http_middleware_bearer_parity_across_tiers ... ok
+test http_middleware_ws_parity_across_tiers ... ok
+test http_plain_fn_handler_parity_across_tiers ... ok
+test http_next_chunk_parity_across_tiers ... ok
+test http_handler_closure_params_parity_across_tiers ... ok
+test http_proxy_stream_parity_across_tiers ... ok
+test forced_jit_matches_bytecode_on_unlowerable_shapes ... ok
+test http_channel_pool_vm ... ok
+test http_raw_bytes_parity_across_tiers ... ok
+test http_redirect_policy_parity_across_tiers ... ok
+test http_request_form_auth_parity_across_tiers ... ok
+test http_request_headers_parity_across_tiers ... ok
+test http_channel_pool_cranelift ... ok
+test http_channel_pool_llvm ... ok
+test http_request_values_parity_across_tiers ... ok
+test http_response_headers_parity_across_tiers ... ok
+test http_router_chain_parity_across_tiers ... ok
+test http_router_params_parity_across_tiers ... ok
+test http_roundtrip_parity_across_tiers ... ok
+test http_router_typed_params_parity_across_tiers ... ok
+test http_serve_err_binding_parity_across_tiers ... ok
+test http_server_headers_parity_across_tiers ... ok
+test http_request_query_pairs_parity_across_tiers ... ok
+test jit_allowlist_rows_name_real_specs ... ok
+test jit_stats_line_is_parsed_from_stderr ... ok
+test http_static_file_parity_across_tiers ... ok
+test http_request_cohort_arena_parity_across_tiers ... ok
+test http_status_reason_parity_across_tiers ... ok
+test http_static_range_parity_across_tiers ... ok
+test http_serve_tls_parity_across_tiers ... ok
+test http_websocket_accept_parity_across_tiers ... ok
+test httptest_static_server_parity_across_tiers ... ok
+test http_request_context_parity_across_tiers ... ok
+test http_server_object_parity_across_tiers ... ok
+test http_response_stream_parity_across_tiers ... ok
+test lifecycle_readiness_shutdown_parity_across_tiers ... ok
+test http_middleware_controls_parity_across_tiers ... ok
+test bytecode_parity_group_0 has been running for over 60 seconds
+test bytecode_parity_group_1 has been running for over 60 seconds
+test bytecode_parity_group_2 has been running for over 60 seconds
+test bytecode_parity_group_3 has been running for over 60 seconds
+test bytecode_parity_group_4 has been running for over 60 seconds
+test bytecode_parity_group_5 has been running for over 60 seconds
+test cranelift_parity_group_0 has been running for over 60 seconds
+test cranelift_parity_group_1 has been running for over 60 seconds
+test cranelift_parity_group_2 has been running for over 60 seconds
+test cranelift_parity_group_3 has been running for over 60 seconds
+test cranelift_parity_group_4 has been running for over 60 seconds
+test cranelift_parity_group_5 has been running for over 60 seconds
+test llvm_debug_parity_group_0 has been running for over 60 seconds
+test llvm_debug_parity_group_1 has been running for over 60 seconds
+test llvm_debug_parity_group_2 has been running for over 60 seconds
+test llvm_debug_parity_group_3 has been running for over 60 seconds
+test llvm_debug_parity_group_4 has been running for over 60 seconds
+test llvm_debug_parity_group_5 has been running for over 60 seconds
+test llvm_parity_group_0 has been running for over 60 seconds
+test llvm_parity_group_1 has been running for over 60 seconds
+test llvm_parity_group_2 has been running for over 60 seconds
+test llvm_parity_group_3 has been running for over 60 seconds
+test llvm_parity_group_4 has been running for over 60 seconds
+test llvm_parity_group_5 has been running for over 60 seconds
+test bytecode_parity_group_0 ... ok
+test bytecode_parity_group_1 ... ok
+test llvm_strict_lower_group_0 has been running for over 60 seconds
+test bytecode_parity_group_2 ... ok
+test llvm_strict_lower_group_1 has been running for over 60 seconds
+test llvm_strict_lower_group_1 ... ok
+test llvm_strict_lower_group_0 ... ok
+test bytecode_parity_group_4 ... ok
+test llvm_strict_lower_group_2 ... ok
+test specs_cover_every_feature_testing_example ... ok
+test stdlib_http_middleware_stack_parity_across_tiers ... ok
+test tier_report_handles_crash_and_timeout ... ok
+test tier_report_shows_exit_ntstatus_and_streams ... ok
+test llvm_strict_lower_group_3 ... ok
+test web_auth_api_parity_across_tiers ... ok
+test web_server_smoke_cranelift ... ok
+test web_server_smoke_llvm ... ok
+test web_server_smoke_vm ... ok
+test websocket_echo_parity_across_tiers ... ok
+test bytecode_parity_group_5 ... ok
+test llvm_strict_lower_group_4 ... ok
+test llvm_strict_lower_group_5 ... ok
+test bytecode_parity_group_3 ... ok
+test vm_runs_every_example_without_crashing has been running for over 60 seconds
+test cranelift_parity_group_0 ... ok
+test vm_runs_every_example_without_crashing ... ok
+test cranelift_parity_group_1 ... ok
+test cranelift_parity_group_2 ... ok
+test cranelift_parity_group_3 ... ok
+test cranelift_parity_group_4 ... ok
+test cranelift_parity_group_5 ... ok
+test llvm_debug_parity_group_0 ... ok
+test llvm_debug_parity_group_1 ... ok
+test llvm_debug_parity_group_2 ... ok
+test llvm_debug_parity_group_3 ... ok
+test llvm_debug_parity_group_4 ... ok
+test llvm_debug_parity_group_5 ... ok
+test llvm_parity_group_0 ... ok
+test llvm_parity_group_1 ... ok
+test llvm_parity_group_2 ... ok
+test llvm_parity_group_3 ... ok
+test llvm_parity_group_4 ... ok
+test llvm_parity_group_5 ... ok
+
+test result: ok. 92 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1240.74s
+
+     Running tests/weak_references.rs (target/debug/deps/weak_references-152f30389ccdc49f)
+
+running 1 test
+test weak_references_reclaim_on_native_debug_and_release ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.50s
+
+     Running tests/lower_shapes.rs (target/debug/deps/lower_shapes-3553aaf47cd8c3e2)
+
+running 33 tests
+test binop_div_i64_emits_sdiv_instruction ... ok
+test const_int_max_emits_max_literal ... ok
+test binop_bitand_i64_emits_and_instruction ... ok
+test an_aggregate_passed_twice_reaches_the_callee_as_two_copies ... ok
+test channel_recv_option_uses_status_out_pointer_call ... ok
+test a_body_answering_through_caller_storage_builds_its_answer_there ... ok
+test binop_bitor_i64_emits_or_instruction ... ok
+test binop_bitxor_i64_emits_xor_instruction ... ok
+test binop_shr_i64_emits_ashr_instruction ... ok
+test binop_shl_i64_emits_shl_instruction ... ok
+test channel_try_recv_option_uses_status_out_pointer_call ... ok
+test binop_rem_i64_emits_srem_instruction ... ok
+test a_direct_callee_reads_its_aggregate_parameters_in_the_callers_storage ... ok
+test fixed_u8_array_uses_packed_native_storage ... ok
+test const_int_zero_emits_store_i64 ... ok
+test a_parameter_the_body_writes_is_copied_into_the_frame ... ok
+test binop_mul_i64_emits_mul_instruction ... ok
+test ir_contains_target_triple ... ok
+test integer_abs_uses_the_integer_runtime_helper ... ok
+test binop_add_i64_emits_add_instruction ... ok
+test large_fixed_array_local_spills_to_heap_storage ... ok
+test binop_sub_i64_emits_sub_instruction ... ok
+test ir_contains_module_id_header ... ok
+test a_carrier_release_calls_the_runtime_only_for_an_arm_that_owns_storage ... ok
+test a_foreign_field_write_at_a_constant_offset_is_an_inline_store ... ok
+test native_static_finalizer_is_shared_across_stores_and_functions ... ok
+test string_map_with_capacity_uses_typed_storage ... ok
+test heap_enum_by_value_parameter_crosses_a_direct_call_as_the_word ... ok
+test a_foreign_scalar_of_a_constant_class_is_an_inline_load_or_store ... ok
+test vec_i64_swap_is_inlined ... ok
+test vec_i64_pop_option_is_inlined ... ok
+test boxed_enum_payload_clones_containers_in_the_destination ... ok
+test multi_slot_struct_parameter_still_arrives_by_pointer ... ok
+
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/builtin_coverage.rs (target/debug/deps/builtin_coverage-c35d8108f65fe60d)
+
+running 4 tests
+test every_exemption_gives_a_mechanism ... ok
+test a_same_named_builtin_is_found ... ok
+test every_runtime_helper_is_reachable_from_the_vm ... ok
+test every_exemption_answers_for_a_helper_with_no_builtin ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+     Running tests/uniqueness.rs (target/debug/deps/uniqueness-3a882f90532b26ef)
+
+running 14 tests
+test a_parameter_is_shared_unless_the_caller_proved_otherwise ... ok
+test a_deque_binding_takes_the_table_its_constructor_built ... ok
+test a_map_stored_on_its_last_use_moves_instead_of_copying ... ok
+test a_map_filled_by_inserts_stays_unique ... ok
+test a_freshly_built_vector_is_unique ... ok
+test a_container_holding_a_copy_of_a_vector_read_after_it_stays_unique ... ok
+test a_vector_stored_in_a_container_it_is_read_after_stays_unique ... ok
+test a_live_reference_makes_the_root_borrowed_not_unique ... ok
+test a_value_returned_from_a_function_that_keeps_no_handle_stays_unique ... ok
+test a_vector_captured_by_a_closure_is_shared ... ok
+test a_recursive_function_that_returns_its_argument_answers_a_shared_value ... ok
+test a_value_a_function_also_stores_elsewhere_stays_unique ... ok
+test a_vector_a_goroutine_takes_a_snapshot_of_stays_unique ... ok
+test a_vector_a_goroutine_reads_unchanged_is_shared ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+

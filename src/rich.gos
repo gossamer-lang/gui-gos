@@ -1,0 +1,98 @@
+// Structured document handles. Small explicit reads copy into application storage;
+// import/export jobs use services::work for bounded background execution.
+use std::errors
+use std::encoding::json
+
+#[derive(PartialEq, Eq)]
+pub enum Format { Markdown, Html }
+#[derive(Default, PartialEq, Eq)]
+pub struct Marks {
+    pub strong: bool
+    pub emphasis: bool
+    pub underline: bool
+    pub strike: bool
+    pub code: bool
+    pub link: String
+    pub title: String
+}
+#[derive(Default, PartialEq, Eq)]
+pub struct Image { pub width: i64, pub height: i64, pub source: String, pub alt: String, pub title: String }
+#[derive(PartialEq, Eq)]
+pub struct Span { pub start: i64, pub end: i64, pub marks: Marks, pub image: Option<Image> }
+#[derive(PartialEq, Eq)]
+pub enum Kind { Paragraph, Heading(i64), Code(String), Quote, List(Option<i64>), Item, Rule }
+#[derive(PartialEq)]
+pub struct Block { pub id: i64, pub kind: Kind, pub text: String, pub spans: Vec<Span>, pub children: Vec<Block> }
+impl Block {
+    pub fn paragraph(text: String) -> Block {
+        Block { id: 0, kind: Kind::Paragraph, text: text, spans: if text.is_empty() { #[] } else { #[Span { start: 0, end: text.byte_len(), marks: Marks::default(), image: None }] }, children: #[] }
+    }
+}
+#[derive(PartialEq)]
+pub struct Content { pub blocks: Vec<Block> }
+#[derive(Default, PartialEq, Eq)]
+pub struct Position { pub block: i64, pub byte: i64 }
+#[derive(Default, PartialEq, Eq)]
+pub struct Selection { pub anchor: Position, pub caret: Position }
+#[derive(PartialEq)]
+pub enum Mark { Strong, Emphasis, Underline, Strike, Code }
+#[derive(PartialEq)]
+pub enum Edit {
+    Replace { block: i64, start: i64, end: i64, text: String, marks: Option<Marks> }
+    SetMark { block: i64, start: i64, end: i64, mark: Mark, enabled: bool }
+    Link { block: i64, start: i64, end: i64, url: String, title: String }
+    SetSpans { block: i64, spans: Vec<Span> }
+    SetKind { block: i64, kind: Kind }
+    Insert { parent: i64, index: i64, block: Block }
+    Remove { block: i64 }
+    Move { block: i64, parent: i64, index: i64 }
+    Split { block: i64, at: i64 }
+    Join { first: i64, second: i64 }
+}
+#[derive(PartialEq)]
+pub struct Info { pub marks: Marks, pub revision: i64, pub dirty: bool, pub can_undo: bool, pub can_redo: bool, pub readonly: bool, pub blocks: i64, pub selection: Selection }
+#[derive(PartialEq)]
+pub struct Record { pub document: i64 }
+#[derive(Default, PartialEq, Eq)]
+pub struct Document { pub id: i64 }
+#[derive(PartialEq)]
+pub struct OutlineRow { pub block: i64, pub depth: i64, pub kind: Kind, pub label: String }
+enum Answer { Outline(Vec<OutlineRow>), Id(i64), Info(crate::rich::Info), Block(crate::rich::Block), Blocks(Vec<crate::rich::Block>), Text(String), Done }
+fn call(method: String, id: i64, args: String) -> Result<Answer, errors::Error> {
+    let answer = gui_engine::rich(method, id, args).map_err(|why| errors::new(why))?
+    json::decode::<Answer>(answer)
+}
+fn expect_id(answer: Answer) -> i64 { if let Answer::Id(id) = answer { id } else { panic("invalid rich document identity answer") } }
+fn expect_info(answer: Answer) -> Info { if let Answer::Info(info) = answer { info } else { panic("invalid rich document info answer") } }
+fn expect_text(answer: Answer) -> String { if let Answer::Text(text) = answer { text } else { panic("invalid rich document text answer") } }
+impl Document {
+    pub fn wrap(&self, kind: Kind) -> Result<Info, errors::Error> { Ok(expect_info(call("wrap", self.id, json::encode(kind))?)) }
+    pub fn enter(&self) -> Result<Info, errors::Error> { Ok(expect_info(call("enter", self.id, "[]")?)) }
+    pub fn indent(&self, outdent: bool = false) -> Result<Info, errors::Error> { Ok(expect_info(call("indent", self.id, json::encode(outdent))?)) }
+    pub fn new() -> Result<Document, errors::Error> { Ok(Document { id: expect_id(call("new", 0, "[]")?) }) }
+    pub fn import(doc_format: Format, source: String) -> Result<Document, errors::Error> { Ok(Document { id: expect_id(call("import", 0, json::encode((doc_format, source)))?) }) }
+    pub fn info(&self) -> Info { expect_info(call("info", self.id, "[]").unwrap_or_else(|why| panic(f"{why}"))) }
+    pub fn block(&self, id: i64) -> Block { if let Answer::Block(block) = call("block", self.id, json::encode(id)).unwrap_or_else(|why| panic(f"{why}")) { block } else { panic("invalid rich block answer") } }
+    pub fn blocks(&self, start: i64, count: i64) -> Result<Vec<Block>, errors::Error> { if let Answer::Blocks(blocks) = call("blocks", self.id, json::encode((start.max(0), count.max(0))))? { Ok(blocks) } else { Err(errors::new("invalid rich block page answer")) } }
+    pub fn text(&self) -> String { expect_text(call("plain", self.id, "[]").unwrap_or_else(|why| panic(f"{why}"))) }
+    pub fn freeze(&self) -> Document { Document { id: expect_id(call("freeze", self.id, "[]").unwrap_or_else(|why| panic(f"{why}"))) } }
+    pub fn close(&self) { let _ = call("close", self.id, "[]") }
+    pub fn select(&self, selection: Selection) -> Result<(), errors::Error> { let _ = call("select", self.id, json::encode(selection))?; Ok(()) }
+    pub fn transact(&self, revision: i64, edits: Vec<Edit>) -> Result<Info, errors::Error> { Ok(expect_info(call("transact", self.id, json::encode((revision, edits)))?)) }
+    pub fn undo(&self) -> Result<Info, errors::Error> { Ok(expect_info(call("undo", self.id, json::encode(self.info().revision))?)) }
+    pub fn redo(&self) -> Result<Info, errors::Error> { Ok(expect_info(call("redo", self.id, json::encode(self.info().revision))?)) }
+    pub fn mark_saved(&self, snapshot: Document) -> Result<(), errors::Error> { let _ = call("saved", self.id, json::encode(snapshot.id))?; Ok(()) }
+    pub fn export(&self, doc_format: Format) -> Result<String, errors::Error> { Ok(expect_text(call("export", self.id, json::encode((self.info().revision, doc_format)))?)) }
+}
+
+impl Document {
+    pub fn outline(&self, start: i64, count: i64) -> Result<Vec<OutlineRow>, errors::Error>{ if let Answer::Outline(rows) = call("outline", self.id, json::encode((start.max(0), count.max(0))))? { Ok(rows) } else { Err(errors::new("invalid rich outline answer")) } }
+    pub fn preview(&self, id: String, start: i64 = 0, count: i64 = 32) -> Result<crate::Widget, errors::Error>{
+        let answer = gui_engine::rich_preview(self.id, id, start, count).map_err(|why| errors::new(why))?
+        json::decode::<crate::Widget>(answer)
+    }
+    pub fn input(&self, block: i64, id: String) -> Result<crate::TextInput, errors::Error>{
+        let answer = gui_engine::rich_input(self.id, block, id).map_err(|why| errors::new(why))?
+        json::decode::<crate::TextInput>(answer)
+    }
+}

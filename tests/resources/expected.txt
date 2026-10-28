@@ -1,0 +1,8 @@
+bounded file read: ok
+atomic file save: ok
+background analysis: ok
+background completion: ok
+progress delivery: ok
+window reservations and callback disposal: ok
+aggregate reservation rejection: ok
+session shutdown and closed mailbox: ok

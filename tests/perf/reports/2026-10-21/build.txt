@@ -1,0 +1,1 @@
+build: 16977448B native executable at /tmp/gui-gos-wrap-work/perf-report/bin/gui-perf (target x86_64-unknown-linux-gnu)

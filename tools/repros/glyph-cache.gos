@@ -1,0 +1,27 @@
+struct Glyph {
+    dx: i64
+    dy: i64
+    w: i64
+    h: i64
+    cov: Vec<u8>
+    advance: i64
+}
+static mut GLYPHS: Map<(char, i64, bool, i64), Glyph> = {}
+fn get(ch: char) -> Glyph {
+    let key = (ch, 14, false, 0)
+    match GLYPHS.get(key) {
+        Some(cached) => cached
+        None => {
+            let made = Glyph { dx: 0, dy: 0, w: 2, h: 2, cov: #[255u8; 4], advance: 3 }
+            GLYPHS[key] = made
+            made
+        }
+    }
+}
+fn main() {
+    let a = get('a')
+    let b = get('a')
+    assert_eq(a.cov.len(), 4)
+    assert_eq(b.cov.len(), 4)
+    println("glyph cache OK")
+}

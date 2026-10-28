@@ -1,0 +1,175 @@
+// search: find and replace over committed text. A match is a byte range
+// whose ends are grapheme cluster boundaries, so a query never matches part
+// of a combined character. Matches are found left to right without overlap.
+
+use crate::editing::word_boundaries
+use crate::text::folding::{FoldedText, folded_chars}
+use crate::text::offsets::{ByteOffset, ByteRange}
+
+/// How a query is compared with the text.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct SearchOptions {
+    /// Compare text exactly instead of case-folded.
+    pub match_case: bool
+    /// Accept only matches that start and end on word boundaries.
+    pub whole_word: bool
+}
+
+/// The non-overlapping matches of `query` in `text`, at most `limit` of
+/// them (0 for all). An empty query matches nothing.
+pub fn find_all(text: String, query: String, options: SearchOptions, limit: i64) -> Vec<ByteRange> {
+    let mut out = #[]
+    let wanted = if options.match_case { query.chars().collect() } else { folded_chars(query) }
+    let m = wanted.len()
+    if m == 0 {
+        return out
+    }
+    let have = FoldedText::of_graphemes(text, !options.match_case)
+    let mut words: Set<i64> = #{}
+    if options.whole_word {
+        for b in word_boundaries(text) { words.insert(b) }
+    }
+    let mut i = 0
+    while i + m <= have.len() {
+        if have.at_boundary(i) && have.at_boundary(i + m) && have.matches_at(wanted, i) {
+            let start, end = have.span(i, i + m)
+            if !options.whole_word || (words.contains(start) && words.contains(end)) {
+                out.push(ByteRange { start: ByteOffset(start), end: ByteOffset(end) })
+                if limit > 0 && out.len() >= limit {
+                    break
+                }
+                i += m
+                continue
+            }
+        }
+        i += 1
+    }
+    out
+}
+
+/// The match to select when stepping from the selection `from..to`: the
+/// first match starting at or after `to` going forward, or the last one
+/// starting before `from` going backward, wrapping past either end. -1 when
+/// there are none.
+pub fn step(ranges: Vec<ByteRange>, from: ByteOffset, to: ByteOffset, forward: bool) -> i64 {
+    if ranges.is_empty() {
+        return -1
+    }
+    if forward {
+        match ranges.iter().position(|r| r.start >= to) {
+            Some(i) => i
+            None => 0
+        }
+    } else {
+        let mut found = ranges.len() - 1
+        let mut i = ranges.len() - 1
+        while i >= 0 {
+            if ranges[i].start < from {
+                found = i
+                break
+            }
+            i -= 1
+        }
+        found
+    }
+}
+
+/// The index of the match covering exactly `from..to`, or -1.
+pub fn selected(ranges: Vec<ByteRange>, from: ByteOffset, to: ByteOffset) -> i64 {
+    match ranges.iter().position(|r| r.start == from && r.end == to) {
+        Some(i) => i
+        None => -1
+    }
+}
+
+/// `text` with every range in `ranges` replaced by `replacement`. The
+/// ranges must be sorted, non-overlapping, and found in this `text`.
+pub fn replace_all(text: String, ranges: Vec<ByteRange>, replacement: String) -> String {
+    let mut out = String::with_capacity(text.byte_len())
+    let mut at = 0
+    for r in ranges {
+        out += text.substring(at, r.start.0)
+        out += replacement
+        at = r.end.0
+    }
+    out += text.substring(at, text.byte_len())
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::text::offsets::{ByteOffset, ByteRange}
+    use super::{find_all, replace_all, selected, step, SearchOptions}
+
+    fn starts(text: String, query: String, options: SearchOptions) -> Vec<i64> {
+        find_all(text, query, options, 0).map(|r| r.start.0)
+    }
+
+    fn range(start: i64, end: i64) -> ByteRange {
+        ByteRange { start: ByteOffset(start), end: ByteOffset(end) }
+    }
+
+    #[test]
+    fn matches_fold_case_unless_asked_and_never_overlap() {
+        let any = SearchOptions::default()
+        assert_eq(starts("Foo foo FOO", "foo", any), #[0, 4, 8])
+        assert_eq(starts("Foo foo FOO", "foo", SearchOptions { match_case: true, whole_word: false }), #[4])
+        assert_eq(starts("aaaa", "aa", any), #[0, 2])
+        assert_eq(starts("abc", "", any), #[])
+        assert_eq(find_all("Foo foo FOO", "foo", any, 2).len(), 2)
+    }
+
+    #[test]
+    fn whole_words_reject_matches_inside_identifiers() {
+        let words = SearchOptions { match_case: false, whole_word: true }
+        assert_eq(starts("let x = xs.len() + x_1 + x", "x", words), #[4, 25])
+        assert_eq(starts("foo.bar foobar", "foo", words), #[0])
+    }
+
+    #[test]
+    fn a_query_never_matches_part_of_a_grapheme() {
+        // "e" followed by a combining acute is one grapheme.
+        let text = "e\u{301}e caf\u{e9}"
+        assert_eq(starts(text, "e", SearchOptions::default()), #[3])
+        assert_eq(find_all(text, "e\u{301}", SearchOptions::default(), 0), #[range(0, 3)])
+        assert_eq(starts("\u{1F469}\u{200D}\u{1F4BB} \u{1F469}", "\u{1F469}", SearchOptions::default()), #[12])
+    }
+
+    #[test]
+    fn folding_that_expands_still_matches_whole_graphemes() {
+        // `İ` folds to `i` plus a combining dot, two characters for one grapheme.
+        let text = "\u{130}STANBUL istanbul \u{130}x i"
+        assert_eq(starts(text, "\u{130}stanbul", SearchOptions::default()), #[0])
+        assert_eq(starts(text, "istanbul", SearchOptions::default()), #[10])
+        assert_eq(starts(text, "i", SearchOptions::default()), #[10, 23])
+        assert_eq(find_all(text, "\u{130}x", SearchOptions::default(), 0), #[range(19, 22)])
+        // `ß` folds to `ss`, so either spelling finds the other.
+        let street = "Stra\u{DF}e STRASSE"
+        assert_eq(starts(street, "strasse", SearchOptions::default()), #[0, 8])
+        assert_eq(starts(street, "Stra\u{DF}e", SearchOptions::default()), #[0, 8])
+        assert_eq(find_all(street, "ss", SearchOptions::default(), 0), #[range(4, 6), range(12, 14)])
+        assert_eq(starts(street, "s", SearchOptions::default()), #[0, 8, 12, 13])
+    }
+
+    #[test]
+    fn stepping_wraps_and_starts_from_the_selection() {
+        let m = #[range(0, 3), range(4, 7), range(8, 11)]
+        assert_eq(step(m, ByteOffset(0), ByteOffset(0), true), 0)
+        assert_eq(step(m, ByteOffset(0), ByteOffset(3), true), 1)
+        assert_eq(step(m, ByteOffset(8), ByteOffset(11), true), 0)
+        assert_eq(step(m, ByteOffset(4), ByteOffset(7), false), 0)
+        assert_eq(step(m, ByteOffset(0), ByteOffset(3), false), 2)
+        assert_eq(step(#[], ByteOffset(0), ByteOffset(0), true), -1)
+        assert_eq(selected(m, ByteOffset(4), ByteOffset(7)), 1)
+        assert_eq(selected(m, ByteOffset(4), ByteOffset(6)), -1)
+    }
+
+    #[test]
+    fn replace_all_rewrites_each_match_once() {
+        let text = "a cat, a Cat"
+        let m = find_all(text, "cat", SearchOptions::default(), 0)
+        assert_eq(replace_all(text, m, "dog"), "a dog, a dog")
+        assert_eq(replace_all(text, #[], "dog"), text)
+        assert_eq(replace_all("xx", find_all("xx", "x", SearchOptions::default(), 0), "xx"), "xxxx")
+    }
+}

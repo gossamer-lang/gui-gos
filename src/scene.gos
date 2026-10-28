@@ -1,0 +1,201 @@
+// Scene canvases: a retained tree of shapes, text, images and groups with
+// transforms and clipping. The pointer selects, moves and resizes objects
+// and pans and zooms the view; the keyboard walks, nudges and deletes them,
+// with undo; every object is an accessible child of the canvas. Edits and
+// selection changes arrive as `UiMsg::Scene(id, info)`.
+
+use std::errors
+use std::encoding::json
+
+use crate::render::vector::Path
+
+/// What an object draws.
+pub enum Shape {
+    Rect { width: f64, height: f64, radius: f64 }
+    Ellipse { width: f64, height: f64 }
+    Path(Path)
+    /// Text with its top-left at the object's origin; text does not rotate.
+    Text { text: String, size: f64 }
+    /// Pixels drawn at `width` x `height`; images do not rotate.
+    Image { rgba: Vec<u8>, pixels_wide: i64, pixels_high: i64, width: f64, height: f64 }
+    Group { width: f64, height: f64, clip: bool, children: Vec<Node> }
+}
+
+/// Position, rotation in degrees about the origin, and scale.
+pub struct Transform {
+    pub x: f64
+    pub y: f64
+    pub rotation: f64
+    pub scale: f64
+}
+
+impl Transform {
+    pub fn at(x: f64, y: f64, rotation: f64 = 0.0, scale: f64 = 1.0) -> Transform {
+        Transform { x: x, y: y, rotation: rotation, scale: scale }
+    }
+}
+
+/// One object of a scene.
+pub struct Node {
+    /// Unique within the scene.
+    pub id: String
+    /// The accessible name; empty marks the object decorative.
+    pub label: String
+    pub shape: Shape
+    pub transform: Transform
+    pub fill: Option<crate::Color>
+    pub stroke: Option<(crate::Color, f64)>
+    pub opacity: f64
+    pub visible: bool
+    pub locked: bool
+}
+
+impl Node {
+    pub fn new(id: String, label: String, shape: Shape, transform: Transform, fill: Option<crate::Color> = None) -> Node {
+        Node { id: id, label: label, shape: shape, transform: transform, fill: fill, stroke: None, opacity: 1.0, visible: true, locked: false }
+    }
+}
+
+/// Scene point (`x`, `y`) at the view's top-left, magnified `zoom` times.
+pub struct Camera {
+    pub x: f64
+    pub y: f64
+    pub zoom: f64
+}
+
+/// A scene's state after an edit.
+#[derive(PartialEq)]
+pub struct Info {
+    pub revision: i64
+    pub selection: Vec<String>
+    pub can_undo: bool
+    pub can_redo: bool
+    pub nodes: i64
+}
+
+/// The widget showing scene `scene`.
+pub struct View {
+    pub id: String
+    pub scene: i64
+    pub label: String
+    pub width: i64
+    pub height: i64
+}
+
+enum Answer {
+    Id(i64)
+    Info(Info)
+    Nodes(Vec<Node>)
+    Hit(Option<String>)
+    Item(crate::print::Item)
+    Done
+}
+
+/// A scene handle; it closes with its session.
+#[derive(Default, PartialEq, Eq)]
+pub struct Scene {
+    pub id: i64
+}
+
+fn call(method: String, id: i64, args: String) -> Result<Answer, errors::Error> {
+    let answer = gui_engine::scene(method, id, args).map_err(|why| errors::new(why))?
+    json::decode::<Answer>(answer)
+}
+
+fn info(answer: Result<Answer, errors::Error>) -> Result<Info, errors::Error> {
+    match answer? {
+        Answer::Info(info) => Ok(info)
+        _ => Err(errors::new("invalid scene answer"))
+    }
+}
+
+impl Scene {
+    pub fn open(nodes: Vec<Node>) -> Result<Scene, errors::Error> {
+        match call("open", 0, json::encode(nodes))? {
+            Answer::Id(id) => Ok(Scene { id: id })
+            _ => Err(errors::new("invalid scene answer"))
+        }
+    }
+
+    /// Adds `node` to group `parent` ("" for the top level), last or at `index`.
+    pub fn add(&self, node: Node, parent: String = "", index: i64 = -1) -> Result<Info, errors::Error> {
+        info(call("add", self.id, json::encode((parent, index, node))))
+    }
+
+    pub fn replace(&self, node: Node) -> Result<Info, errors::Error> {
+        info(call("replace", self.id, json::encode(node)))
+    }
+
+    pub fn remove(&self, ids: Vec<String>) -> Result<Info, errors::Error> {
+        info(call("remove", self.id, json::encode(ids)))
+    }
+
+    /// Moves an object to `index` among its siblings.
+    pub fn restack(&self, object: String, index: i64) -> Result<Info, errors::Error> {
+        info(call("restack", self.id, json::encode((object, index))))
+    }
+
+    pub fn translate(&self, ids: Vec<String>, dx: f64, dy: f64) -> Result<Info, errors::Error> {
+        info(call("translate", self.id, json::encode((ids, dx, dy))))
+    }
+
+    pub fn resize(&self, object: String, width: f64, height: f64) -> Result<Info, errors::Error> {
+        info(call("resize", self.id, json::encode((object, width, height))))
+    }
+
+    pub fn undo(&self) -> Result<Info, errors::Error> {
+        info(call("undo", self.id, "null"))
+    }
+
+    pub fn redo(&self) -> Result<Info, errors::Error> {
+        info(call("redo", self.id, "null"))
+    }
+
+    pub fn select(&self, ids: Vec<String>) -> Result<Info, errors::Error> {
+        info(call("select", self.id, json::encode(ids)))
+    }
+
+    pub fn set_camera(&self, camera: Camera) -> Result<(), errors::Error> {
+        call("camera", self.id, json::encode(camera)).map(|_| ())
+    }
+
+    pub fn info(&self) -> Result<Info, errors::Error> {
+        info(call("info", self.id, "null"))
+    }
+
+    /// The scene's objects, as built.
+    pub fn nodes(&self) -> Result<Vec<Node>, errors::Error> {
+        match call("nodes", self.id, "null")? {
+            Answer::Nodes(nodes) => Ok(nodes)
+            _ => Err(errors::new("invalid scene answer"))
+        }
+    }
+
+    /// The top-level (or with `deep` the innermost) object under view pixel (`x`, `y`).
+    pub fn hit(&self, x: f64, y: f64, deep: bool = false) -> Result<Option<String>, errors::Error> {
+        match call("hit", self.id, json::encode((x, y, deep)))? {
+            Answer::Hit(id) => Ok(id)
+            _ => Err(errors::new("invalid scene answer"))
+        }
+    }
+
+    pub fn export_png(&self, path: String, width: i64, height: i64) -> Result<(), errors::Error> {
+        call("export_png", self.id, json::encode((path, width, height))).map(|_| ())
+    }
+
+    /// The scene as a printable drawing, for `gui::print` documents.
+    pub fn print_item(&self, width: i64, height: i64) -> Result<crate::print::Item, errors::Error> {
+        match call("drawing", self.id, json::encode((width, height)))? {
+            Answer::Item(item) => Ok(item)
+            _ => Err(errors::new("invalid scene answer"))
+        }
+    }
+
+    pub fn view(&self, id: String, label: String, width: i64 = 600, height: i64 = 400) -> crate::Widget {
+        crate::Widget::Scene(View { id: id, scene: self.id, label: label, width: width, height: height })
+    }
+
+    pub fn close(&self) {
+        let _ = call("close", self.id, "null")
+    }
+}

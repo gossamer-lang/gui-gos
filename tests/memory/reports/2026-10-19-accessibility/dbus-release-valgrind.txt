@@ -1,0 +1,110 @@
+==1433370== Memcheck, a memory error detector
+==1433370== Copyright (C) 2002-2022, and GNU GPL'd, by Julian Seward et al.
+==1433370== Using Valgrind-3.22.0 and LibVEX; rerun with -h for copyright info
+==1433370== Command: /tmp/gui-dbus-final/release/gui-dbus-roundtrip
+==1433370== Parent PID: 1433369
+==1433370== 
+==1433370== 
+==1433370== HEAP SUMMARY:
+==1433370==     in use at exit: 4,576 bytes in 20 blocks
+==1433370==   total heap usage: 1,041 allocs, 1,021 frees, 141,548 bytes allocated
+==1433370== 
+==1433370== 24 bytes in 1 blocks are still reachable in loss record 1 of 8
+==1433370==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1433370==    by 0x48A6962: dbus_threads_init (in /usr/lib/x86_64-linux-gnu/libdbus-1.so.3.32.4)
+==1433370==    by 0x48A0D8F: ??? (in /usr/lib/x86_64-linux-gnu/libdbus-1.so.3.32.4)
+==1433370==    by 0x48A1BF4: dbus_message_new_method_call (in /usr/lib/x86_64-linux-gnu/libdbus-1.so.3.32.4)
+==1433370==    by 0x11BA8F: dbus::native::call (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x117FBC: gos_main (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x160EA9: gos_rt_call_main (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x118C08: main (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370== 
+==1433370== 24 bytes in 1 blocks are still reachable in loss record 2 of 8
+==1433370==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1433370==    by 0x48B6D95: _dbus_register_shutdown_func (in /usr/lib/x86_64-linux-gnu/libdbus-1.so.3.32.4)
+==1433370==    by 0x48A1A45: dbus_message_unref (in /usr/lib/x86_64-linux-gnu/libdbus-1.so.3.32.4)
+==1433370==    by 0x118533: gos_main (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x160EA9: gos_rt_call_main (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x118C08: main (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370== 
+==1433370== 80 bytes in 1 blocks are still reachable in loss record 3 of 8
+==1433370==    at 0x484DB80: realloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1433370==    by 0x48AF075: ??? (in /usr/lib/x86_64-linux-gnu/libdbus-1.so.3.32.4)
+==1433370==    by 0x48AF104: ??? (in /usr/lib/x86_64-linux-gnu/libdbus-1.so.3.32.4)
+==1433370==    by 0x48B0B7B: _dbus_string_copy_len (in /usr/lib/x86_64-linux-gnu/libdbus-1.so.3.32.4)
+==1433370==    by 0x48B3076: ??? (in /usr/lib/x86_64-linux-gnu/libdbus-1.so.3.32.4)
+==1433370==    by 0x489DCA3: _dbus_type_writer_write_basic (in /usr/lib/x86_64-linux-gnu/libdbus-1.so.3.32.4)
+==1433370==    by 0x48A15B9: dbus_message_iter_append_basic (in /usr/lib/x86_64-linux-gnu/libdbus-1.so.3.32.4)
+==1433370==    by 0x119289: dbus::native::append (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x119BF8: dbus::native::append (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x11A608: dbus::native::body (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x1182E1: gos_main (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x160EA9: gos_rt_call_main (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370== 
+==1433370== 160 bytes in 1 blocks are still reachable in loss record 4 of 8
+==1433370==    at 0x484DB80: realloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1433370==    by 0x48AF075: ??? (in /usr/lib/x86_64-linux-gnu/libdbus-1.so.3.32.4)
+==1433370==    by 0x48AF104: ??? (in /usr/lib/x86_64-linux-gnu/libdbus-1.so.3.32.4)
+==1433370==    by 0x48B0B7B: _dbus_string_copy_len (in /usr/lib/x86_64-linux-gnu/libdbus-1.so.3.32.4)
+==1433370==    by 0x48B3076: ??? (in /usr/lib/x86_64-linux-gnu/libdbus-1.so.3.32.4)
+==1433370==    by 0x489DCA3: _dbus_type_writer_write_basic (in /usr/lib/x86_64-linux-gnu/libdbus-1.so.3.32.4)
+==1433370==    by 0x489DEF7: ??? (in /usr/lib/x86_64-linux-gnu/libdbus-1.so.3.32.4)
+==1433370==    by 0x48B89D1: ??? (in /usr/lib/x86_64-linux-gnu/libdbus-1.so.3.32.4)
+==1433370==    by 0x48A1C1C: dbus_message_new_method_call (in /usr/lib/x86_64-linux-gnu/libdbus-1.so.3.32.4)
+==1433370==    by 0x11BA8F: dbus::native::call (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x117FBC: gos_main (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x160EA9: gos_rt_call_main (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370== 
+==1433370== 184 bytes in 1 blocks are still reachable in loss record 5 of 8
+==1433370==    at 0x484D953: calloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1433370==    by 0x48A0DDF: ??? (in /usr/lib/x86_64-linux-gnu/libdbus-1.so.3.32.4)
+==1433370==    by 0x48A1BF4: dbus_message_new_method_call (in /usr/lib/x86_64-linux-gnu/libdbus-1.so.3.32.4)
+==1433370==    by 0x11BA8F: dbus::native::call (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x117FBC: gos_main (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x160EA9: gos_rt_call_main (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x118C08: main (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370== 
+==1433370== 520 bytes in 13 blocks are still reachable in loss record 6 of 8
+==1433370==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1433370==    by 0x48B2C8B: ??? (in /usr/lib/x86_64-linux-gnu/libdbus-1.so.3.32.4)
+==1433370==    by 0x48A6934: dbus_threads_init (in /usr/lib/x86_64-linux-gnu/libdbus-1.so.3.32.4)
+==1433370==    by 0x48A0D8F: ??? (in /usr/lib/x86_64-linux-gnu/libdbus-1.so.3.32.4)
+==1433370==    by 0x48A1BF4: dbus_message_new_method_call (in /usr/lib/x86_64-linux-gnu/libdbus-1.so.3.32.4)
+==1433370==    by 0x11BA8F: dbus::native::call (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x117FBC: gos_main (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x160EA9: gos_rt_call_main (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x118C08: main (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370== 
+==1433370== 1,024 bytes in 1 blocks are still reachable in loss record 7 of 8
+==1433370==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1433370==    by 0x248AFD: <std::sync::once::Once>::call_once_force::<<std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::initialize<<std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::get_or_init<std::io::stdio::stdout::{closure#0}>::{closure#0}, !>::{closure#0}>::{closure#0} (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x116876: <std::sys::sync::once::futex::Once>::call (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x115A91: <std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::initialize::<<std::sync::once_lock::OnceLock<std::sync::reentrant_lock::ReentrantLock<core::cell::RefCell<std::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw>>>>>::get_or_init<std::io::stdio::stdout::{closure#0}>::{closure#0}, !> (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x25B20A: std::io::stdio::stdout (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x1366DB: gossamer_runtime::c_abi::print::write_terminal_direct (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x136178: gossamer_runtime::c_abi::print::write_terminal (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x1360A3: gossamer_runtime::c_abi::print::write_stdout (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x1648CA: gos_rt_println (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x11851D: gos_main (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x160EA9: gos_rt_call_main (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x118C08: main (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370== 
+==1433370== 2,560 bytes in 1 blocks are still reachable in loss record 8 of 8
+==1433370==    at 0x4846828: malloc (in /usr/libexec/valgrind/vgpreload_memcheck-amd64-linux.so)
+==1433370==    by 0x14E7E0: std::sync::once::Once::call_once_force::{{closure}} (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x116876: <std::sys::sync::once::futex::Once>::call (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x10D1B7: std::sync::once_lock::OnceLock<T>::initialize (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x13B565: gossamer_runtime::c_abi::string::register_heap_string_body (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x13B237: gossamer_runtime::c_abi::string::alloc_growable_forced (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x1655B2: gos_rt_set_args (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370==    by 0x118BF9: main (in /tmp/gui-dbus-final/release/gui-dbus-roundtrip)
+==1433370== 
+==1433370== LEAK SUMMARY:
+==1433370==    definitely lost: 0 bytes in 0 blocks
+==1433370==    indirectly lost: 0 bytes in 0 blocks
+==1433370==      possibly lost: 0 bytes in 0 blocks
+==1433370==    still reachable: 4,576 bytes in 20 blocks
+==1433370==         suppressed: 0 bytes in 0 blocks
+==1433370== 
+==1433370== For lists of detected and suppressed errors, rerun with: -s
+==1433370== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)

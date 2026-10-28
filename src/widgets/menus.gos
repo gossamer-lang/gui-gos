@@ -1,0 +1,415 @@
+// menus: menu bars, pull-down and context menus, and submenus over the
+// shared popup layer. Items name commands, so labels, shortcuts, and
+// enabled/checked state come from the window's command registry and a
+// disabled command cannot run from a menu.
+//
+// Keyboard: F10 or Alt focuses the bar; Left/Right move between menus;
+// Down/Enter/Space open; inside a menu Up/Down/Home/End move (skipping
+// separators and disabled items), Right opens a submenu, Left closes it,
+// Enter activates, Escape closes one level, a letter jumps to the next
+// item starting with it, and Alt+mnemonic opens a menu from anywhere.
+// Pointer: click opens, hovering another title switches menus, hovering
+// a submenu row opens it after a short delay, and an outside click
+// closes everything without reaching what is under it.
+
+
+use crate::accessibility::{AccessNode, Role}
+use crate::commands::Command
+use crate::render::icons::Icon
+use crate::style::Theme
+use crate::widgets::Widget
+use crate::widgets::cx::{command, Node}
+use crate::widgets::state::StateStore
+
+/// One menu entry.
+#[derive(PartialEq)]
+pub enum MenuItem {
+    /// Runs `command`; `label` overrides the command's label when set.
+    Action { command: String, label: String, icon: Option<Icon> }
+    /// A radio entry: checked when its command is checked; one of a group.
+    Radio { command: String, label: String }
+    Submenu { label: String, items: Vec<MenuItem> }
+    Separator
+    /// A heading row that cannot be chosen.
+    Header(String)
+}
+
+/// A titled menu (a menu bar entry or a context menu body).
+#[derive(PartialEq)]
+pub struct Menu {
+    /// `&` marks the mnemonic letter: `&File`.
+    pub label: String
+    pub items: Vec<MenuItem>
+}
+
+impl Menu {
+    pub fn new(label: String, items: Vec<MenuItem>) -> Menu {
+        Menu { label: label, items: items }
+    }
+}
+
+/// An action entry for `command`.
+pub fn item(command: String) -> MenuItem {
+    MenuItem::Action { command: command, label: String::new(), icon: None }
+}
+
+/// An action entry with its own label.
+pub fn labeled(command: String, label: String) -> MenuItem {
+    MenuItem::Action { command: command, label: label, icon: None }
+}
+
+pub fn radio(command: String, label: String) -> MenuItem {
+    MenuItem::Radio { command: command, label: label }
+}
+
+pub fn submenu(label: String, items: Vec<MenuItem>) -> MenuItem {
+    MenuItem::Submenu { label: label, items: items }
+}
+
+pub fn separator() -> MenuItem {
+    MenuItem::Separator
+}
+
+/// Open-menu state of a menu bar or context menu.
+#[derive(PartialEq)]
+pub struct MenuState {
+    /// The open bar menu, or -1 (context menus use 0).
+    pub open: i64
+    /// The highlighted row per open level.
+    pub path: Vec<i64>
+    /// The bar title focused for keyboard navigation (menu bar only).
+    pub title: i64
+    pub keyboard: bool
+    /// Where a context menu was requested (window pixels).
+    pub at_x: i64
+    pub at_y: i64
+    pub typeahead: String
+    pub typeahead_time: i64
+}
+
+impl Default for MenuState {
+    fn default() -> MenuState {
+        MenuState { open: -1, path: #[], title: 0, keyboard: false, at_x: 0, at_y: 0, typeahead: String::new(), typeahead_time: 0 }
+    }
+}
+
+/// A horizontal bar of menus.
+#[derive(PartialEq)]
+pub struct MenuBar {
+    pub id: String
+    pub menus: Vec<Menu>
+}
+
+/// A widget with a context menu on right-click, Shift+F10, or the Menu key.
+#[derive(PartialEq)]
+pub struct ContextMenu {
+    pub id: String
+    pub child: Widget
+    pub items: Vec<MenuItem>
+}
+
+/// The visible label and mnemonic letter of `label` (`&File` -> "File", 'f').
+pub fn mnemonic(label: String) -> (String, String) {
+    let mut out = String::new()
+    let mut key = String::new()
+    let mut amp = false
+    for c in label {
+        if amp {
+            if c != '&' && key.is_empty() { key = f"{c}".to_lowercase() }
+            out.push(c)
+            amp = false
+        } else if c == '&' {
+            amp = true
+        } else {
+            out.push(c)
+        }
+    }
+    (out, key)
+}
+
+// The byte offset of the mnemonic letter in the visible label, or -1.
+fn mnemonic_offset(label: String) -> i64 {
+    let mut at = 0
+    let mut amp = false
+    for c in label {
+        if amp {
+            if c != '&' { return at }
+            at += 1
+            amp = false
+        } else if c == '&' {
+            amp = true
+        } else {
+            at += c.len_utf8()
+        }
+    }
+    -1
+}
+
+fn item_label(it: MenuItem, registry: Vec<Command>) -> String {
+    match it {
+        MenuItem::Action { command: cmd, label, .. } | MenuItem::Radio { command: cmd, label } => {
+            if !label.is_empty() { return label }
+            match command(registry, cmd) {
+                Some(c) => c.label
+                None => cmd
+            }
+        }
+        MenuItem::Submenu { label, .. } => label
+        MenuItem::Header(t) => t
+        MenuItem::Separator => String::new()
+    }
+}
+
+fn item_enabled(it: MenuItem, registry: Vec<Command>) -> bool {
+    match it {
+        MenuItem::Action { command: cmd, .. } | MenuItem::Radio { command: cmd, .. } => {
+            match command(registry, cmd) {
+                Some(c) => c.enabled && c.visible
+                None => true
+            }
+        }
+        MenuItem::Submenu { items, .. } => !items.is_empty()
+        _ => false
+    }
+}
+
+fn item_checked(it: MenuItem, registry: Vec<Command>) -> i64 {
+    match it {
+        MenuItem::Action { command: cmd, .. } | MenuItem::Radio { command: cmd, .. } => {
+            match command(registry, cmd) {
+                Some(c) => c.checked
+                None => -1
+            }
+        }
+        _ => -1
+    }
+}
+
+fn item_shortcut(it: MenuItem, registry: Vec<Command>) -> String {
+    match it {
+        MenuItem::Action { command: cmd, .. } | MenuItem::Radio { command: cmd, .. } => {
+            match command(registry, cmd) {
+                Some(c) => c.shortcut_label()
+                None => String::new()
+            }
+        }
+        _ => String::new()
+    }
+}
+
+fn visible(items: Vec<MenuItem>, registry: Vec<Command>) -> Vec<MenuItem> {
+    items.filter(|it| match it {
+        MenuItem::Action { command: cmd, .. } | MenuItem::Radio { command: cmd, .. } => {
+            match command(registry, *cmd) {
+                Some(c) => c.visible
+                None => true
+            }
+        }
+        _ => true
+    })
+}
+
+// ---- geometry ----
+
+
+fn sep_h(theme: Theme) -> i64 {
+    theme.px(9)
+}
+
+fn pad(theme: Theme) -> i64 {
+    theme.px(5)
+}
+
+
+fn selectable(it: MenuItem, registry: Vec<Command>) -> bool {
+    match it {
+        MenuItem::Separator | MenuItem::Header(_) => false
+        _ => item_enabled(it, registry)
+    }
+}
+
+fn step(items: Vec<MenuItem>, from: i64, dir: i64, registry: Vec<Command>) -> i64 {
+    let n = items.len()
+    if n == 0 { return -1 }
+    let mut i = from
+    let mut tries = 0
+    loop {
+        i = if i < 0 { if dir > 0 { 0 } else { n - 1 } } else { (i + dir + n) % n }
+        tries += 1
+        if selectable(items[i], registry) || tries > n { break }
+    }
+    if tries > n { -1 } else { i }
+}
+
+// ---- menu bar ----
+
+
+// The items shown at `level` for the open menu.
+fn level_items(root: Vec<MenuItem>, s: MenuState, level: i64, registry: Vec<Command>) -> Vec<MenuItem> {
+    let mut items = visible(root, registry)
+    let mut k = 0
+    while k < level {
+        if k >= s.path.len() { return #[] }
+        let at = s.path[k]
+        if at < 0 || at >= items.len() { return #[] }
+        match items[at] {
+            MenuItem::Submenu { items: sub, .. } => items = visible(sub, registry)
+            _ => return #[]
+        }
+        k += 1
+    }
+    items
+}
+
+
+pub fn menu_bar_semantics(b: MenuBar, node: Node, st: StateStore) -> Option<AccessNode> {
+    let mut bar = AccessNode::control(Role::MenuBar, b.id, String::new(), "")
+    let s = st.menu(b.id)
+    let mut i = 0
+    while i < b.menus.len() {
+        let label, _ = mnemonic(b.menus[i].label)
+        let mut m = AccessNode::new(Role::MenuItem, label)
+        m.id = f"{b.id}#{i}"
+        m.expanded = if s.open == i { 1 } else { 0 }
+        m.actions.push("open")
+        if i < node.parts.len() { m.bounds = node.parts[i] }
+        bar.children.push(m)
+        i += 1
+    }
+    Some(bar)
+}
+
+/// The accessibility tree of an open menu level (for the popup layer).
+pub fn panel_semantics(root: Vec<MenuItem>, owner: String, level: i64, st: StateStore, registry: Vec<Command>) -> AccessNode {
+    let s = st.menu(owner)
+    let items = level_items(root, s, level, registry)
+    let mut menu = AccessNode::new(Role::Menu, String::new())
+    menu.id = f"{owner}#menu{level}"
+    let mut i = 0
+    let n = items.len()
+    while i < n {
+        let it = items[i]
+        match it {
+            MenuItem::Separator => menu.children.push(AccessNode::new(Role::Separator, String::new()))
+            _ => {
+                let label, _ = mnemonic(item_label(it, registry))
+                let checked = item_checked(it, registry)
+                let role = match it {
+                    MenuItem::Radio { .. } => Role::MenuItemRadio
+                    _ => if checked >= 0 { Role::MenuItemCheck } else { Role::MenuItem }
+                }
+                let mut node = AccessNode::new(role, label)
+                node.disabled = !item_enabled(it, registry)
+                node.checked = checked
+                node.selected = level < s.path.len() && s.path[level] == i
+                node.description = item_shortcut(it, registry)
+                node.pos_in_set = i + 1
+                node.set_size = n
+                if let MenuItem::Submenu { .. } = it { node.expanded = if s.path.len() > level + 1 && s.path[level] == i { 1 } else { 0 } }
+                node.actions.push("press")
+                menu.children.push(node)
+            }
+        }
+        i += 1
+    }
+    menu
+}
+
+// ---- context menus ----
+
+
+/// Opens or reports the menu whose popup level a session event targets.
+pub fn bar_menu_items(b: MenuBar, st: StateStore) -> Vec<MenuItem> {
+    let s = st.menu(b.id)
+    if s.open < 0 || s.open >= b.menus.len() { #[] } else { b.menus[s.open].items }
+}
+
+/// The native menu bar `menus` describe, for `windowing`'s `App::set_menu_bar`:
+/// each command entry gets identity `i + 1`, where entry `i` of the answered
+/// list is the command it runs. Hidden commands are left out; enabled and
+/// checked state, labels (without mnemonic marks) and single-stroke
+/// shortcuts come from the registry. A run of radio entries between
+/// separators forms one group.
+pub fn native_menu_bar(menus: Vec<Menu>, registry: Vec<Command>) -> (Vec<windowing::Menu>, Vec<String>) {
+    let mut commands: Vec<String> = #[]
+    let mut out: Vec<windowing::Menu> = #[]
+    let mut group: u32 = 0
+    for menu in menus {
+        let label, _ = mnemonic(menu.label)
+        let entries = native_entries(menu.items, registry, &mut commands, &mut group)
+        out.push(windowing::Menu { title: label, entries: entries })
+    }
+    (out, commands)
+}
+
+/// The native entries for one menu body (a tray menu), with the command
+/// each identity runs, numbered as in [`native_menu_bar`].
+pub fn native_menu_entries(items: Vec<MenuItem>, registry: Vec<Command>) -> (Vec<windowing::MenuEntry>, Vec<String>) {
+    let mut commands: Vec<String> = #[]
+    let mut group: u32 = 0
+    let entries = native_entries(items, registry, &mut commands, &mut group)
+    (entries, commands)
+}
+
+fn native_shortcut(command: Command) -> Option<windowing::Shortcut> {
+    let shortcut = command.shortcuts.first()?
+    if shortcut.strokes.len() != 1 {
+        return None
+    }
+    let stroke = shortcut.strokes[0]
+    let mods = windowing::Mods {
+        shift: stroke.shift
+        ctrl: stroke.ctrl
+        alt: stroke.alt
+        gui: stroke.primary || stroke.meta
+        ..windowing::Mods::default()
+    }
+    Some(windowing::Shortcut { key: stroke.key, mods: mods })
+}
+
+fn native_entries(items: Vec<MenuItem>, registry: Vec<Command>, commands: &mut Vec<String>, group: &mut u32) -> Vec<windowing::MenuEntry> {
+    let mut out: Vec<windowing::MenuEntry> = #[]
+    let mut in_radio_run = false
+    for entry in items {
+        let found = |id: String| registry.iter().find(|c| c.id == id)
+        match entry {
+            MenuItem::Action { command, label, .. } => {
+                in_radio_run = false
+                let Some(c) = found(command) else { continue }
+                if !c.visible { continue }
+                commands.push(c.id)
+                let id = commands.len() as u32
+                let title, _ = mnemonic(if label.is_empty() { c.label } else { label })
+                let shortcut = native_shortcut(c)
+                if c.checked >= 0 {
+                    out.push(windowing::MenuEntry::Check { id: id, title: title, enabled: c.enabled, checked: c.checked == 1, shortcut: shortcut })
+                } else {
+                    out.push(windowing::MenuEntry::Action { id: id, title: title, enabled: c.enabled, shortcut: shortcut })
+                }
+            }
+            MenuItem::Radio { command, label } => {
+                if !in_radio_run {
+                    *group += 1
+                    in_radio_run = true
+                }
+                let Some(c) = found(command) else { continue }
+                if !c.visible { continue }
+                commands.push(c.id)
+                let id = commands.len() as u32
+                let title, _ = mnemonic(if label.is_empty() { c.label } else { label })
+                out.push(windowing::MenuEntry::Radio { id: id, title: title, enabled: c.enabled, checked: c.checked == 1, group: *group, shortcut: native_shortcut(c) })
+            }
+            MenuItem::Submenu { label, items } => {
+                in_radio_run = false
+                let title, _ = mnemonic(label)
+                let entries = native_entries(items, registry, commands, group)
+                out.push(windowing::MenuEntry::Submenu { title: title, enabled: true, entries: entries })
+            }
+            MenuItem::Separator | MenuItem::Header(_) => {
+                in_radio_run = false
+                out.push(windowing::MenuEntry::Separator)
+            }
+        }
+    }
+    out
+}

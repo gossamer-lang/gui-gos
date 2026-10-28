@@ -1,0 +1,1 @@
+build: 12491664B native executable at /tmp/gui-memory-hello-world/bin/gui-hello-world (target x86_64-unknown-linux-gnu)

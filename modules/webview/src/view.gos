@@ -1,0 +1,33 @@
+use gui
+use gui::{Custom, DrawOp, Role, Widget}
+use gui::geometry::{Rect, Size}
+
+use crate::{Frame, Page}
+
+// Fills its space with `frame`, asking the page for a frame of its own size
+// whenever the one shown differs.
+pub fn widget(page: Page, frame: Option<Frame>, label: String) -> Widget {
+    let mut custom = Custom::new(f"webview:{page.id}", Role::Document, label
+        |c, t| c.constrain(Size::new(if c.has_bounded_width() { c.max_width } else { t.px(800) }, if c.has_bounded_height() { c.max_height } else { t.px(600) }))
+        |size, theme| {
+            let fits = match frame { Some(f) => f.width == size.width && f.height == size.height && f.scale == theme.scale, None => false }
+            if !fits { page.resize(size.width, size.height, theme.scale) }
+            match frame {
+                Some(f) => #[
+                    DrawOp::FillRect { rect: Rect::from_size(size), color: gui::Color::white() }
+                    DrawOp::Clip(Rect::from_size(size))
+                    DrawOp::Image { rect: Rect::new(0, 0, f.width, f.height), rgba: f.rgba, width: f.width, height: f.height }
+                    DrawOp::Unclip
+                ]
+                None => #[DrawOp::FillRect { rect: Rect::from_size(size), color: gui::Color::white() }]
+            }
+        }
+        |i| {
+            page.input(i)
+            #[]
+        }
+    )
+    custom.focusable = true
+    custom.captures_input = true
+    Widget::custom(custom).grow(1)
+}

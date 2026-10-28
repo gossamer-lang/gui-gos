@@ -1,0 +1,2 @@
+gos-jit-stats: compiled=106
+gos-jit-stats: compiled=52

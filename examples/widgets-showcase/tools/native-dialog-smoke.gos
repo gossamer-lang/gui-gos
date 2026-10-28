@@ -1,0 +1,22 @@
+// Run interactively from widgets-showcase with gos run tools/native-dialog-smoke.gos.
+use gui::{start, UiMsg, Widget}
+use gui::dialogs::request
+use std::errors
+
+fn main() -> Result<(), errors::Error> {
+    let mut session = start("Native dialog verification", "dev.gossamer.gui-native-dialog-smoke")?
+    let mut answered = #[false]
+    session.set_shell(|msg| {
+        if let UiMsg::Dialog(id, outcome) = msg { println(f"{id}: {outcome:?}"); answered[0] = true }
+    }, |_| Widget::label("Choose a test file, then a folder. Results print to the terminal."), || #[])
+    session.open_window("main", "Native dialog verification", 640, 240)?
+    for req in #[request::open_file("file", "Verify open file", #[]), request::select_folder("folder", "Verify choose folder")] {
+        answered[0] = false
+        session.open_dialog_in("main", req)
+        while !answered[0] {
+            if !session.step()? { session.shutdown(); return Ok(()) }
+        }
+    }
+    session.shutdown()
+    Ok(())
+}

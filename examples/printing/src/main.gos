@@ -1,0 +1,242 @@
+// A document previewed page by page on a chosen paper size, exported as PDF
+// and sent to a printer. Export and printing run in the background; their
+// progress and outcome arrive as messages.
+
+use std::{env, errors, fs, path, process}
+
+use gui
+use gui::{CompletionItem, Effect, Outcome, UiMsg, Widget}
+use gui::dialogs::request
+use gui::print::{Destination, Event, Item, PageSetup, Paper, PrintDocument, PrintOptions}
+use gui::rich::{Document, Format}
+use gui::render::display::DrawOp
+
+const SAMPLE: String = "# Quarterly report\n\nRevenue grew in every region. Grüße to the teams in Αθήνα, Москва and القاهرة.\n\n- North: 42%\n- South: 31%\n\n1. Plan\n2. Build\n\n> Ship what was promised.\n\n```\ntotal = north + south\n```\n"
+
+struct Model {
+    document: Document
+    printed: PrintDocument
+    paper: Paper
+    landscape: bool
+    page: i64
+    pages: i64
+    status: String
+    printers: Vec<Destination>
+    destination: String
+}
+
+fn chart() -> Item {
+    let mut ops = #[DrawOp::FillRect { rect: gui::Rect { x: 0, y: 0, width: 400, height: 200 }, color: gui::Color::rgb(245, 245, 245) }]
+    let values = #[42, 31, 27]
+    for i in 0..values.len() {
+        let h = values[i] * 4
+        ops.push(DrawOp::FillRect { rect: gui::Rect { x: 40 + i * 120, y: 190 - h, width: 80, height: h }, color: gui::Color::rgb(30, (100 + i * 50) as u8, 200) })
+    }
+    Item::Drawing { ops: ops, width: 400.0, height: 200.0 }
+}
+
+fn items(m: Model) -> Vec<Item> {
+    let mut items = #[Item::Rich(m.document.id), chart()]
+    for n in 0..40 {
+        items.push(Item::Paragraph { text: f"Note {n}: figures are preliminary until the audit closes." })
+    }
+    items
+}
+
+fn setup(m: Model) -> PageSetup {
+    let mut s = PageSetup::default()
+    s.paper = m.paper
+    s.landscape = m.landscape
+    s.header = "Quarterly report"
+    s
+}
+
+fn init() -> Model {
+    let printers = gui::print::destinations().unwrap_or(#[])
+    let chosen = printers.iter().find(|p| p.default).or(printers.iter().next()).map(|p| p.name).unwrap_or("")
+    let document = Document::import(Format::Markdown, SAMPLE).unwrap()
+    let mut m = Model { document: document, printed: PrintDocument::default(), paper: Paper::A4, landscape: false, page: 1, pages: 0, status: "Ready", printers: printers, destination: chosen }
+    m.printed = PrintDocument::open(items(m), setup(m)).unwrap()
+    m.pages = m.printed.page_count().unwrap_or(0)
+    m
+}
+
+fn repaginate(m: Model) -> Model {
+    let mut n = m
+    n.pages = n.printed.set_setup(setup(n)).unwrap_or(0)
+    n.page = n.page.min(n.pages).max(1)
+    n
+}
+
+fn export_path() -> String {
+    path::join(env::temp_dir(), f"gui-printing-{process::id()}.pdf")
+}
+
+fn update(m: Model, msg: UiMsg) -> Model {
+    let mut n = m
+    match msg {
+        UiMsg::Click(id) => match id {
+            "next" => n.page = (n.page + 1).min(n.pages)
+            "previous" => n.page = (n.page - 1).max(1)
+            "letter" => {
+                n.paper = Paper::Letter
+                n = repaginate(n)
+            }
+            "a4" => {
+                n.paper = Paper::A4
+                n = repaginate(n)
+            }
+            "rotate" => {
+                n.landscape = !n.landscape
+                n = repaginate(n)
+            }
+            "export" => {
+                let pdf = #[request::FileFilter { name: "PDF documents", patterns: #["*.pdf"] }]
+                gui::perform(Effect::OpenDialog(request::save_file("export", "Export PDF", "Quarterly report.pdf", pdf)))
+            }
+            "print" => {
+                let options = PrintOptions { destination: n.destination, server: "", copies: 1, pages: "", title: "Quarterly report" }
+                n.status = match n.printed.print_document(options) {
+                    Ok(_) => "Printing"
+                    Err(why) => f"Failed: {why}"
+                }
+            }
+            _ => ()
+        }
+        UiMsg::Select(id, key) if id == "printer" => n.destination = key
+        UiMsg::Dialog(id, outcome) if id == "export" => match outcome {
+            Outcome::Paths(paths) => if !paths.is_empty() {
+                n.status = match n.printed.export_pdf("Quarterly report", paths[0]) {
+                    Ok(_) => "Exporting"
+                    Err(why) => f"Failed: {why}"
+                }
+            }
+            // Without a native chooser the toolkit's own file browser asks.
+            Outcome::Unsupported(_) | Outcome::Failed(_) => {
+                let pdf = #[request::FileFilter { name: "PDF documents", patterns: #["*.pdf"] }]
+                gui::perform(Effect::OpenDialog(request::toolkit_file(request::save_file("export", "Export PDF", "Quarterly report.pdf", pdf))))
+            }
+            _ => ()
+        }
+        UiMsg::Print(_, event) => n.status = match event {
+            Event::Paginated(pages) => f"Laid out {pages} pages"
+            Event::Exported { path, bytes } => f"Exported {path}"
+            Event::Submitted { job, pages } => f"Sent {pages} pages as {job}"
+            Event::Failed(why) => f"Print failed: {why}"
+            Event::Cancelled => "Cancelled"
+        }
+        _ => ()
+    }
+    n
+}
+
+fn printer_choice(m: Model) -> Widget {
+    if m.printers.is_empty() {
+        return Widget::label("No printers found")
+    }
+    let mut items = #[]
+    for p in m.printers {
+        items.push(CompletionItem::new(p.name, if p.default { f"{p.name} (default)" } else { p.name }))
+    }
+    Widget::select("printer", items, m.destination, "Printer")
+}
+
+fn view(m: Model) -> Widget {
+    Widget::column(#[
+        Widget::row(#[
+            Widget::button("previous", "Previous")
+            Widget::label(f"Page {m.page} of {m.pages}")
+            Widget::button("next", "Next")
+            Widget::button("a4", "A4")
+            Widget::button("letter", "Letter")
+            Widget::button("rotate", "Rotate")
+        ], 8)
+        Widget::row(#[
+            printer_choice(m)
+            Widget::button("export", "Export PDF")
+            Widget::button("print", "Print")
+        ], 8)
+        Widget::label(m.status)
+        Widget::scroll("pages", m.printed.preview("page", m.page, 0.75)).grow(1)
+    ], 8).padding(12)
+}
+
+fn app() -> gui::App<Model> {
+    gui::application("Printing", "dev.gossamer.gui-printing", init, update, view).size(980, 760)
+}
+
+fn require(value: bool, why: String) -> Result<(), errors::Error> {
+    if value { Ok(()) } else { Err(errors::new(why)) }
+}
+
+fn await_status(s: &mut gui::Session, prefix: String) -> Result<String, errors::Error> {
+    loop {
+        let dump = s.semantics(0).dump()
+        if dump.contains(prefix) {
+            return Ok(dump)
+        }
+        if dump.contains("failed:") || dump.contains("Failed:") {
+            return Err(errors::new(f"waiting for {prefix}: {dump}"))
+        }
+        s.step()?
+    }
+}
+
+// The page count the accessible "Page n of m" label shows.
+fn shown_pages(s: gui::Session) -> i64 {
+    let dump = s.semantics(0).dump()
+    let at = dump.find(" of ").unwrap_or(0)
+    let tail = dump.substring(at + 4, dump.byte_len())
+    let digits = tail.substring(0, tail.find("\"").unwrap_or(0))
+    digits.to_i64().unwrap_or(0)
+}
+
+fn fixture() -> Result<(), errors::Error> {
+    let mut s = app().start()?
+    let first = s.semantics(0).dump()
+    let portrait = shown_pages(s)
+    require(portrait >= 2 && first.contains("document \"Page 1 of"), f"A4 portrait: {first}")?
+    require(first.contains("Quarterly report") && first.contains("North: 42%"), f"the preview has no page text: {first}")?
+    println(f"preview: A4 portrait fills {portrait} pages; the page preview reads its text")
+    s.click("next")?
+    require(s.semantics(0).dump().contains(f"Page 2 of {portrait}"), "next page")?
+    s.click("rotate")?
+    let landscape = shown_pages(s)
+    require(landscape > portrait, f"landscape {landscape} vs portrait {portrait}")?
+    s.click("rotate")?
+    s.click("letter")?
+    let letter = shown_pages(s)
+    require(letter >= 2, "letter portrait")?
+    println(f"paper: A4 landscape fills {landscape} pages; Letter portrait {letter}")
+    s.click("export")?
+    s.answer_file_dialog("export", export_path())?
+    await_status(&mut s, "Exported")?
+    let pdf = fs::read(export_path())?
+    require(pdf.len() > 1_000 && pdf[0] == 37 && pdf[1] == 80 && pdf[2] == 68 && pdf[3] == 70, "not a PDF")?
+    fs::remove_file(export_path())?
+    println("export: the PDF was written in the background")
+    let mut big = #[]
+    for n in 0..20_000 {
+        big.push(Item::Paragraph { text: f"Line {n}" })
+    }
+    let job = gui::print::export_pdf(big, PageSetup::default(), "Large", export_path())?
+    job.cancel()?
+    await_status(&mut s, "Cancelled")?
+    require(!fs::exists(export_path()), "a cancelled export wrote its file")?
+    println("cancel: a cancelled export reports it and writes nothing")
+    s.emit(UiMsg::Select("printer", "gui-printing-no-such-printer"))
+    s.click("print")?
+    await_status(&mut s, "Print failed:")?
+    println("errors: printing to a missing printer reports the spooler's failure")
+    s.shutdown()
+    Ok(())
+}
+
+fn main() -> Result<(), errors::Error> {
+    if env::args().contains("--fixture") {
+        fixture()?
+        require(gui::app::host::callback_count() == 0, "the printing example leaked callbacks")?
+        return Ok(())
+    }
+    app().run()
+}

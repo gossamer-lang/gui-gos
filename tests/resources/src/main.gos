@@ -1,0 +1,99 @@
+use std::{env, errors, fs, path, process, time}
+use gui
+use gui::{Effect, UiMsg, Widget}
+use gui::services::work::{Work, Operation, Outcome}
+use gui::widgets::completion::{CompletionItem, MatchMode}
+
+#[derive(Default)]
+struct Model { status: String, progress: i64 }
+
+fn update(model: Model, message: UiMsg) -> Model {
+    let mut next = model
+    if let UiMsg::Worked(_, request, _, outcome) = message {
+        match outcome {
+            Outcome::Progress(_, _) => next.progress += 1
+            Outcome::Text(_, text) => if text == "hello אבג 👩🏽‍💻" { next.status = "read complete" }
+            Outcome::Saved(_, text) => if text == "saved Ελληνικά" { next.status = "save complete" }
+            Outcome::Analysis(document) => {
+                if document.error.is_empty() && document.scanned == 3 && !document.spans.is_empty() { next.status = "analysis complete" }
+            }
+            Outcome::Completions(items) => {
+                if items.len() == 2 && items[0].key == "a" && items[1].key == "b" { next.status = "completion complete" }
+            }
+            Outcome::Failed(error) => next.status = f"failed {request}: {error}"
+            _ => ()
+        }
+    }
+    next
+}
+
+fn view(model: Model) -> Widget {
+    Widget::column(#[Widget::label(model.status), Widget::label(f"progress {model.progress}"), Widget::button("document", "Document")], 4)
+}
+
+fn extra(_model: Model, key: String) -> Widget {
+    Widget::custom(gui::widgets::Custom::new(
+        f"custom:{key}", gui::Role::Group, "Owned callbacks"
+        |_c, _t| gui::Size::new(40, 30), |_s, _t| #[], |_event| #[]))
+}
+
+fn await_status(session: &mut gui::Session, status: String) -> Result<(), errors::Error> {
+    let until = time::monotonic_nanos() + 10_000_000_000
+    loop {
+        let dump = session.semantics(0).dump()
+        if dump.contains(status) { return Ok(()) }
+        if dump.contains("failed ") { return Err(errors::new(dump)) }
+        if time::monotonic_nanos() > until { return Err(errors::new(f"timeout waiting for {status}")) }
+        if !session.step()? { return Err(errors::new(f"session ended before {status}")) }
+    }
+}
+
+fn submit(session: &mut gui::Session, request: i64, operation: Operation, status: String) -> Result<(), errors::Error> {
+    gui::perform(Effect::Work(Work::new("document", request, 0, operation)))
+    session.flush()?
+    await_status(session, status)
+}
+
+fn main() -> Result<(), errors::Error> {
+    let file = path::join(env::temp_dir(), f"gui-resource-work-{process::id()}.txt")
+    fs::write(file, "hello אבג 👩🏽‍💻".bytes())?
+    let mut session = gui::application("Resource checks", "dev.gossamer.gui-resources", || Model::default(), update, view).windows(extra).size(320, 200).start()?
+    let baseline_callbacks = gui::app::host::callback_count()
+    submit(&mut session, 1, Operation::ReadText(file), "read complete")?
+    println("bounded file read: ok")
+    submit(&mut session, 2, Operation::WriteText(file, "saved Ελληνικά"), "save complete")?
+    if fs::read_to_string(file)? != "saved Ελληνικά" { return Err(errors::new("atomic save changed the wrong contents")) }
+    println("atomic file save: ok")
+    submit(&mut session, 3, Operation::Analyze("let a = 1\nlet b = 2\nlet c = 3", "gos"), "analysis complete")?
+    println("background analysis: ok")
+    let items = #[CompletionItem::new("b", "alpine"), CompletionItem::new("a", "alpha"), CompletionItem::new("c", "other")]
+    submit(&mut session, 4, Operation::Complete(items, "al", MatchMode::Prefix, 2), "completion complete")?
+    println("background completion: ok")
+    let mut progress_seen = false
+    for n in 4..20 { if session.semantics(0).dump().contains(f"progress {n}") { progress_seen = true } }
+    if !progress_seen { return Err(errors::new("background progress was not delivered")) }
+    println("progress delivery: ok")
+    let initial = session.resource_usage()
+    for n in 0..40 {
+        session.open_window(f"extra:{n}", "Extra", 120, 80)?
+        if gui::app::host::callback_count() <= baseline_callbacks { return Err(errors::new("fixture did not register window callbacks")) }
+        let usage = session.resource_usage()
+        if usage.total > usage.limit { return Err(errors::new("aggregate byte budget was exceeded")) }
+        session.close_window(1)
+        session.flush()?
+        if gui::app::host::callback_count() != baseline_callbacks { return Err(errors::new("disposed window retained callbacks")) }
+    }
+    if session.resource_usage().total > initial.total + 131_072 { return Err(errors::new("repeated windows retained monotonic storage")) }
+    println("window reservations and callback disposal: ok")
+    session.set_memory_limit(session.resource_usage().total + 4096)?
+    if session.open_window("rejected", "Rejected", 120, 80).is_ok() { return Err(errors::new("aggregate budget accepted an oversized window")) }
+    if session.window_count() != 1 || gui::app::host::callback_count() != baseline_callbacks { return Err(errors::new("rejected window leaked resources")) }
+    println("aggregate reservation rejection: ok")
+    let mailbox = session.mailbox()
+    session.shutdown()
+    if mailbox.try_post(UiMsg::Custom("late", "post")).is_ok() { return Err(errors::new("closed session accepted a post")) }
+    if gui::app::host::callback_count() != 0 { return Err(errors::new("session retained callbacks")) }
+    println("session shutdown and closed mailbox: ok")
+    fs::remove_file(file)?
+    Ok(())
+}

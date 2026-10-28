@@ -1,0 +1,8 @@
+name = "Media Player"
+app_id = "dev.gossamer.gui-media-player"
+comment = "Play audio and video files"
+categories = "AudioVideo;Player;"
+icon = false
+
+# Playback needs GStreamer, which the toolkit loads at run time when present.
+runtime = ["media"]

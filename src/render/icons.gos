@@ -1,0 +1,260 @@
+// icons: the built-in vector icon set, drawn on a 24-unit grid with
+// round-capped strokes so they scale to any size and theme, and the icon sets
+// applications register on the same grid for a theme to draw from. A custom
+// icon no set has draws a neutral box, never nothing.
+
+use crate::render::vector::Path
+
+/// A built-in icon, or one an application registers under a name of its own.
+#[derive(PartialEq)]
+pub enum Icon {
+    Check
+    Close
+    Plus
+    Minus
+    ChevronDown
+    ChevronUp
+    ChevronLeft
+    ChevronRight
+    ArrowLeft
+    ArrowRight
+    ArrowUp
+    ArrowDown
+    Search
+    Menu
+    More
+    Folder
+    FolderOpen
+    File
+    FileText
+    Star
+    StarFilled
+    Info
+    Warning
+    Error
+    Eye
+    EyeOff
+    Home
+    Refresh
+    Settings
+    Trash
+    Edit
+    Copy
+    Paste
+    Cut
+    Undo
+    Redo
+    Save
+    Play
+    Pause
+    Stop
+    Dot
+    Calendar
+    Clock
+    User
+    Lock
+    Globe
+    Download
+    Upload
+    Link
+    Bookmark
+    Terminal
+    Code
+    Grid
+    List
+    SortAsc
+    SortDesc
+    Filter
+    Drag
+    External
+    App
+    /// An icon `register` adds under this name; drawn as a neutral box where no
+    /// set the theme names has it.
+    Custom(String)
+}
+
+impl Icon {
+    /// The name icon sets know this icon by.
+    pub fn name(&self) -> String {
+        match self {
+            Icon::Check => "check"
+            Icon::Close => "close"
+            Icon::Plus => "plus"
+            Icon::Minus => "minus"
+            Icon::ChevronDown => "chevron-down"
+            Icon::ChevronUp => "chevron-up"
+            Icon::ChevronLeft => "chevron-left"
+            Icon::ChevronRight => "chevron-right"
+            Icon::ArrowLeft => "arrow-left"
+            Icon::ArrowRight => "arrow-right"
+            Icon::ArrowUp => "arrow-up"
+            Icon::ArrowDown => "arrow-down"
+            Icon::Search => "search"
+            Icon::Menu => "menu"
+            Icon::More => "more"
+            Icon::Folder => "folder"
+            Icon::FolderOpen => "folder-open"
+            Icon::File => "file"
+            Icon::FileText => "file-text"
+            Icon::Star => "star"
+            Icon::StarFilled => "star-filled"
+            Icon::Info => "info"
+            Icon::Warning => "warning"
+            Icon::Error => "error"
+            Icon::Eye => "eye"
+            Icon::EyeOff => "eye-off"
+            Icon::Home => "home"
+            Icon::Refresh => "refresh"
+            Icon::Settings => "settings"
+            Icon::Trash => "trash"
+            Icon::Edit => "edit"
+            Icon::Copy => "copy"
+            Icon::Paste => "paste"
+            Icon::Cut => "cut"
+            Icon::Undo => "undo"
+            Icon::Redo => "redo"
+            Icon::Save => "save"
+            Icon::Play => "play"
+            Icon::Pause => "pause"
+            Icon::Stop => "stop"
+            Icon::Dot => "dot"
+            Icon::Calendar => "calendar"
+            Icon::Clock => "clock"
+            Icon::User => "user"
+            Icon::Lock => "lock"
+            Icon::Globe => "globe"
+            Icon::Download => "download"
+            Icon::Upload => "upload"
+            Icon::Link => "link"
+            Icon::Bookmark => "bookmark"
+            Icon::Terminal => "terminal"
+            Icon::Code => "code"
+            Icon::Grid => "grid"
+            Icon::List => "list"
+            Icon::SortAsc => "sort-asc"
+            Icon::SortDesc => "sort-desc"
+            Icon::Filter => "filter"
+            Icon::Drag => "drag"
+            Icon::External => "external"
+            Icon::App => "app"
+            Icon::Custom(name) => name
+        }
+    }
+
+    /// The built-in icon called `name`, for names that arrive as data.
+    pub fn named(name: String) -> Option<Icon> {
+        match name {
+            "check" => Some(Icon::Check)
+            "close" => Some(Icon::Close)
+            "plus" => Some(Icon::Plus)
+            "minus" => Some(Icon::Minus)
+            "chevron-down" => Some(Icon::ChevronDown)
+            "chevron-up" => Some(Icon::ChevronUp)
+            "chevron-left" => Some(Icon::ChevronLeft)
+            "chevron-right" => Some(Icon::ChevronRight)
+            "arrow-left" => Some(Icon::ArrowLeft)
+            "arrow-right" => Some(Icon::ArrowRight)
+            "arrow-up" => Some(Icon::ArrowUp)
+            "arrow-down" => Some(Icon::ArrowDown)
+            "search" => Some(Icon::Search)
+            "menu" => Some(Icon::Menu)
+            "more" => Some(Icon::More)
+            "folder" => Some(Icon::Folder)
+            "folder-open" => Some(Icon::FolderOpen)
+            "file" => Some(Icon::File)
+            "file-text" => Some(Icon::FileText)
+            "star" => Some(Icon::Star)
+            "star-filled" => Some(Icon::StarFilled)
+            "info" => Some(Icon::Info)
+            "warning" => Some(Icon::Warning)
+            "error" => Some(Icon::Error)
+            "eye" => Some(Icon::Eye)
+            "eye-off" => Some(Icon::EyeOff)
+            "home" => Some(Icon::Home)
+            "refresh" => Some(Icon::Refresh)
+            "settings" => Some(Icon::Settings)
+            "trash" => Some(Icon::Trash)
+            "edit" => Some(Icon::Edit)
+            "copy" => Some(Icon::Copy)
+            "paste" => Some(Icon::Paste)
+            "cut" => Some(Icon::Cut)
+            "undo" => Some(Icon::Undo)
+            "redo" => Some(Icon::Redo)
+            "save" => Some(Icon::Save)
+            "play" => Some(Icon::Play)
+            "pause" => Some(Icon::Pause)
+            "stop" => Some(Icon::Stop)
+            "dot" => Some(Icon::Dot)
+            "calendar" => Some(Icon::Calendar)
+            "clock" => Some(Icon::Clock)
+            "user" => Some(Icon::User)
+            "lock" => Some(Icon::Lock)
+            "globe" => Some(Icon::Globe)
+            "download" => Some(Icon::Download)
+            "upload" => Some(Icon::Upload)
+            "link" => Some(Icon::Link)
+            "bookmark" => Some(Icon::Bookmark)
+            "terminal" => Some(Icon::Terminal)
+            "code" => Some(Icon::Code)
+            "grid" => Some(Icon::Grid)
+            "list" => Some(Icon::List)
+            "sort-asc" => Some(Icon::SortAsc)
+            "sort-desc" => Some(Icon::SortDesc)
+            "filter" => Some(Icon::Filter)
+            "drag" => Some(Icon::Drag)
+            "external" => Some(Icon::External)
+            "app" => Some(Icon::App)
+            _ => None
+        }
+    }
+}
+
+/// Every built-in icon.
+pub const BUILT_IN: [Icon; 60] = [
+    Icon::Check, Icon::Close, Icon::Plus, Icon::Minus, Icon::ChevronDown, Icon::ChevronUp
+    Icon::ChevronLeft, Icon::ChevronRight, Icon::ArrowLeft, Icon::ArrowRight, Icon::ArrowUp, Icon::ArrowDown
+    Icon::Search, Icon::Menu, Icon::More, Icon::Folder, Icon::FolderOpen, Icon::File
+    Icon::FileText, Icon::Star, Icon::StarFilled, Icon::Info, Icon::Warning, Icon::Error
+    Icon::Eye, Icon::EyeOff, Icon::Home, Icon::Refresh, Icon::Settings, Icon::Trash
+    Icon::Edit, Icon::Copy, Icon::Paste, Icon::Cut, Icon::Undo, Icon::Redo
+    Icon::Save, Icon::Play, Icon::Pause, Icon::Stop, Icon::Dot, Icon::Calendar
+    Icon::Clock, Icon::User, Icon::Lock, Icon::Globe, Icon::Download, Icon::Upload
+    Icon::Link, Icon::Bookmark, Icon::Terminal, Icon::Code, Icon::Grid, Icon::List
+    Icon::SortAsc, Icon::SortDesc, Icon::Filter, Icon::Drag, Icon::External, Icon::App
+]
+
+fn seg(p: &mut Path, s: f64, ox: f64, oy: f64, pts: Vec<f64>) {
+    let mut i = 0
+    while i + 1 < pts.len() {
+        if i == 0 { p.move_to(ox + pts[0] * s, oy + pts[1] * s) } else { p.line_to(ox + pts[i] * s, oy + pts[i + 1] * s) }
+        i += 2
+    }
+}
+
+fn circle(p: &mut Path, s: f64, ox: f64, oy: f64, cx: f64, cy: f64, r: f64) {
+    let e = Path::ellipse(ox + cx * s, oy + cy * s, r * s, r * s)
+    for v in e.cmds { p.cmds.push(v) }
+}
+
+fn rect(p: &mut Path, s: f64, ox: f64, oy: f64, x: f64, y: f64, w: f64, h: f64, r: f64) {
+    let e = Path::rounded_rect(ox + x * s, oy + y * s, w * s, h * s, r * s)
+    for v in e.cmds { p.cmds.push(v) }
+}
+
+/// An application's icon: outlines on the built-in set's 24-unit grid, the
+/// `fill` filled (even-odd) and the `stroke` stroked as the built-in icons are.
+#[derive(PartialEq)]
+pub struct IconArt {
+    pub fill: Path
+    pub stroke: Path
+}
+
+static mut SETS: Map<String, Map<String, IconArt>> = {}
+
+/// Adds `art` to the icon set `set` as `icon`; a theme whose `icons` names
+/// the set draws it in place of the built-in one.
+pub fn register(set: String, icon: Icon, art: IconArt) {
+    let mut icons = SETS.get(set).unwrap_or(Map::new())
+    icons[icon.name()] = art
+    SETS[set] = icons
+}

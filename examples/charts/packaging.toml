@@ -1,0 +1,5 @@
+name = "Charts"
+app_id = "dev.gossamer.gui-charts"
+comment = "Live charts with hover values, pan, zoom, exports and data tables"
+categories = "Office;Viewer;"
+icon = false

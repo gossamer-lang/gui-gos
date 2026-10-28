@@ -1,0 +1,11 @@
+editing: Unicode, undo and redo
+offsets: Ok(ByteOffset(7)) Ok(Utf16Offset(4)) Ok(LinePosition { line: 1, column: ByteOffset(2) }) Ok(ByteRange { start: ByteOffset(3), end: ByteOffset(7) })
+offsets: UTF-16 offset 3 splits a surrogate pair
+offsets: byte 1 is inside a grapheme cluster
+offsets: byte 4 is inside a UTF-8 sequence
+offsets: preedit abか😀 2..9 caret 3
+syntax: cached lines and byte offsets
+completion: stable matching
+modules: probe module matches the running OS family
+channels: worker posts reach the session in order
+windows: a second window opens apart; a closed window's state is disposed

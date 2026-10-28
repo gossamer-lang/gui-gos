@@ -1,0 +1,1 @@
+choices: deleted and disabled items cannot commit; filters and missing selections survive

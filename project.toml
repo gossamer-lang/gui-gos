@@ -1,0 +1,13 @@
+[project]
+id = "github.com/gossamer-lang/gui-gos"
+version = "0.1.0"
+gossamer-version = "^v0.75.5"
+authors = ["Dan Pozmanter"]
+license = "Apache 2.0"
+
+[lib]
+name = "gui"
+
+[dependencies]
+"github.com/gossamer-lang/windowing-gos" = { git = "https://github.com/gossamer-lang/windowing-gos", tag = "v0.1.0" }
+"github.com/gossamer-lang/gui-engine-gos" = { git = "https://github.com/gossamer-lang/gui-engine-gos", tag = "v0.1.0" }

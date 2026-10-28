@@ -1,0 +1,62 @@
+[
+  {
+    "fixture": "native_owner_lifecycles",
+    "tier": "vm",
+    "exit_code": 0
+  },
+  {
+    "fixture": "native_owner_lifecycles",
+    "tier": "jit",
+    "exit_code": 0
+  },
+  {
+    "fixture": "native_owner_lifecycles",
+    "tier": "debug",
+    "exit_code": 0
+  },
+  {
+    "fixture": "native_owner_lifecycles",
+    "tier": "release",
+    "exit_code": 0
+  },
+  {
+    "fixture": "method_vector_return_cleanup",
+    "tier": "vm",
+    "exit_code": 0
+  },
+  {
+    "fixture": "method_vector_return_cleanup",
+    "tier": "jit",
+    "exit_code": 0
+  },
+  {
+    "fixture": "method_vector_return_cleanup",
+    "tier": "debug",
+    "exit_code": 0
+  },
+  {
+    "fixture": "method_vector_return_cleanup",
+    "tier": "release",
+    "exit_code": 0
+  },
+  {
+    "fixture": "rebound_string_field_transfer",
+    "tier": "vm",
+    "exit_code": 0
+  },
+  {
+    "fixture": "rebound_string_field_transfer",
+    "tier": "jit",
+    "exit_code": 0
+  },
+  {
+    "fixture": "rebound_string_field_transfer",
+    "tier": "debug",
+    "exit_code": 0
+  },
+  {
+    "fixture": "rebound_string_field_transfer",
+    "tier": "release",
+    "exit_code": 0
+  }
+]

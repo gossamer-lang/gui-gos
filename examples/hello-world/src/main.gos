@@ -1,0 +1,66 @@
+// Hello world: a name field, a greeting command bound to Enter and a
+// button, a File menu with Quit, and an announced result.
+
+use std::errors
+use gui
+use gui::{Command, Effect, UiMsg, Widget}
+use gui::widgets::menus
+
+#[derive(PartialEq)]
+struct Model {
+    name: String
+    greeting: String
+}
+
+fn init() -> Model {
+    Model { name: "", greeting: "" }
+}
+
+fn greet(m: Model) -> Model {
+    let who = m.name.trim()
+    let text = if who.is_empty() { "Hello! What is your name?" } else { f"Hello, {who}!" }
+    gui::perform(Effect::Announce(text))
+    Model { name: m.name, greeting: text }
+}
+
+fn update(m: Model, msg: UiMsg) -> Model {
+    match msg {
+        UiMsg::Text(id, text) => if id == "name" { Model { name: text, greeting: m.greeting } } else { m }
+        UiMsg::Submit(id, _) => if id == "name" { greet(m) } else { m }
+        UiMsg::Command(id) => if id == "hello.greet" { greet(m) } else { m }
+        _ => m
+    }
+}
+
+fn commands(_m: Model) -> Vec<Command> {
+    #[Command::new("hello.greet", "Say Hello").key("Primary+G").category("Greeting")]
+}
+
+fn view(m: Model) -> Widget {
+    let menu = Widget::menu_bar("menu", #[
+        menus::Menu::new("&File", #[menus::item("gui.quit")])
+    ])
+    let field = gui::TextInput::new("name", m.name, "Your name", gui::InputKind::Line)
+    let mut labelled = field
+    labelled.label = "Name"
+    let body = Widget::column(#[
+        Widget::title("Hello, world")
+        Widget::label("What is your name?")
+        Widget::input(labelled).max_width(360)
+        Widget::command_button("hello.greet", "Say hello")
+        Widget::text(m.greeting, gui::TextRole::Heading, gui::Tone::Accent)
+    ], 12).padding(24)
+    Widget::column(#[menu, body], 0)
+}
+
+fn app() -> gui::App<Model> {
+    gui::application("Hello", "dev.gossamer.gui-hello-world", init, update, view)
+        .title("Hello, Gossamer")
+        .size(520, 360)
+        .commands(commands)
+        .focus("name")
+}
+
+fn main() -> Result<(), errors::Error> {
+    app().run()
+}

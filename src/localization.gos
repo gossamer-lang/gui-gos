@@ -1,0 +1,228 @@
+// Catalog messages are keyed by context and source text. Placeholders use
+// `{name}` and are replaced in one pass, so translated/user text is not code.
+// The pseudo-locale `qps-ploc` brackets every translated string, so a
+// journey shows any built-in text that does not pass through a catalog.
+use std::{errors, fs}
+use std::encoding::json
+
+use gui_engine
+
+#[derive(PartialEq)]
+pub struct Message { pub context: String, pub source: String, pub forms: Map<String, String> }
+#[derive(PartialEq)]
+pub struct Catalog { pub locale: String, pub messages: Vec<Message> }
+impl Catalog {
+    pub fn load(file: String) -> Result<Catalog, errors::Error> { json::decode::<Catalog>(fs::read_to_string(file)?) }
+    pub fn translate(&self, context: String, source: String, count: i64, arguments: Map<String, String>) -> String {
+        let form = plural(self.locale, count)
+        let mut selected = source
+        for entry in self.messages {
+            if entry.context == context && entry.source == source { selected = entry.forms.get(form).unwrap_or(entry.forms.get("other").unwrap_or(source)); break }
+        }
+        let mut values = arguments
+        values["count"] = f"{count}"
+        let text = substitute(selected, values)
+        if self.locale == PSEUDO_LOCALE { f"[{text}]" } else { text }
+    }
+    pub fn rtl(&self) -> bool { let language = self.locale.replace("_", "-").split("-")[0]; language == "ar" || language == "he" || language == "fa" || language == "ur" }
+}
+pub fn substitute(text: String, values: Map<String, String>) -> String {
+    let mut out = ""
+    let mut key = ""
+    let mut opened = false
+    for ch in text {
+        if opened {
+            if ch == '}' { out += values.get(key).unwrap_or("{" + key + "}"); key = ""; opened = false }
+            else { key.push(ch) }
+        } else if ch == '{' { opened = true } else { out.push(ch) }
+    }
+    if opened { out += "{" + key }
+    out
+}
+/// CLDR integer cardinal categories for the shipped locale families. Other
+/// locales use one/other. Noninteger/ordinal rules require a separate catalog.
+pub fn plural(locale: String, count: i64) -> String {
+    let lang = locale.replace("_", "-").split("-")[0]
+    let n = if count < 0 { -(count % 1_000_000) } else { count % 1_000_000 }
+    if lang == "ja" || lang == "zh" || lang == "ko" || lang == "th" { return "other" }
+    if lang == "ar" {
+        if count == 0 { return "zero" }; if count == 1 || count == -1 { return "one" }; if count == 2 || count == -2 { return "two" }
+        if n % 100 >= 3 && n % 100 <= 10 { return "few" }; if n % 100 >= 11 && n % 100 <= 99 { return "many" }; return "other"
+    }
+    if lang == "ru" || lang == "uk" {
+        if n % 10 == 1 && n % 100 != 11 { return "one" }
+        if n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) { return "few" }
+        return "many"
+    }
+    if lang == "fr" { if count == 0 || count == 1 || count == -1 { return "one" }; if n == 0 { return "many" } }
+    if count == 1 || count == -1 { "one" } else { "other" }
+}
+/// How a locale writes numbers, dates and times.
+#[derive(Debug, PartialEq)]
+pub struct Conventions {
+    pub decimal: String
+    /// Between groups of three integer digits.
+    pub group: String
+    /// "ymd", "mdy" or "dmy".
+    pub date_order: String
+    pub date_separator: String
+    pub hour24: bool
+}
+
+/// The conventions of `locale` (`de`, `en-GB`, `pt_BR`, ...): its language,
+/// refined by its region where they differ. Other locales write English
+/// numbers and ISO dates.
+pub fn conventions(locale: String) -> Conventions {
+    let tag = locale.replace("_", "-")
+    let parts = tag.split("-")
+    let language = parts[0].to_lowercase()
+    let region = if parts.len() > 1 { parts[1].to_uppercase() } else { String::new() }
+    let c = |decimal: String, group: String, order: String, sep: String, hour24: bool| Conventions { decimal: decimal, group: group, date_order: order, date_separator: sep, hour24: hour24 }
+    match language {
+        "en" => match region {
+            "US" | "" => c(".", ",", "mdy", "/", false)
+            "CA" => c(".", ",", "ymd", "-", false)
+            _ => c(".", ",", "dmy", "/", true)
+        }
+        "de" | "da" | "id" | "tr" => c(",", ".", "dmy", ".", true)
+        "es" | "it" | "pt" | "el" => c(",", ".", "dmy", "/", true)
+        "nl" => c(",", ".", "dmy", "-", true)
+        "fr" => c(",", "\u{202F}", "dmy", "/", true)
+        "ru" | "uk" | "pl" | "cs" | "fi" | "nb" | "sv" => c(",", "\u{00A0}", "dmy", ".", true)
+        "ja" | "zh" | "ko" => c(".", ",", "ymd", "/", true)
+        "he" => c(".", ",", "dmy", ".", true)
+        "ar" | "fa" => c("\u{066B}", "\u{066C}", "dmy", "/", true)
+        _ => c(".", ",", "ymd", "-", true)
+    }
+}
+
+/// `value` with `decimals` digits after the decimal separator and grouped
+/// thousands, as the installed catalog's locale writes it.
+pub fn format_number(value: f64, decimals: i64) -> String {
+    let conv = conventions(locale())
+    let plain = crate::widgets::numeric::format_number(value, decimals)
+    let negative = plain.starts_with("-")
+    let unsigned = if negative { plain.substring(1, plain.byte_len()) } else { plain }
+    let whole, fraction = match unsigned.split_once(".") {
+        Some((w, f)) => (w, f)
+        None => (unsigned, String::new())
+    }
+    let mut grouped = String::new()
+    let digits: Vec<char> = whole.chars().collect()
+    let mut i = 0
+    while i < digits.len() {
+        if i > 0 && (digits.len() - i) % 3 == 0 { grouped += conv.group }
+        grouped.push(digits[i])
+        i += 1
+    }
+    let sign = if negative { "-" } else { "" }
+    if fraction.is_empty() { f"{sign}{grouped}" } else { f"{sign}{grouped}{conv.decimal}{fraction}" }
+}
+
+// Whether `text` splits at `separator` into a leading part and groups of
+// exactly three digits, as grouped thousands do.
+fn grouped(text: String, separator: String) -> bool {
+    let parts = text.split(separator)
+    if parts.len() < 2 || parts[0].is_empty() { return false }
+    let mut i = 1
+    while i < parts.len() {
+        if parts[i].len() != 3 || !parts[i].chars().all(|c| c.is_ascii_digit()) { return false }
+        i += 1
+    }
+    true
+}
+
+/// A number typed in the installed catalog's locale. Its decimal separator
+/// makes the group separators and spaces between groups ignorable; without
+/// it, a group separator counts only between groups of three digits, and any
+/// other `.` or `,` is the decimal point. `None` for anything else.
+pub fn parse_number(text: String) -> Option<f64> {
+    let conv = conventions(locale())
+    let mut t = text.trim().replace(" ", "").replace("\u{00A0}", "").replace("\u{202F}", "")
+    if t.contains(conv.decimal) {
+        t = t.replace(conv.group, "").replace(conv.decimal, ".")
+    } else if t.contains(conv.group) && grouped(t, conv.group) {
+        t = t.replace(conv.group, "")
+    } else {
+        t = t.replace(",", ".")
+    }
+    t.to_f64()
+}
+
+/// A date as the installed catalog's locale writes it, with two-digit days
+/// and months and four-digit years.
+pub fn format_date(year: i64, month: i64, day: i64) -> String {
+    let conv = conventions(locale())
+    let two = |n: i64| if n < 10 { f"0{n}" } else { f"{n}" }
+    let y = f"{year}"
+    let parts = match conv.date_order {
+        "mdy" => #[two(month), two(day), y]
+        "dmy" => #[two(day), two(month), y]
+        _ => #[y, two(month), two(day)]
+    }
+    parts.join(conv.date_separator)
+}
+
+/// A time of day as the installed catalog's locale writes it: 24-hour, or
+/// 12-hour with a translated AM/PM.
+pub fn format_time(hour: i64, minute: i64) -> String {
+    let m = if minute < 10 { f"0{minute}" } else { f"{minute}" }
+    if conventions(locale()).hour24 {
+        return f"{if hour < 10 { f"0{hour}" } else { f"{hour}" }}:{m}"
+    }
+    let h = if hour % 12 == 0 { 12 } else { hour % 12 }
+    message("time", if hour < 12 { "{time} AM" } else { "{time} PM" }, 1, { "time": f"{h}:{m}" })
+}
+
+/// The moment `unix_ms` (milliseconds since the Unix epoch) as a date and
+/// time in the system's time zone, written as the installed locale does.
+pub fn format_timestamp(unix_ms: i64) -> String {
+    match std::time::Location::local().civil(unix_ms) {
+        Ok(c) => f"{format_date(c.year, c.month, c.day)} {format_time(c.hour, c.minute)}"
+        Err(_) => String::new()
+    }
+}
+
+/// The name of month `month` (1 to 12).
+pub fn month_name(month: i64) -> String {
+    let names = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+    tr(names[(month - 1).max(0).min(11)])
+}
+
+/// The pseudo-locale that marks every translated string with brackets.
+pub const PSEUDO_LOCALE: String = "qps-ploc"
+
+// The catalog lives in the toolkit, so the session's own text and every
+// view's translate alike.
+fn localized(op: String, args: String) -> String {
+    match gui_engine::localize(op, args) {
+        Ok(a) => a
+        Err(e) => panic(f"gui: localization {op}: {e}")
+    }
+}
+
+/// Makes `catalog` the one every translation reads.
+pub fn install(catalog: Catalog) {
+    let _ = localized("install", json::encode(catalog))
+}
+
+/// The installed catalog's locale.
+pub fn locale() -> String {
+    crate::app::wire::text(localized("locale", "null"))
+}
+
+/// Whether the installed locale writes right to left.
+pub fn rtl() -> bool {
+    crate::app::wire::flag(localized("rtl", "null"))
+}
+
+/// `source` in the installed locale.
+pub fn tr(source: String) -> String {
+    crate::app::wire::text(localized("tr", json::encode(source)))
+}
+
+/// `source` in context `context`, in the plural form `count` takes, with
+/// `args` substituted, in the installed locale.
+pub fn message(context: String, source: String, count: i64, args: Map<String, String>) -> String {
+    crate::app::wire::text(localized("message", f"[{json::encode(context)},{json::encode(source)},{count},{json::encode(args)}]"))
+}

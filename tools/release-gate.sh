@@ -1,0 +1,9 @@
+#!/bin/sh
+# One isolated native-host ledger. Other OS ledgers remain required for release.
+set -eu
+here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if [ "$(uname -s)" = Linux ] && [ "${GUI_GATE_PRIVATE_BUS:-0}" != 1 ]; then
+    export GUI_GATE_PRIVATE_BUS=1
+    exec dbus-run-session -- "${GOS:-gos}" run "$here/release-gate.gos" "$@"
+fi
+exec "${GOS:-gos}" run "$here/release-gate.gos" "$@"

@@ -1,0 +1,16 @@
+    Blocking waiting for file lock on build directory
+   Compiling gossamer-runtime v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-runtime)
+    Checking gossamer-mir v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-mir)
+   Compiling gossamer-cli v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-cli)
+    Checking gossamer-codegen-llvm v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-codegen-llvm)
+    Checking gossamer-sched v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-sched)
+    Checking gossamer-codegen-cranelift v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-codegen-cranelift)
+    Checking gossamer-std v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-std)
+    Checking gossamer-driver v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-driver)
+    Checking gossamer-interp v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-interp)
+    Checking xtask v0.74.0 (/home/daniel/dev/gossamer/xtask)
+    Checking gossamer-lsp v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-lsp)
+    Checking gossamer-binding v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-binding)
+    Checking gossamer-mcp v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-mcp)
+    Checking gossamer-playground v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-playground)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 26.98s

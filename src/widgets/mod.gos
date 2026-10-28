@@ -1,0 +1,1069 @@
+// widgets: the widget tree. An application's view function builds a
+// `Widget` value from its model after every change; the toolkit lays it
+// out into a `Node` tree, paints it, routes input through it, and
+// mirrors it into the accessibility tree. Widget behavior (keyboard,
+// pointer, focus, semantics) lives with each control; containers only
+// arrange. Interaction state that must survive a rebuild (caret, scroll
+// offset, open popup) lives in the window's `StateStore`, keyed by id.
+//
+// Contract per widget:
+// - `layout(constraints)` answers a size inside the constraints and the
+//   children's nodes; it reads state but never writes it.
+// - `paint` draws inside the node's rectangle; popups and dialogs draw in
+//   their own layers.
+// - `event` handles input aimed at this widget or bubbling through it and
+//   may only request changes through the `EventCx`.
+// - `semantics` describes the widget for assistive technology.
+
+use windowing
+
+use crate::accessibility::{AccessNode, Role}
+use crate::geometry::{Constraints, Insets, Size, UNBOUNDED}
+use crate::render::display::DrawOp
+use crate::style::{Theme, TextRole}
+use crate::style::color::Color
+use crate::text::layout::TextAlign
+use crate::widgets::completion::CompletionItem
+use crate::widgets::cx::{CheckState, PopupRequest, UiMsg}
+use crate::widgets::state::StateStore
+use crate::widgets::{buttons, choices, collections, colorpicker, containers, display, feedback, menus, numeric, tabs, temporal, textinput}
+
+/// A main-axis direction.
+#[derive(PartialEq, Eq)]
+pub enum Axis {
+    Horizontal
+    Vertical
+}
+
+/// Main-axis distribution in a flex container.
+#[derive(PartialEq, Eq)]
+pub enum MainAlign {
+    Start
+    Center
+    End
+    SpaceBetween
+    SpaceAround
+}
+
+/// Cross-axis placement in a flex container.
+#[derive(PartialEq, Eq)]
+pub enum CrossAlign {
+    Start
+    Center
+    End
+    Stretch
+    Baseline
+}
+
+/// Whether a widget shows, keeps its space invisibly, or takes no space.
+#[derive(PartialEq, Eq)]
+pub enum Visibility {
+    Visible
+    Hidden
+    Collapsed
+}
+
+/// A color role for text and fills, resolved against the theme at paint.
+#[derive(PartialEq)]
+pub enum Tone {
+    Normal
+    Muted
+    Disabled
+    Accent
+    OnAccent
+    Danger
+    Success
+    Warning
+    Info
+    Link
+    Surface
+    SurfaceAlt
+    Field
+    Background
+    Selection
+    Custom(Color)
+}
+
+impl Tone {
+    /// The theme color for this role.
+    pub fn resolve(&self, theme: Theme) -> Color {
+        match self {
+            Tone::Normal => theme.text
+            Tone::Muted => theme.text_muted
+            Tone::Disabled => theme.text_disabled
+            Tone::Accent => theme.accent
+            Tone::OnAccent => theme.accent_text
+            Tone::Danger => theme.danger
+            Tone::Success => theme.success
+            Tone::Warning => theme.warning
+            Tone::Info => theme.info
+            Tone::Link => theme.link
+            Tone::Surface => theme.surface
+            Tone::SurfaceAlt => theme.surface_alt
+            Tone::Field => theme.field
+            Tone::Background => theme.background
+            Tone::Selection => theme.selection
+            Tone::Custom(c) => *c
+        }
+    }
+}
+
+/// Layout and presentation modifiers a `Decorated` wrapper applies. Sizes
+/// are interface units; -1 means "not set".
+#[derive(PartialEq)]
+pub struct Modifiers {
+    pub padding: Insets
+    pub margin: Insets
+    pub width: i64
+    pub height: i64
+    pub min_width: i64
+    pub min_height: i64
+    pub max_width: i64
+    pub max_height: i64
+    /// Share of a flex container's free space (0 = natural size).
+    pub grow: i64
+    /// Placement inside the space given (0..1), or -1 to fill it.
+    pub align_x: f64
+    pub align_y: f64
+    pub background: Option<Tone>
+    pub border: bool
+    pub radius: i64
+    pub elevation: i64
+    pub tooltip: String
+    pub disabled: bool
+    pub visibility: Visibility
+    /// Accessible name, description, and role overrides.
+    pub label: String
+    pub description: String
+    pub role: Option<Role>
+    /// Identity for focus scopes, drop targets, and inspection.
+    pub key: String
+    pub drop_target: bool
+    /// What dragging the subtree away offers, when it is a drag source.
+    pub drag: Option<containers::DragSource>
+    /// Width / height ratio to keep, or 0.
+    pub aspect: f64
+    /// A theme override for the subtree: a palette, density, direction.
+    pub theme: Option<ThemeOverride>
+    /// Shown but left out of the accessibility tree (separators, ornaments).
+    pub decorative: bool
+    /// Pointer input lands on what is below except where the child is (an
+    /// overlay that covers the window but shows only part of it).
+    pub pass_through: bool
+}
+
+impl Default for Modifiers {
+    fn default() -> Modifiers {
+        Modifiers {
+            padding: Insets::all(0)
+            margin: Insets::all(0)
+            width: -1
+            height: -1
+            min_width: -1
+            min_height: -1
+            max_width: -1
+            max_height: -1
+            grow: 0
+            align_x: -1.0
+            align_y: -1.0
+            background: None
+            border: false
+            radius: -1
+            elevation: 0
+            tooltip: String::new()
+            disabled: false
+            visibility: Visibility::Visible
+            label: String::new()
+            description: String::new()
+            role: None
+            key: String::new()
+            drop_target: false
+            drag: None
+            aspect: 0.0
+            theme: None
+            decorative: false
+            pass_through: false
+        }
+    }
+}
+
+/// A subtree theme change.
+#[derive(PartialEq)]
+pub struct ThemeOverride {
+    pub kind: Option<crate::style::ThemeKind>
+    pub density: Option<crate::style::Density>
+    pub rtl: Option<bool>
+    pub text_scale: f64
+    /// Typography, shape, motion and icon tokens for the subtree.
+    pub tokens: Option<crate::style::ThemeTokens>
+    /// Overrides the keyboard focus outline within this subtree.
+    pub focus: Option<crate::style::color::Color>
+}
+
+impl ThemeOverride {
+    pub fn apply(&self, theme: Theme) -> Theme {
+        let mut t = match self.kind {
+            Some(k) => theme.with_kind(k)
+            None => theme
+        }
+        if let Some(d) = self.density { t.density = d }
+        if let Some(r) = self.rtl { t.rtl = r }
+        if self.text_scale > 0.0 { t.text_scale = self.text_scale }
+        if let Some(tokens) = self.tokens { t = t.with_tokens(tokens) }
+        if let Some(color) = self.focus { t.focus = color }
+        t
+    }
+}
+
+/// A widget the application draws itself: a display list from its size,
+/// and messages from its input.
+pub struct Custom {
+    pub id: String
+    pub focusable: bool
+    pub role: Role
+    pub label: String
+    /// Host ids of the natural size (pixels) for given constraints and
+    /// theme, the draw operations in local pixels for a size and theme, and
+    /// the messages for an event in local pixels; `Custom::new` registers them.
+    pub measure: i64
+    pub draw: i64
+    pub input: i64
+    /// Keeps every event it receives, even with no messages to emit (an
+    /// embedded document), so keys such as Tab reach it.
+    pub captures_input: bool
+}
+
+impl Custom {
+    /// A custom widget `id` sized by `measure`, drawn by `draw`, and turning
+    /// events into messages with `input`.
+    pub fn new(id: String, role: Role, label: String, measure: Fn(Constraints, Theme) -> Size, draw: Fn(Size, Theme) -> Vec<DrawOp>, input: Fn(CustomInput) -> Vec<UiMsg>) -> Custom {
+        Custom {
+            id: id
+            focusable: false
+            role: role
+            label: label
+            measure: crate::app::host::measure(measure)
+            draw: crate::app::host::draw(draw)
+            input: crate::app::host::custom_input(input)
+            captures_input: false
+        }
+    }
+}
+
+impl PartialEq for Custom {
+    fn eq(&self, other: Custom) -> bool {
+        self.id == other.id
+    }
+}
+
+/// Input a custom widget receives, in its local pixels.
+#[derive(PartialEq)]
+pub enum CustomInput {
+    Press { x: i64, y: i64, button: windowing::MouseButton, clicks: i64, mods: windowing::Mods }
+    /// The pointer moved with a button held.
+    Drag { x: i64, y: i64 }
+    /// The pointer moved with no button held.
+    Hover { x: i64, y: i64 }
+    Release { x: i64, y: i64, button: windowing::MouseButton, mods: windowing::Mods }
+    /// The pointer left the widget.
+    Leave
+    KeyPress(windowing::Key, windowing::Mods)
+    KeyRelease(windowing::Key, windowing::Mods)
+    /// Committed text: typed, chosen in an input method, or pasted.
+    Text(String)
+    /// The wheel turned at (`x`, `y`) by `dx`, `dy` notches.
+    Wheel { x: i64, y: i64, dx: f64, dy: f64, mods: windowing::Mods }
+    /// Keyboard focus arrived (`true`) or left.
+    Focus(bool)
+}
+
+/// One node of a window's view tree.
+#[derive(PartialEq)]
+pub enum Widget {
+    Empty
+    Text(display::Label)
+    Spacer(display::Spacer)
+    Separator(display::Separator)
+    Image(display::Image)
+    Icon(display::Icon)
+    Badge(display::Badge)
+    Flex(containers::Flex)
+    Grid(containers::Grid)
+    Stack(containers::Stack)
+    Flow(containers::Flow)
+    Scroll(containers::Scroll)
+    Split(containers::Split)
+    Decorated(containers::DecoratedBox)
+    Button(buttons::Button)
+    Check(buttons::Check)
+    RadioGroup(buttons::RadioGroup)
+    Segmented(buttons::Segmented)
+    TextInput(textinput::TextInput)
+    Feedback(feedback::Feedback)
+    Numeric(numeric::Numeric)
+    Calendar(temporal::Calendar)
+    TemporalEditor(temporal::TemporalEditor)
+    ColorWheel(colorpicker::ColorWheel)
+    Choice(choices::Choice)
+    MenuBar(menus::MenuBar)
+    ContextMenu(menus::ContextMenu)
+    Collection(collections::Collection)
+    Tabs(tabs::Tabs)
+    Terminal(crate::terminal::View)
+    PagePreview(crate::print::PagePreview)
+    Chart(crate::chart::View)
+    Scene(crate::scene::View)
+    ImageView(crate::imageview::View)
+    Media(crate::media::View)
+    Custom(Custom)
+}
+
+impl Widget {
+    /// A validated Gregorian date editor; incomplete text remains a draft.
+    pub fn date_field(id: String, value: String) -> Widget { Widget::TemporalEditor(temporal::TemporalEditor::new(id, value, temporal::TemporalKind::DateOnly)) }
+    pub fn time_field(id: String, value: String) -> Widget { Widget::TemporalEditor(temporal::TemporalEditor::new(id, value, temporal::TemporalKind::TimeOnly)) }
+    pub fn datetime_field(id: String, value: String) -> Widget { Widget::TemporalEditor(temporal::TemporalEditor::new(id, value, temporal::TemporalKind::DateAndTime)) }
+    pub fn duration_field(id: String, value: String) -> Widget { Widget::TemporalEditor(temporal::TemporalEditor::new(id, value, temporal::TemporalKind::Elapsed)) }
+    /// A virtual list, grid, table, or tree with stable row keys.
+    pub fn collection(view: collections::Collection) -> Widget {
+        Widget::Collection(view)
+    }
+
+    // ---- display ----
+
+    /// Body text on one line.
+    pub fn label(text: String) -> Widget {
+        Widget::Text(display::Label::new(text, TextRole::Body))
+    }
+
+    /// A section heading.
+    pub fn heading(text: String) -> Widget {
+        Widget::Text(display::Label::new(text, TextRole::Heading))
+    }
+
+    /// A page or window title.
+    pub fn title(text: String) -> Widget {
+        Widget::Text(display::Label::new(text, TextRole::Title))
+    }
+
+    /// Secondary text.
+    pub fn muted(text: String) -> Widget {
+        let mut l = display::Label::new(text, TextRole::Small)
+        l.tone = Tone::Muted
+        Widget::Text(l)
+    }
+
+    /// Body text that wraps to the width it is given.
+    pub fn paragraph(text: String) -> Widget {
+        let mut l = display::Label::new(text, TextRole::Body)
+        l.wrap = true
+        Widget::Text(l)
+    }
+
+    /// Text in a role with a tone.
+    pub fn text(text: String, role: TextRole, tone: Tone) -> Widget {
+        let mut l = display::Label::new(text, role)
+        l.tone = tone
+        Widget::Text(l)
+    }
+
+    /// One line of `text` that ends in an ellipsis where it does not fit.
+    pub fn text_line(text: String, role: TextRole, tone: Tone) -> Widget {
+        let mut l = display::Label::new(text, role)
+        l.tone = tone
+        l.max_lines = 1
+        Widget::Text(l)
+    }
+
+    /// Read-only text the user can select and copy.
+    pub fn selectable(id: String, text: String) -> Widget {
+        let mut l = display::Label::new(text, TextRole::Body)
+        l.id = id
+        l.selectable = true
+        l.wrap = true
+        Widget::Text(l)
+    }
+
+    /// A focusable hyperlink-styled text; activation emits `Click(id)`.
+    pub fn link(id: String, text: String) -> Widget {
+        let mut l = display::Label::new(text, TextRole::Body)
+        l.id = id
+        l.link = true
+        l.tone = Tone::Link
+        Widget::Text(l)
+    }
+
+    /// Fixed empty space of `units` on both axes.
+    pub fn spacer(units: i64) -> Widget {
+        Widget::Spacer(display::Spacer { units: units, flexible: false })
+    }
+
+    /// Space that takes the free room in a flex container.
+    pub fn stretch() -> Widget {
+        Widget::Spacer(display::Spacer { units: 0, flexible: true })
+    }
+
+    /// A horizontal rule.
+    pub fn separator() -> Widget {
+        Widget::Separator(display::Separator { vertical: false })
+    }
+
+    pub fn vseparator() -> Widget {
+        Widget::Separator(display::Separator { vertical: true })
+    }
+
+    /// An RGBA image with alternative text (empty `alt` marks it decorative).
+    pub fn image(rgba: Vec<u8>, width: i64, height: i64, alt: String) -> Widget {
+        Widget::Image(display::Image { rgba: rgba, width: width, height: height, alt: alt, fit: display::Fit::Contain, error: String::new() })
+    }
+
+    /// A named vector icon from the built-in set, `units` square.
+    pub fn icon(icon: crate::render::icons::Icon, units: i64) -> Widget {
+        Widget::Icon(display::Icon { icon: icon, units: units, tone: Tone::Normal, label: String::new() })
+    }
+
+    /// A button that opens `items` as a menu below itself (on press, Enter,
+    /// Space or Down).
+    pub fn menu_button(id: String, label: String, items: Vec<menus::MenuItem>) -> Widget {
+        let mut b = buttons::Button::new(id, label, buttons::ButtonKind::Normal)
+        b.menu_arrow = true
+        b.menu = items
+        Widget::Button(b)
+    }
+
+    /// A button whose main part emits `Click(id)` and whose arrow part (or
+    /// Down from the keyboard) opens `items` as a menu.
+    pub fn split_button(id: String, label: String, items: Vec<menus::MenuItem>) -> Widget {
+        let mut b = buttons::Button::new(id, label, buttons::ButtonKind::Normal)
+        b.menu = items
+        b.split = true
+        Widget::Button(b)
+    }
+
+    /// A small pill showing a count or status word. `label` is what
+    /// assistive technology reads ("3 unread"); empty reads `text`.
+    pub fn badge(text: String, tone: Tone, label: String) -> Widget {
+        Widget::Badge(display::Badge { text: text, tone: tone, label: label })
+    }
+
+    // ---- containers ----
+
+    /// Children left to right (start to end in right-to-left layouts).
+    pub fn row(children: Vec<Widget>, spacing: i64) -> Widget {
+        Widget::Flex(containers::Flex::new(Axis::Horizontal, children, spacing))
+    }
+
+    /// Children top to bottom.
+    pub fn column(children: Vec<Widget>, spacing: i64) -> Widget {
+        Widget::Flex(containers::Flex::new(Axis::Vertical, children, spacing))
+    }
+
+    /// A flex container with explicit alignment.
+    pub fn flex(axis: Axis, children: Vec<Widget>, spacing: i64, main: MainAlign, cross: CrossAlign) -> Widget {
+        let mut f = containers::Flex::new(axis, children, spacing)
+        f.main = main
+        f.cross = cross
+        Widget::Flex(f)
+    }
+
+    /// Children in `columns` columns, row-major. Column widths follow the
+    /// widest cell; `stretch_last` gives the last column the free width.
+    pub fn grid(children: Vec<Widget>, columns: i64, gap: i64) -> Widget {
+        Widget::Grid(containers::Grid { children: children, columns: columns, column_gap: gap, row_gap: gap, stretch_last: false })
+    }
+
+    /// Label/field pairs: labels end-aligned in the first column, fields
+    /// filling the second.
+    pub fn form(rows: Vec<(String, Widget)>) -> Widget {
+        let mut cells = #[]
+        for (label, field) in rows {
+            let mut l = display::Label::new(label, TextRole::Body)
+            l.align = TextAlign::End
+            cells.push(Widget::Text(l).align(1.0, 0.5))
+            cells.push(field)
+        }
+        Widget::Grid(containers::Grid { children: cells, columns: 2, column_gap: 12, row_gap: 10, stretch_last: true })
+    }
+
+    /// Children painted over each other, first at the bottom.
+    pub fn stack(layers: Vec<Widget>) -> Widget {
+        Widget::Stack(containers::Stack { layers: layers })
+    }
+
+    /// Children that wrap onto new lines when the width runs out.
+    pub fn flow(children: Vec<Widget>, spacing: i64) -> Widget {
+        Widget::Flow(containers::Flow { children: children, spacing: spacing, line_spacing: spacing })
+    }
+
+    /// A vertically scrolling viewport over `child`.
+    pub fn scroll(id: String, child: Widget) -> Widget {
+        Widget::Scroll(containers::Scroll { id: id, child: child, horizontal: false, vertical: true, fit: false })
+    }
+
+    /// A vertical scroll as tall as its content, up to the height offered;
+    /// inside a flex it takes no more of its share than the content needs.
+    pub fn scroll_to_fit(id: String, child: Widget) -> Widget {
+        Widget::Scroll(containers::Scroll { id: id, child: child, horizontal: false, vertical: true, fit: true })
+    }
+
+    /// A horizontally scrolling strip over `child`, as tall as its content.
+    pub fn scroll_horizontal(id: String, child: Widget) -> Widget {
+        Widget::Scroll(containers::Scroll { id: id, child: child, horizontal: true, vertical: false, fit: false })
+    }
+
+    /// A viewport scrolling on both axes.
+    pub fn scroll_both(id: String, child: Widget) -> Widget {
+        Widget::Scroll(containers::Scroll { id: id, child: child, horizontal: true, vertical: true, fit: false })
+    }
+
+    /// Two panes with a draggable divider; `ratio` (0..1) is the first
+    /// pane's share and `Split(id, ratio)` reports drags.
+    pub fn split(id: String, first: Widget, second: Widget, axis: Axis, ratio: f64) -> Widget {
+        Widget::Split(containers::Split { id: id, first: first, second: second, axis: axis, ratio: ratio, min_first: 80, min_second: 80 })
+    }
+
+    /// A raised card: surface background, border, radius, padding.
+    pub fn card(child: Widget) -> Widget {
+        let mut m = Modifiers::default()
+        m.padding = Insets::all(16)
+        m.background = Some(Tone::Surface)
+        m.border = true
+        Widget::Decorated(containers::DecoratedBox { child: child, mods: m })
+    }
+
+    /// A titled group box.
+    pub fn group(title: String, child: Widget) -> Widget {
+        let body = Widget::column(#[Widget::text(title, TextRole::Label, Tone::Normal), child], 8)
+        let mut m = Modifiers::default()
+        m.padding = Insets::all(12)
+        m.border = true
+        m.role = Some(Role::Group)
+        m.label = title
+        Widget::Decorated(containers::DecoratedBox { child: body, mods: m })
+    }
+
+    // ---- actions ----
+
+    /// A push button; activation emits `Click(id)`.
+    pub fn button(id: String, label: String) -> Widget {
+        Widget::Button(buttons::Button::new(id, label, buttons::ButtonKind::Normal))
+    }
+
+    /// The emphasised default action of a view or dialog.
+    pub fn primary_button(id: String, label: String) -> Widget {
+        Widget::Button(buttons::Button::new(id, label, buttons::ButtonKind::Primary))
+    }
+
+    /// A destructive action.
+    pub fn danger_button(id: String, label: String) -> Widget {
+        Widget::Button(buttons::Button::new(id, label, buttons::ButtonKind::Danger))
+    }
+
+    /// A borderless button for toolbars and dense rows.
+    pub fn flat_button(id: String, label: String) -> Widget {
+        Widget::Button(buttons::Button::new(id, label, buttons::ButtonKind::Flat))
+    }
+
+    /// An icon-only toolbar button; `label` is its accessible name and tooltip.
+    pub fn tool_button(id: String, icon: crate::render::icons::Icon, label: String) -> Widget {
+        let mut b = buttons::Button::new(id, label, buttons::ButtonKind::Tool)
+        b.icon = Some(icon)
+        Widget::Button(b).tooltip(label)
+    }
+
+    /// A square button showing `color`, named `label` for its tooltip and
+    /// for assistive technology (a palette swatch).
+    pub fn swatch_button(id: String, color: crate::style::color::Color, label: String) -> Widget {
+        let mut b = buttons::Button::new(id, label, buttons::ButtonKind::Tool)
+        b.swatch = Some(color)
+        Widget::Button(b).tooltip(label)
+    }
+
+    /// A button bound to a command: label, shortcut, and enabled state
+    /// come from the command; activation runs it.
+    pub fn command_button(command: String, label: String) -> Widget {
+        let mut b = buttons::Button::new(f"cmd:{command}", label, buttons::ButtonKind::Normal)
+        b.command = command
+        Widget::Button(b)
+    }
+
+    /// A button that stays pressed; emits `Toggle(id, on)`.
+    pub fn toggle_button(id: String, label: String, on: bool) -> Widget {
+        let mut b = buttons::Button::new(id, label, buttons::ButtonKind::Normal)
+        b.toggled = if on { 1 } else { 0 }
+        Widget::Button(b)
+    }
+
+    /// A checkbox; emits `Toggle(id, checked)`.
+    pub fn checkbox(id: String, label: String, checked: bool) -> Widget {
+        Widget::Check(buttons::Check::checkbox(id, label, if checked { CheckState::Checked } else { CheckState::Unchecked }))
+    }
+
+    /// A tri-state checkbox; emits `Check(id, state)`, cycling through
+    /// mixed only when `cycle_mixed`.
+    pub fn tristate(id: String, label: String, state: CheckState, cycle_mixed: bool) -> Widget {
+        let mut c = buttons::Check::checkbox(id, label, state)
+        c.tristate = true
+        c.cycle_mixed = cycle_mixed
+        Widget::Check(c)
+    }
+
+    /// An on/off switch; emits `Toggle(id, on)`.
+    pub fn switch(id: String, label: String, on: bool) -> Widget {
+        let mut c = buttons::Check::checkbox(id, label, if on { CheckState::Checked } else { CheckState::Unchecked })
+        c.switch = true
+        Widget::Check(c)
+    }
+
+    /// Mutually exclusive options; arrow keys move the choice and
+    /// `Choose(id, key)` reports it.
+    pub fn radio_group(id: String, options: Vec<(String, String)>, selected: String, horizontal: bool) -> Widget {
+        Widget::RadioGroup(buttons::RadioGroup { id: id, options: options, selected: selected, horizontal: horizontal, disabled_keys: #[] })
+    }
+
+    /// A row of exclusive buttons; emits `Choose(id, key)`.
+    pub fn segmented(id: String, options: Vec<(String, String)>, selected: String) -> Widget {
+        Widget::Segmented(buttons::Segmented { id: id, options: options, selected: selected })
+    }
+
+    // ---- text ----
+
+    /// A single-line text field; edits emit `Text(id, text)` and Enter
+    /// emits `Submit(id, text)`.
+    pub fn text_field(id: String, text: String, placeholder: String) -> Widget {
+        Widget::TextInput(textinput::TextInput::new(id, text, placeholder, textinput::InputKind::Line))
+    }
+
+    /// A multi-line text area `rows` lines tall.
+    pub fn text_area(id: String, text: String, rows: i64) -> Widget {
+        let mut t = textinput::TextInput::new(id, text, String::new(), textinput::InputKind::Area)
+        t.rows = rows
+        Widget::TextInput(t)
+    }
+
+    /// A field that hides its text, with a reveal toggle; copy and cut are
+    /// disabled and its value is never exposed to assistive technology.
+    pub fn password_field(id: String, text: String, placeholder: String) -> Widget {
+        Widget::TextInput(textinput::TextInput::new(id, text, placeholder, textinput::InputKind::Password))
+    }
+
+    /// A search field with a clear button; Escape clears it.
+    pub fn search_field(id: String, text: String, placeholder: String) -> Widget {
+        Widget::TextInput(textinput::TextInput::new(id, text, placeholder, textinput::InputKind::Search))
+    }
+
+    /// A text input built field by field (validation, masks, history).
+    pub fn input(input: textinput::TextInput) -> Widget {
+        Widget::TextInput(input)
+    }
+
+    // ---- numbers ----
+
+    /// A number field with step buttons; reports `Value(id, v)`.
+    pub fn spin_box(id: String, value: f64, min: f64, max: f64, step: f64, decimals: i64) -> Widget {
+        Widget::Numeric(numeric::Numeric::Spin(numeric::SpinBox { id: id, value: value, min: min, max: max, step: step, page: step * 10.0, decimals: decimals, suffix: String::new(), label: String::new() }))
+    }
+
+    /// A horizontal slider; reports `Value(id, v)`.
+    pub fn slider(id: String, value: f64, min: f64, max: f64, step: f64) -> Widget {
+        Widget::Numeric(numeric::Numeric::Slide(numeric::Slider { id: id, value: value, min: min, max: max, step: step, page: 0.0, vertical: false, ticks: 0, label: String::new() }))
+    }
+
+    /// A two-thumb slider; reports `Range(id, low, high)`.
+    pub fn range_slider(id: String, low: f64, high: f64, min: f64, max: f64, step: f64) -> Widget {
+        Widget::Numeric(numeric::Numeric::Range(numeric::RangeSlider { id: id, low: low, high: high, min: min, max: max, step: step, label: String::new() }))
+    }
+
+    /// A rotary knob; reports `Value(id, v)`.
+    pub fn dial(id: String, value: f64, min: f64, max: f64, step: f64) -> Widget {
+        Widget::Numeric(numeric::Numeric::Knob(numeric::Dial { id: id, value: value, min: min, max: max, step: step, wraps: false, label: String::new() }))
+    }
+
+    // ---- choices ----
+
+    /// A non-editable choice of one item key; reports `Select(id, key)`.
+    pub fn select(id: String, items: Vec<CompletionItem>, selected: String, placeholder: String) -> Widget {
+        Widget::Choice(choices::Choice::One(choices::Select { id: id, items: items, selected: selected, placeholder: placeholder, label: String::new(), loading: false, error: String::new() }))
+    }
+
+    /// A searchable picker; reports `Select` (single) or `SelectMany`.
+    pub fn picker(id: String, items: Vec<CompletionItem>, selected: Vec<String>, multiple: bool, placeholder: String) -> Widget {
+        Widget::Choice(choices::Choice::Pick(choices::Picker { id: id, items: items, selected: selected, multiple: multiple, placeholder: placeholder, label: String::new(), loading: false, error: String::new() }))
+    }
+
+    /// An editable combo: free text (or only listed items when `strict`)
+    /// with a dropdown of `items`; reports `Text` and, on choosing, `Select`.
+    pub fn combo(id: String, text: String, items: Vec<CompletionItem>, strict: bool, placeholder: String) -> Widget {
+        let mut t = textinput::TextInput::new(id, text, placeholder, textinput::InputKind::Line)
+        let mut c = crate::widgets::completion::Completion::local(items, crate::widgets::completion::MatchMode::Substring)
+        c.min_chars = 1
+        t.completion = Some(c)
+        t.dropdown = true
+        t.strict = strict
+        Widget::TextInput(t)
+    }
+
+    /// A text field that proposes completions as the user types.
+    pub fn autocomplete(id: String, text: String, completion: crate::widgets::completion::Completion, placeholder: String) -> Widget {
+        let mut t = textinput::TextInput::new(id, text, placeholder, textinput::InputKind::Line)
+        t.completion = Some(completion)
+        Widget::TextInput(t)
+    }
+
+    /// An inline command palette over the window's commands.
+    pub fn command_palette(id: String) -> Widget {
+        Widget::Choice(choices::Choice::Commands(choices::Palette { id: id, placeholder: "Search commands" }))
+    }
+
+    /// Items from (key, label) pairs.
+    pub fn items(pairs: Vec<(String, String)>) -> Vec<CompletionItem> {
+        pairs.map(|p| CompletionItem::new(p.0, p.1))
+    }
+
+    // ---- menus ----
+
+    /// A menu bar; items run commands from the window's registry.
+    pub fn menu_bar(id: String, menus: Vec<menus::Menu>) -> Widget {
+        Widget::MenuBar(menus::MenuBar { id: id, menus: menus })
+    }
+
+    /// This widget with a context menu (right-click, Shift+F10, Menu key).
+    pub fn context_menu(self, id: String, items: Vec<menus::MenuItem>) -> Widget {
+        Widget::ContextMenu(menus::ContextMenu { id: id, child: self, items: items })
+    }
+
+    /// A tab strip over `content`, the active tab's content. The
+    /// application keeps the tab list and the active key; see `tabs`.
+    pub fn tabs(id: String, items: Vec<tabs::TabItem>, active: String, content: Widget) -> Widget {
+        Widget::Tabs(tabs::Tabs { id: id, items: items, active: active, content: content, pages: Map::new(), workspace: "", add_button: true, detachable: false })
+    }
+
+    /// A tab strip whose tabs can move to a new window (`detach` actions).
+    pub fn detachable_tabs(id: String, items: Vec<tabs::TabItem>, active: String, content: Widget) -> Widget {
+        Widget::Tabs(tabs::Tabs { id: id, items: items, active: active, content: content, pages: Map::new(), workspace: "", add_button: true, detachable: true })
+    }
+
+    /// Retains every page's caret, undo, and scroll state, including inactive pages.
+    /// A workspace gives each page one owner across the application's windows.
+    pub fn tab_pages(id: String, workspace: String, items: Vec<tabs::TabItem>, active: String, pages: Map<String, Widget>) -> Widget {
+        let content = pages.get(active).unwrap_or(Widget::Empty)
+        Widget::Tabs(tabs::Tabs { id: id, items: items, active: active, content: content, pages: pages, workspace: workspace, add_button: true, detachable: true })
+    }
+
+    // ---- custom ----
+
+    pub fn custom(custom: Custom) -> Widget {
+        Widget::Custom(custom)
+    }
+
+    // ---- modifiers ----
+
+    fn decorate(self, apply: Fn(Modifiers) -> Modifiers) -> Widget {
+        match self {
+            Widget::Decorated(d) => Widget::Decorated(containers::DecoratedBox { child: d.child, mods: apply(d.mods) })
+            other => Widget::Decorated(containers::DecoratedBox { child: other, mods: apply(Modifiers::default()) })
+        }
+    }
+
+    /// Inner space of `units` on every side.
+    pub fn padding(self, units: i64) -> Widget {
+        self.decorate(|m| { let mut n = m; n.padding = Insets::all(units); n })
+    }
+
+    pub fn padding_xy(self, horizontal: i64, vertical: i64) -> Widget {
+        self.decorate(|m| { let mut n = m; n.padding = Insets::symmetric(horizontal, vertical); n })
+    }
+
+    pub fn margin(self, units: i64) -> Widget {
+        self.decorate(|m| { let mut n = m; n.margin = Insets::all(units); n })
+    }
+
+    /// Inner space on each side, by logical side: `start` is the left in
+    /// left-to-right layouts and the right in right-to-left ones.
+    pub fn padding_sides(self, start: i64, top: i64, end: i64, bottom: i64) -> Widget {
+        self.decorate(|m| { let mut n = m; n.padding = Insets::new(start, top, end, bottom); n })
+    }
+
+    /// Outer space on each side, by logical side (see `padding_sides`).
+    pub fn margin_sides(self, start: i64, top: i64, end: i64, bottom: i64) -> Widget {
+        self.decorate(|m| { let mut n = m; n.margin = Insets::new(start, top, end, bottom); n })
+    }
+
+    /// Takes `weight` shares of a flex container's free space.
+    pub fn grow(self, weight: i64) -> Widget {
+        self.decorate(|m| { let mut n = m; n.grow = weight; n })
+    }
+
+    pub fn width(self, units: i64) -> Widget {
+        self.decorate(|m| { let mut n = m; n.width = units; n })
+    }
+
+    pub fn height(self, units: i64) -> Widget {
+        self.decorate(|m| { let mut n = m; n.height = units; n })
+    }
+
+    pub fn min_width(self, units: i64) -> Widget {
+        self.decorate(|m| { let mut n = m; n.min_width = units; n })
+    }
+
+    pub fn max_width(self, units: i64) -> Widget {
+        self.decorate(|m| { let mut n = m; n.max_width = units; n })
+    }
+
+    pub fn min_height(self, units: i64) -> Widget {
+        self.decorate(|m| { let mut n = m; n.min_height = units; n })
+    }
+
+    pub fn max_height(self, units: i64) -> Widget {
+        self.decorate(|m| { let mut n = m; n.max_height = units; n })
+    }
+
+    /// Placed at fractions of the space given instead of filling it.
+    pub fn align(self, x: f64, y: f64) -> Widget {
+        self.decorate(|m| { let mut n = m; n.align_x = x; n.align_y = y; n })
+    }
+
+    pub fn center(self) -> Widget {
+        self.align(0.5, 0.5)
+    }
+
+    pub fn background(self, tone: Tone) -> Widget {
+        self.decorate(|m| { let mut n = m; n.background = Some(tone); n })
+    }
+
+    pub fn bordered(self) -> Widget {
+        self.decorate(|m| { let mut n = m; n.border = true; n })
+    }
+
+    pub fn radius(self, units: i64) -> Widget {
+        self.decorate(|m| { let mut n = m; n.radius = units; n })
+    }
+
+    pub fn tooltip(self, text: String) -> Widget {
+        let base = self.id()
+        self.decorate(|m| {
+            let mut n = m
+            n.tooltip = text
+            if n.key.is_empty() { n.key = f"tip:{base}:{text}" }
+            n
+        })
+    }
+
+    /// Disables the subtree: no input, no focus, disabled styling.
+    pub fn disabled(self, disabled: bool) -> Widget {
+        self.decorate(|m| { let mut n = m; n.disabled = disabled; n })
+    }
+
+    pub fn visibility(self, v: Visibility) -> Widget {
+        self.decorate(|m| { let mut n = m; n.visibility = v; n })
+    }
+
+    /// Collapses the subtree unless `shown`.
+    pub fn shown(self, shown: bool) -> Widget {
+        self.visibility(if shown { Visibility::Visible } else { Visibility::Collapsed })
+    }
+
+    /// The accessible name assistive technology announces.
+    pub fn accessible(self, label: String) -> Widget {
+        self.decorate(|m| { let mut n = m; n.label = label; n })
+    }
+
+    /// Lets pointer input through to the layers below except over the child.
+    pub fn pass_through(self) -> Widget {
+        self.decorate(|m| { let mut n = m; n.pass_through = true; n })
+    }
+
+    /// Leaves the subtree out of the accessibility tree; it still shows.
+    pub fn decorative(self) -> Widget {
+        self.decorate(|m| { let mut n = m; n.decorative = true; n })
+    }
+
+    pub fn described(self, description: String) -> Widget {
+        self.decorate(|m| { let mut n = m; n.description = description; n })
+    }
+
+    pub fn role(self, role: Role) -> Widget {
+        self.decorate(|m| { let mut n = m; n.role = Some(role); n })
+    }
+
+    pub fn key(self, key: String) -> Widget {
+        self.decorate(|m| { let mut n = m; n.key = key; n })
+    }
+
+    /// Accepts dropped files, reported as `Dropped(key, paths)`.
+    pub fn drop_target(self, key: String) -> Widget {
+        self.decorate(|m| { let mut n = m; n.key = key; n.drop_target = true; n })
+    }
+
+    /// Lets the pointer drag `items` out of the subtree, for content that
+    /// does not take the press itself (labels, icons, previews): a press and
+    /// a move of a few units start a platform drag, answered by
+    /// `UiMsg::DragFinished(id, operation)`.
+    pub fn drag_source(self, id: String, items: Vec<windowing::DragItem>, operation: windowing::DragOperation) -> Widget {
+        self.decorate(|m| { let mut n = m; n.key = id; n.drag = Some(containers::DragSource { items: items, operation: operation }); n })
+    }
+
+    pub fn aspect(self, ratio: f64) -> Widget {
+        self.decorate(|m| { let mut n = m; n.aspect = ratio; n })
+    }
+
+    /// Paints the subtree with a different theme palette, density, or
+    /// direction.
+    pub fn themed(self, change: ThemeOverride) -> Widget {
+        self.decorate(|m| { let mut n = m; n.theme = Some(change); n })
+    }
+
+    /// Lays the subtree out right to left (or left to right).
+    pub fn direction_rtl(self, rtl: bool) -> Widget {
+        self.themed(ThemeOverride { kind: None, density: None, rtl: Some(rtl), text_scale: 0.0, tokens: None, focus: None })
+    }
+
+    // ---- structure ----
+
+    /// The widget's id, or "" for widgets without identity.
+    pub fn id(&self) -> String {
+        match self {
+            Widget::Text(l) => l.id
+            Widget::Scroll(s) => s.id
+            Widget::Split(s) => s.id
+            Widget::Decorated(d) => d.mods.key
+            Widget::Button(b) => b.id
+            Widget::Check(c) => c.id
+            Widget::RadioGroup(r) => r.id
+            Widget::Segmented(s) => s.id
+            Widget::TextInput(t) => t.id
+            Widget::Feedback(f) => f.id()
+            Widget::ColorWheel(c) => c.id
+            Widget::TemporalEditor(t) => t.id
+            Widget::Calendar(c) => c.id
+            Widget::Numeric(n) => n.id()
+            Widget::Choice(c) => c.id()
+            Widget::MenuBar(b) => b.id
+            Widget::ContextMenu(m) => m.id
+            Widget::Collection(c) => c.id
+            Widget::Tabs(t) => t.id
+            Widget::Terminal(t) => t.id
+            Widget::PagePreview(p) => p.id
+            Widget::Chart(c) => c.id
+            Widget::Scene(c) => c.id
+            Widget::ImageView(c) => c.id
+            Widget::Media(c) => c.id
+            Widget::Custom(c) => c.id
+            _ => String::new()
+        }
+    }
+
+    /// The children, in the order their nodes appear.
+    pub fn children(&self) -> Vec<Widget> {
+        match self {
+            Widget::Flex(f) => f.children
+            Widget::Grid(g) => g.children
+            Widget::Stack(s) => s.layers
+            Widget::Flow(f) => f.children
+            Widget::Scroll(s) => #[s.child]
+            Widget::Split(s) => #[s.first, s.second]
+            Widget::Decorated(d) => #[d.child]
+            Widget::ContextMenu(m) => #[m.child]
+            Widget::Tabs(t) => #[t.content]
+            _ => #[]
+        }
+    }
+
+    /// Whether keyboard focus can rest on this widget.
+    pub fn focusable(&self) -> bool {
+        match self {
+            Widget::Text(l) => !l.id.is_empty() && (l.selectable || l.link)
+            Widget::Button(_) |
+                Widget::Check(_) |
+                Widget::TextInput(_) |
+                Widget::Split(_) |
+                Widget::ColorWheel(_) |
+                Widget::TemporalEditor(_) |
+                Widget::Calendar(_) |
+                Widget::Numeric(_) |
+                Widget::Choice(_) => true
+            Widget::RadioGroup(r) => !r.options.is_empty()
+            Widget::Segmented(s) => !s.options.is_empty()
+            Widget::Feedback(f) => f.focusable()
+            Widget::MenuBar(b) => !b.menus.is_empty() && !windowing::menu::has_native_menu_bar()
+            Widget::Collection(c) => c.count > 0
+            Widget::Tabs(t) => !t.items.is_empty()
+            Widget::Terminal(_) | Widget::Chart(_) | Widget::Scene(_) | Widget::ImageView(_) | Widget::Media(_) => true
+            Widget::Custom(c) => c.focusable
+            _ => false
+        }
+    }
+
+    /// Whether the widget clips its children (for hit testing and paint).
+    pub fn clips(&self) -> bool {
+        match self {
+            Widget::Scroll(_) | Widget::Split(_) => true
+            _ => false
+        }
+    }
+
+    /// Whether this child takes only as much of a flex share as its content needs.
+    pub fn fits_content(&self) -> bool {
+        match self {
+            Widget::Decorated(d) => d.child.fits_content()
+            Widget::Scroll(s) => s.fit
+            _ => false
+        }
+    }
+
+    /// The flex weight a container gives this child.
+    pub fn grow_weight(&self) -> i64 {
+        match self {
+            Widget::Decorated(d) => {
+                if d.mods.visibility == Visibility::Collapsed { 0 } else { d.mods.grow }
+            }
+            Widget::Spacer(s) => if s.flexible { 1 } else { 0 }
+            _ => 0
+        }
+    }
+
+    /// Whether the widget takes no space (`Visibility::Collapsed`).
+    pub fn is_collapsed(&self) -> bool {
+        match self {
+            Widget::Decorated(d) => d.mods.visibility == Visibility::Collapsed
+            _ => false
+        }
+    }
+
+    // ---- passes ----
+
+
+    /// The accessibility node of a popup this widget opened, for popups whose
+    /// content is not already part of the widget's own node.
+    pub fn popup_semantics(&self, popup: PopupRequest, st: StateStore, registry: Vec<crate::commands::Command>) -> Option<AccessNode> {
+        match self {
+            Widget::MenuBar(b) => Some(menus::panel_semantics(menus::bar_menu_items(*b, st), b.id, popup.level, st, registry))
+            Widget::ContextMenu(m) => Some(menus::panel_semantics(m.items, m.id, popup.level, st, registry))
+            Widget::Button(b) => if b.menu.is_empty() { None } else { Some(menus::panel_semantics(b.menu, b.id, popup.level, st, registry)) }
+            _ => None
+        }
+    }
+
+
+}
+
+
+/// Constraints for a child of natural size inside `c`, minimums dropped.
+pub fn loose(c: Constraints) -> Constraints {
+    c.loosen()
+}
+
+/// The unbounded size marker, re-exported for containers.
+pub const NO_LIMIT: i64 = UNBOUNDED
+
+impl Display for Custom {
+    fn fmt(&self) -> String {
+        f"Custom({self.id})"
+    }
+}
+
+impl Debug for Custom {
+    fn fmt(&self) -> String {
+        f"Custom {{ id: {self.id:?} }}"
+    }
+}

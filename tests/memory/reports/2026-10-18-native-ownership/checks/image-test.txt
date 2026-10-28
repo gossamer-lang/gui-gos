@@ -1,0 +1,17 @@
+   Compiling gossamer-runtime v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-runtime)
+   Compiling gossamer-cli v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-cli)
+   Compiling gossamer-codegen-cranelift v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-codegen-cranelift)
+   Compiling gossamer-sched v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-sched)
+   Compiling gossamer-std v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-std)
+   Compiling gossamer-driver v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-driver)
+   Compiling gossamer-interp v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-interp)
+   Compiling gossamer-lsp v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-lsp)
+   Compiling gossamer-mcp v0.74.0 (/home/daniel/dev/gossamer/crates/gossamer-mcp)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 36.04s
+     Running tests/stdlib_new_modules.rs (target/debug/deps/stdlib_new_modules-2c55f9d8d1744448)
+
+running 1 test
+test image_png_jpeg_round_trip_and_invalid_input_match_native ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 56 filtered out; finished in 0.37s
+

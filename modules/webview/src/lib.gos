@@ -1,0 +1,230 @@
+// webview: web pages for gui-gos applications. WebKitGTK renders each page
+// offscreen on an engine thread; `view` paints the latest frame and forwards
+// input back. An application runs the engine beside its session:
+//
+//     let engine, runner = webview::engine()
+//     let mut session = app(engine).start()?
+//     let runner = runner.posting_to(session.mailbox())
+//     cohort(isolation: Isolation::Thread) {
+//         let _ = spawn(|| webview::run(runner))
+//         result = session.run()
+//         engine.shutdown()
+//     }
+//
+// Engine events arrive as `UiMsg::Custom("webview", "")`; `Engine::events`
+// answers them. Frames come in `Event::Painted`, for the model to keep and
+// `widget` to show.
+
+use std::errors
+use std::sync::{channel_unbounded, Receiver, Sender, Shared}
+
+use gui
+
+use crate::{engine, view}
+
+/// The message the engine posts to the session when events are waiting.
+pub const WAKE: String = "webview"
+
+/// One rendered page: `width` x `height` straight RGBA pixels, drawn at `scale`.
+#[derive(Debug, Default, PartialEq)]
+pub struct Frame {
+    pub width: i64
+    pub height: i64
+    pub scale: f64
+    pub rgba: Vec<u8>
+}
+
+/// What happened in the engine.
+#[derive(Debug, PartialEq)]
+pub enum Event {
+    /// A page load began.
+    Started { page: i64, uri: String }
+    /// The new page's content started arriving.
+    Committed { page: i64, uri: String }
+    Finished { page: i64, uri: String }
+    Failed { page: i64, uri: String, error: String }
+    Title { page: i64, title: String }
+    Uri { page: i64, uri: String }
+    /// Estimated load progress, 0 to 1.
+    Progress { page: i64, fraction: f64 }
+    History { page: i64, back: bool, forward: bool }
+    /// The page was drawn anew.
+    Painted { page: i64, frame: Frame }
+    /// The page asked for a new window (a `_blank` link or `window.open`).
+    NewWindow { page: i64, uri: String }
+    /// The page asked for a permission; answer with `Engine::answer_permission`.
+    Permission { page: i64, request: i64, kind: String }
+    DownloadStarted { page: i64, download: i64, uri: String }
+    DownloadFinished { download: i64, path: String, bytes: i64 }
+    DownloadFailed { download: i64, error: String }
+    /// The page's web process ended; reload the page to recover.
+    Crashed { page: i64, reason: String }
+    /// The answer to `Page::evaluate`: the script's value as text, or its error.
+    Script { page: i64, request: i64, result: Result<String, String> }
+    /// The answer to `Page::save_session`.
+    Session { page: i64, state: Vec<u8> }
+    /// The engine could not start; the text says why.
+    Unavailable(String)
+}
+
+/// A request to the engine thread.
+pub enum Command {
+    Create(i64)
+    Close(i64)
+    Load(i64, String)
+    LoadHtml(i64, String, String)
+    Reload(i64)
+    Stop(i64)
+    Back(i64)
+    Forward(i64)
+    Resize(i64, i64, i64, f64)
+    Input(i64, gui::CustomInput)
+    Evaluate(i64, i64, String)
+    Permission(i64, bool)
+    Download(i64, String)
+    DownloadDir(String)
+    Terminate(i64)
+    SaveSession(i64)
+    RestoreSession(i64, Vec<u8>)
+    Quit
+}
+
+/// The application's side of a running engine.
+pub struct Engine {
+    commands: Sender<Command>
+    events: Receiver<Event>
+    next: Shared<i64>
+}
+
+/// The engine thread's side, handed to `run`.
+pub struct Runner {
+    pub (package) commands: Receiver<Command>
+    pub (package) events: Sender<Event>
+    pub (package) mailbox: Option<gui::Mailbox>
+}
+
+/// A new engine. Pages can be opened at once; their commands wait until
+/// `run` starts the engine thread.
+pub fn engine() -> (Engine, Runner) {
+    let ctx, crx = channel_unbounded()
+    let etx, erx = channel_unbounded()
+    (Engine { commands: ctx, events: erx, next: Shared::new(0) }, Runner { commands: crx, events: etx, mailbox: None })
+}
+
+impl Runner {
+    /// The runner, waking the session through `mailbox` whenever events arrive.
+    pub fn posting_to(self, mailbox: gui::Mailbox) -> Runner {
+        let mut r = self
+        r.mailbox = Some(mailbox)
+        r
+    }
+}
+
+/// Runs the engine until `Engine::shutdown`, on a goroutine of its own OS
+/// thread (`cohort(isolation: Isolation::Thread)`). Where no engine is
+/// available it posts `Event::Unavailable` and answers the reason.
+pub fn run(runner: Runner) -> Result<(), errors::Error> {
+    engine::run(runner)
+}
+
+impl Engine {
+    /// A new, empty page.
+    pub fn open(&self) -> Page {
+        let id = self.fresh()
+        self.send(Command::Create(id))
+        Page { id: id, engine: *self }
+    }
+
+    /// The events that arrived since the last call, oldest first.
+    pub fn events(&self) -> Vec<Event> {
+        let mut out = #[]
+        while let Some(event) = self.events.try_recv() {
+            out.push(event)
+        }
+        out
+    }
+
+    /// Where downloads are saved.
+    pub fn set_download_dir(&self, dir: String) {
+        self.send(Command::DownloadDir(dir))
+    }
+
+    /// Answers the permission request `request`.
+    pub fn answer_permission(&self, request: i64, allow: bool) {
+        self.send(Command::Permission(request, allow))
+    }
+
+    /// Ends the engine thread; `run` returns.
+    pub fn shutdown(&self) {
+        self.send(Command::Quit)
+        self.commands.close()
+    }
+
+    fn fresh(&self) -> i64 {
+        self.next.update(|n| n + 1)
+        self.next.get()
+    }
+
+    pub (package) fn send(&self, command: Command) {
+        self.commands.send(command)
+        engine::wake()
+    }
+}
+
+/// One page of an engine.
+pub struct Page {
+    pub id: i64
+    engine: Engine
+}
+
+impl Page {
+    pub fn load(&self, uri: String) { self.engine.send(Command::Load(self.id, uri)) }
+
+    /// Shows `html` as if it had been loaded from `base` (which resolves its relative links).
+    pub fn load_html(&self, html: String, base: String) { self.engine.send(Command::LoadHtml(self.id, html, base)) }
+
+    pub fn reload(&self) { self.engine.send(Command::Reload(self.id)) }
+
+    pub fn stop(&self) { self.engine.send(Command::Stop(self.id)) }
+
+    pub fn back(&self) { self.engine.send(Command::Back(self.id)) }
+
+    pub fn forward(&self) { self.engine.send(Command::Forward(self.id)) }
+
+    /// Runs `script` in the page; the answer arrives as `Event::Script` with the request id answered here.
+    pub fn evaluate(&self, script: String) -> i64 {
+        let request = self.engine.fresh()
+        self.engine.send(Command::Evaluate(self.id, request, script))
+        request
+    }
+
+    /// Downloads `uri` into the download directory.
+    pub fn download(&self, uri: String) { self.engine.send(Command::Download(self.id, uri)) }
+
+    /// Ends the page's web process, as a crash would.
+    pub fn terminate(&self) { self.engine.send(Command::Terminate(self.id)) }
+
+    /// Asks for the page's history as bytes, answered by `Event::Session`.
+    pub fn save_session(&self) { self.engine.send(Command::SaveSession(self.id)) }
+
+    /// Restores history saved by `save_session` and shows its current entry.
+    pub fn restore_session(&self, state: Vec<u8>) { self.engine.send(Command::RestoreSession(self.id, state)) }
+
+    pub fn close(&self) { self.engine.send(Command::Close(self.id)) }
+
+    /// Forwards pointer, key, text and focus input in the view's pixels.
+    pub fn input(&self, input: gui::CustomInput) { self.engine.send(Command::Input(self.id, input)) }
+
+    /// Sizes the page to `width` x `height` pixels drawn at `scale`.
+    pub fn resize(&self, width: i64, height: i64, scale: f64) {
+        if width > 0 && height > 0 {
+            self.engine.send(Command::Resize(self.id, width, height, scale))
+        }
+    }
+}
+
+/// A widget showing `page` with its latest `frame`, filling the space it is
+/// given; `label` names it for assistive technology.
+pub fn widget(page: Page, frame: Option<Frame>, label: String) -> gui::Widget {
+    view::widget(page, frame, label)
+}

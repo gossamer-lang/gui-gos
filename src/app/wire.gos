@@ -1,0 +1,56 @@
+// Reading the JSON the toolkit answers whose shape is not a declared struct
+// or enum (typed serde decodes those): text, numbers, flags, and lists.
+// The toolkit encodes each from its declared type, so a mismatch is a
+// toolkit bug and panics.
+
+use std::encoding::json
+
+fn parsed(a: String) -> json::Value {
+    match json::parse(a) {
+        Ok(v) => v
+        Err(e) => panic(f"gui: the toolkit answered malformed JSON: {e}")
+    }
+}
+
+fn bad(what: String, a: String) -> String {
+    panic(f"gui: the toolkit answered {a} where {what} belongs")
+}
+
+/// The JSON string `a`.
+pub fn text(a: String) -> String {
+    json::as_str(parsed(a)).unwrap_or_else(|| bad("text", a))
+}
+
+/// The JSON integer `a`.
+pub fn int(a: String) -> i64 {
+    match json::as_i64(parsed(a)) {
+        Some(n) => n
+        None => { let _ = bad("an integer", a); 0 }
+    }
+}
+
+/// The JSON boolean `a`.
+pub fn flag(a: String) -> bool {
+    match json::as_bool(parsed(a)) {
+        Some(b) => b
+        None => { let _ = bad("a flag", a); false }
+    }
+}
+
+/// The JSON array `a`'s elements, each as JSON text.
+pub fn items(a: String) -> Vec<String> {
+    match json::as_array(parsed(a)) {
+        Some(xs) => xs.map(|x| json::render(x))
+        None => { let _ = bad("a list", a); #[] }
+    }
+}
+
+/// The JSON array of strings `a`.
+pub fn texts(a: String) -> Vec<String> {
+    items(a).map(text)
+}
+
+/// Whether `a` is JSON null.
+pub fn is_null(a: String) -> bool {
+    json::is_null(parsed(a))
+}

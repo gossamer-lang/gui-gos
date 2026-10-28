@@ -1,0 +1,223 @@
+// Charts with a live feed: while the feed runs, a goroutine appends a batch
+// of samples on every tick and the window shows them; hover reads values,
+// drag pans, the wheel zooms and Home fits again. The data table beside the chart is the chart's accessible
+// alternative; the chart exports as PNG and prints through the shared path.
+
+use std::{env, errors, fs, math, path, process}
+
+use gui
+use gui::{CrossAlign, Effect, MainAlign, Outcome, UiMsg, Widget}
+use gui::chart::{Axis, Chart, Kind, Scale, SeriesStyle, Spec}
+use gui::dialogs::request
+use gui::print::{Event, PageSetup, PrintDocument}
+
+// Samples per tick, and the tick in milliseconds.
+const BATCH: i64 = 10
+const TICK: i64 = 100
+
+struct Model {
+    chart: Chart
+    status: String
+    feeding: bool
+    fed: i64
+    baseline_hidden: bool
+}
+
+fn quarters() -> Vec<String> {
+    #["Q1", "Q2", "Q3", "Q4"]
+}
+
+fn init() -> Model {
+    let spec = Spec::titled("Throughput", Axis { label: "Sample", scale: Scale::Linear }, Axis { label: "Requests/s", scale: Scale::Linear })
+    let chart = Chart::open(spec).unwrap()
+    let mut baseline = #[]
+    for i in 0..50 {
+        baseline.push((i as f64, 100.0 + (i % 7) as f64 * 3.0))
+    }
+    let _ = chart.add_series(SeriesStyle::named("Baseline", Kind::Area), baseline)
+    let _ = chart.add_series(SeriesStyle::named("Live", Kind::Line, 500))
+    Model { chart: chart, status: "Ready", feeding: false, fed: 0, baseline_hidden: false }
+}
+
+fn export_base() -> String {
+    path::join(env::temp_dir(), f"gui-charts-{process::id()}")
+}
+
+fn save_dialog(id: String, title: String, name: String, filter: request::FileFilter, toolkit: bool) {
+    let req = request::save_file(id, title, name, #[filter])
+    gui::perform(Effect::OpenDialog(if toolkit { request::toolkit_file(req) } else { req }))
+}
+
+fn png_filter() -> request::FileFilter {
+    request::FileFilter { name: "PNG images", patterns: #["*.png"] }
+}
+
+fn pdf_filter() -> request::FileFilter {
+    request::FileFilter { name: "PDF documents", patterns: #["*.pdf"] }
+}
+
+fn export(m: Model, id: String, path: String) -> Model {
+    let mut n = m
+    if id == "png" {
+        n.status = match n.chart.export_png(path, 800, 500) {
+            Ok(_) => "Saved PNG"
+            Err(why) => f"Failed: {why}"
+        }
+    } else {
+        let item = n.chart.print_item(480, 300).unwrap()
+        let document = PrintDocument::open(#[item], PageSetup::default()).unwrap()
+        n.status = match document.export_pdf("Throughput", path) {
+            Ok(_) => "Exporting PDF"
+            Err(why) => f"Failed: {why}"
+        }
+    }
+    n
+}
+
+fn update(m: Model, msg: UiMsg) -> Model {
+    let mut n = m
+    match msg {
+        UiMsg::Click(id) => match id {
+            "fit" => {
+                let _ = n.chart.fit()
+            }
+            "feed" => {
+                n.feeding = !n.feeding
+                gui::perform(if n.feeding { Effect::Timer("feed", TICK, true) } else { Effect::CancelTimer("feed") })
+                n.status = if n.feeding { "Feeding" } else { f"Stopped after {n.fed} samples" }
+            }
+            "hide" => {
+                n.baseline_hidden = !n.baseline_hidden
+                let _ = n.chart.set_hidden(0, n.baseline_hidden)
+            }
+            "png" => save_dialog("png", "Save PNG", "throughput.png", png_filter(), false)
+            "pdf" => save_dialog("pdf", "Save PDF", "throughput.pdf", pdf_filter(), false)
+            _ => ()
+        }
+        UiMsg::Timer(tag) if tag == "feed" => n.fed = match feed(n.chart, n.fed, BATCH) {
+            Ok(_) => n.fed + BATCH
+            Err(why) => {
+                n.status = f"Failed: {why}"
+                n.fed
+            }
+        }
+        UiMsg::Dialog(id, outcome) if id == "png" || id == "pdf" => match outcome {
+            Outcome::Paths(paths) => if !paths.is_empty() { n = export(n, id, paths[0]) }
+            // Without a native chooser the toolkit's own file browser asks.
+            Outcome::Unsupported(_) | Outcome::Failed(_) => {
+                if id == "png" {
+                    save_dialog("png", "Save PNG", "throughput.png", png_filter(), true)
+                } else {
+                    save_dialog("pdf", "Save PDF", "throughput.pdf", pdf_filter(), true)
+                }
+            }
+            _ => ()
+        }
+        UiMsg::ChartPoint(_, hit) => n.status = f"Picked {hit.name} {hit.x}, {hit.y}"
+        UiMsg::Print(_, Event::Exported { path, bytes }) => n.status = "Saved PDF"
+        UiMsg::Print(_, Event::Failed(why)) => n.status = f"Failed: {why}"
+        _ => ()
+    }
+    n
+}
+
+fn view(m: Model) -> Widget {
+    let mut rows = #[Widget::paragraph(m.chart.summary().unwrap_or("")), Widget::heading("Data table")]
+    for (series, x, y) in m.chart.table(12).unwrap_or(#[]) {
+        rows.push(Widget::label(f"{series}: {x}, {y}"))
+    }
+    Widget::column(#[
+        Widget::row(#[
+            Widget::button("feed", if m.feeding { "Stop feed" } else { "Start feed" })
+            Widget::button("fit", "Fit")
+            Widget::button("hide", if m.baseline_hidden { "Show baseline" } else { "Hide baseline" })
+            Widget::button("png", "Save PNG")
+            Widget::button("pdf", "Save PDF")
+        ], 8)
+        Widget::label(m.status)
+        Widget::flex(gui::Axis::Horizontal, #[
+            m.chart.view("chart", "Throughput chart", 640, 420).grow(1)
+            Widget::scroll("table", Widget::column(rows, 4)).width(280)
+        ], 12, MainAlign::Start, CrossAlign::Stretch).grow(1)
+    ], 8).padding(12)
+}
+
+fn app() -> gui::App<Model> {
+    gui::application("Charts", "dev.gossamer.gui-charts", init, update, view).size(980, 620).focus("chart")
+}
+
+fn require(value: bool, why: String) -> Result<(), errors::Error> {
+    if value { Ok(()) } else { Err(errors::new(why)) }
+}
+
+fn await_dump(s: &mut gui::Session, text: String) -> Result<String, errors::Error> {
+    loop {
+        let dump = s.semantics(0).dump()
+        if dump.contains(text) {
+            return Ok(dump)
+        }
+        if dump.contains("Failed:") {
+            return Err(errors::new(dump))
+        }
+        s.step()?
+    }
+}
+
+// Appends `count` samples after the first `from` to the live series from a
+// goroutine.
+fn feed(chart: Chart, from: i64, count: i64) -> Result<(), errors::Error> {
+    cohort {
+        let worker = spawn(|| {
+            for i in from..from + count {
+                let wave = math::sin(i as f64 / 9.0) * 30.0 + (i % 7) as f64 * 2.0
+                let _ = chart.append(1, #[(i as f64, 110.0 + wave)])
+            }
+        })
+        let _ = worker.join()
+    }
+}
+
+fn fixture() -> Result<(), errors::Error> {
+    let mut s = app().start()?
+    let first = s.semantics(0).dump()
+    require(first.contains("Baseline: 50 points"), f"no summary: {first}")?
+    require(first.contains("Baseline: 0, 100"), f"no data table: {first}")?
+    println("chart: an accessible summary and a data table beside the chart")
+    s.click("feed")?
+    s.advance(TICK * 20)?
+    s.click("feed")?
+    await_dump(&mut s, "Live: 200 points")?
+    println("live: twenty ticks of samples appended from a goroutine reached the window")
+    s.focus("chart")?
+    s.press(windowing::Key::Right, windowing::Mods::default())?
+    s.press(windowing::Key::Right, windowing::Mods::default())?
+    s.advance(2000)?
+    let spoken = s.spoken()
+    require(spoken.len() >= 2 && spoken[spoken.len() - 1].contains("(3 of 50)"), f"spoken: {spoken}")?
+    println("keyboard: Right reads one point at a time aloud")
+    s.click("hide")?
+    await_dump(&mut s, "Baseline (hidden)")?
+    println("legend: the baseline series hides and the summary says so")
+    s.click("png")?
+    s.answer_file_dialog("png", f"{export_base()}.png")?
+    await_dump(&mut s, "Saved PNG")?
+    let png = fs::read(f"{export_base()}.png")?
+    require(png.len() > 1_000 && png[1] == 80 && png[2] == 78 && png[3] == 71, "not a PNG")?
+    fs::remove_file(f"{export_base()}.png")?
+    s.click("pdf")?
+    s.answer_file_dialog("pdf", f"{export_base()}.pdf")?
+    await_dump(&mut s, "Saved PDF")?
+    fs::remove_file(f"{export_base()}.pdf")?
+    println("export: PNG and PDF through the shared drawing and printing path")
+    s.shutdown()
+    Ok(())
+}
+
+fn main() -> Result<(), errors::Error> {
+    if env::args().contains("--fixture") {
+        fixture()?
+        require(gui::app::host::callback_count() == 0, "the charts example leaked callbacks")?
+        return Ok(())
+    }
+    app().run()
+}

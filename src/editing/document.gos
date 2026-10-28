@@ -1,0 +1,76 @@
+// Persistent native documents. Handles share rope snapshots across callbacks
+// and windows; only explicit read() calls copy text into the application.
+use std::errors
+use std::encoding::json
+
+#[derive(PartialEq)]
+pub struct Record {
+    pub key: String
+    pub document: i64
+}
+
+#[derive(PartialEq, Eq)]
+pub enum Affinity {
+    Before
+    After
+}
+#[derive(PartialEq, Eq)]
+pub struct Anchor {
+    pub byte: i64
+    pub affinity: Affinity
+}
+#[derive(PartialEq)]
+pub struct Info {
+    pub revision: i64
+    pub bytes: i64
+    pub lines: i64
+    pub dirty: bool
+    pub anchor: i64
+    pub caret: i64
+}
+#[derive(Default, PartialEq, Eq)]
+pub struct Document { pub id: i64 }
+enum Answer {
+    Id(i64)
+    Info(crate::editing::document::Info)
+    Text(String)
+    Position(i64, i64)
+    Anchor(crate::editing::document::Anchor)
+    Done
+    Flag(bool)
+}
+fn call(method: String, id: i64, args: String) -> Result<Answer, errors::Error> {
+    let value = gui_engine::document(method, id, args).map_err(|why| errors::new(why))?
+    json::decode::<Answer>(value)
+}
+fn expect_id(answer: Answer) -> i64 { if let Answer::Id(id) = answer { id } else { panic("invalid document identity answer") } }
+fn expect_info(answer: Answer) -> Info { if let Answer::Info(info) = answer { info } else { panic("invalid document info answer") } }
+fn expect_position(answer: Answer) -> (i64, i64) { if let Answer::Position(a, b) = answer { (a, b) } else { panic("invalid document position answer") } }
+impl Document {
+    pub fn try_new(text: String) -> Result<Document, errors::Error> { Ok(Document { id: expect_id(call("new", 0, json::encode(text))?) }) }
+    pub fn new(text: String) -> Document { Document::try_new(text).unwrap_or_else(|why| panic(f"{why}")) }
+    pub fn layout_ready(&self) -> bool {
+        match call("layout_ready", self.id, "[]") { Ok(Answer::Flag(ready)) => ready, _ => false }
+    }
+    pub fn info(&self) -> Info { expect_info(call("info", self.id, "[]").unwrap_or_else(|why| panic(f"{why}"))) }
+    pub fn read(&self, start: i64, end: i64) -> String {
+        let answer = call("read", self.id, json::encode((start.max(0), end.max(0)))).unwrap_or_else(|why| panic(f"{why}"))
+        if let Answer::Text(text) = answer { text } else { panic("invalid document text answer") }
+    }
+    pub fn text(&self) -> String { self.read(0, self.info().bytes) }
+    pub fn replace(&self, revision: i64, start: i64, end: i64, text: String) -> Result<Info, errors::Error> {
+        Ok(expect_info(call("replace", self.id, json::encode((revision, start.max(0), end.max(0), text)))?))
+    }
+    pub fn freeze(&self) -> Document { Document { id: expect_id(call("freeze", self.id, "[]").unwrap_or_else(|why| panic(f"{why}"))) } }
+    pub fn try_mark_saved(&self, snapshot: Document) -> Result<(), errors::Error>{ let _ = call("saved", self.id, json::encode(snapshot.id))?; Ok(()) }
+    pub fn mark_saved(&self, snapshot: Document) { self.try_mark_saved(snapshot).unwrap_or_else(|why| panic(f"Could not record save marker: {why}")) }
+    pub fn close(&self) { let _ = call("close", self.id, "[]") }
+    pub fn position(&self, byte: i64) -> (i64, i64) { expect_position(call("position", self.id, json::encode(byte.max(0))).unwrap_or_else(|why| panic(f"{why}"))) }
+    pub fn line(&self, line: i64) -> (i64, i64) { expect_position(call("line", self.id, json::encode(line.max(0))).unwrap_or_else(|why| panic(f"{why}"))) }
+    pub fn anchor(&self, byte: i64, affinity: Affinity) -> Result<i64, errors::Error> { Ok(expect_id(call("anchor", self.id, json::encode((byte.max(0), affinity)))?)) }
+    pub fn resolve(&self, anchor: i64) -> Result<Anchor, errors::Error> {
+        let answer = call("resolve", self.id, json::encode(anchor))?
+        if let Answer::Anchor(anchor) = answer { Ok(anchor) } else { Err(errors::new("invalid anchor answer")) }
+    }
+    pub fn release_anchor(&self, anchor: i64) { let _ = call("release_anchor", self.id, json::encode(anchor)) }
+}
