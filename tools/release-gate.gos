@@ -1,5 +1,6 @@
 // One release ledger for Rust, four execution tiers, native probes and artifacts.
-// Usage: tools/release-gate.sh [OUT] [--profile portable|linux|native] [--list]
+// Usage: tools/release-gate.sh [OUT] [--profile portable|linux|native] [--group NAME] [--list]
+// A group runs one share of the steps, so hosts can divide a profile between them.
 use std::{env, errors, fs, os, path, process}
 use std::crypto::sha256
 use std::encoding::{json, toml}
@@ -19,9 +20,12 @@ const EXCLUDED: [String; 9] = [
     ".ci-config"
 ]
 const CROSS_TARGETS: [String; 3] = ["x86_64-pc-windows-msvc", "aarch64-apple-darwin", "x86_64-apple-darwin"]
+const SETUP: String = "setup"
+const EXAMPLE_GROUPS: i64 = 3
 
 struct Step {
     name: String
+    group: String
     cwd: String
     command: Vec<String>
     env: BTreeMap<String, String>
@@ -43,6 +47,7 @@ struct Ledger {
     rust_gate_toolchain: String
     revisions: BTreeMap<String, Option<String>>
     profile: String
+    group: String
     host: String
     complete_release_acceptance: bool
     status: String
@@ -54,6 +59,7 @@ struct Ledger {
 struct Options {
     out: String
     profile: String
+    group: String
     list: bool
 }
 
@@ -71,6 +77,7 @@ fn fail(message: String) -> errors::Error { errors::new(f"release-gate: {message
 fn parse_options() -> Result<Options, errors::Error> {
     let mut out = ""
     let mut profile = if system() == "Linux" { "linux" } else { "native" }
+    let mut group = ""
     let mut list = false
     let args = env::args()
     let mut i = 0
@@ -83,9 +90,14 @@ fn parse_options() -> Result<Options, errors::Error> {
             i += 1
         } else if arg.starts_with("--profile=") {
             profile = arg.substring(10, arg.byte_len())
+        } else if arg == "--group" && i + 1 < args.len() {
+            group = args[i + 1]
+            i += 1
+        } else if arg.starts_with("--group=") {
+            group = arg.substring(8, arg.byte_len())
         } else {
             if arg.starts_with("-") || !out.is_empty() {
-                return Err(fail(f"usage: tools/release-gate.sh [OUT] [--profile portable|linux|native] [--list]; unexpected {arg}"))
+                return Err(fail(f"usage: tools/release-gate.sh [OUT] [--profile portable|linux|native] [--group NAME] [--list]; unexpected {arg}"))
             }
             out = arg
         }
@@ -94,7 +106,7 @@ fn parse_options() -> Result<Options, errors::Error> {
     if profile != "portable" && profile != "linux" && profile != "native" {
         return Err(fail(f"unknown profile {profile}"))
     }
-    Ok(Options { out: out, profile: profile, list: list })
+    Ok(Options { out: out, profile: profile, group: group, list: list })
 }
 
 fn absolute(p: String) -> Result<String, errors::Error> {
@@ -186,8 +198,11 @@ fn host() -> String {
 fn plan(gui: String, root: String, out: String, profile: String) -> Result<Vec<Step>, errors::Error> {
     let gos = env::var("GOS").unwrap_or("gos")
     let mut steps = #[]
+    // Each step joins the group named last. Every group also runs the
+    // `setup` steps, so its ledger records the dependencies it checked.
+    let mut group = SETUP
     let add = |name: String, cwd: String, command: Vec<String>, environment: BTreeMap<String, String>| {
-        steps.push(Step { name: name, cwd: cwd, command: command, env: environment })
+        steps.push(Step { name: name, group: group, cwd: cwd, command: command, env: environment })
     }
     let none = BTreeMap::new()
     let only = |key: String, value: String| {
@@ -195,9 +210,11 @@ fn plan(gui: String, root: String, out: String, profile: String) -> Result<Vec<S
         m.insert(key, value)
         m
     }
+    add("tagged dependencies", gui, #["sh", "tools/fetch.sh"], none)
+    group = "core"
     add("release evidence sealing", gui, #[gos, "test", "tools/release-gate.gos"], none)
     add("source policy", gui, #["sh", "tools/check-source-policy.sh"], none)
-    add("tagged dependencies", gui, #["sh", "tools/fetch.sh"], none)
+    group = "rust"
     if system() == "Linux" {
         add("Rust cores and bindings", gui, #["dbus-run-session", "--", "tools/check-rust.sh"], none)
     } else {
@@ -205,6 +222,7 @@ fn plan(gui: String, root: String, out: String, profile: String) -> Result<Vec<S
     }
     for project in #["windowing-gos", "gui-gos"] {
         let directory = path::join(root, project)
+        group = if project == "gui-gos" { "gui" } else { "core" }
         add(f"{project} quick-check", directory, #["sh", "quick-check.sh"], none)
         add(f"{project} unit tests", directory, #[gos, "test", "."], none)
         add(f"{project} four-tier parity", directory, #["sh", "tests/parity/run.sh"], none)
@@ -219,10 +237,23 @@ fn plan(gui: String, root: String, out: String, profile: String) -> Result<Vec<S
         ("performance budgets", "tests/perf/run.sh", "GUI_PERF_OUT")
     ]
     for (name, script, variable) in reported {
+        group = if name == "screenshots" || name == "memory lifetimes" || name == "performance budgets" { "visuals" } else { "journeys" }
         add(name, gui, #["sh", script], only(variable, path::join(out, name.replace(" ", "-"))))
     }
+    group = "visuals"
     add("scale journeys", gui, #["sh", "tests/scale/run.sh"], none)
-    add("example journeys", gui, #["sh", "tools/check-examples.sh"], only("GUI_EXAMPLE_REPORT", path::join(out, "examples")))
+    let mut examples = #["hello-world"]
+    for entry in sorted_entries(path::join(gui, "examples"))? {
+        let packaging = path::join(entry.path, "packaging.toml")
+        if fs::is_file(packaging) && json::get(toml_value(packaging)?, "fixture").and_then(|v| json::as_bool(v)) != Some(false) {
+            examples.push(entry.name)
+        }
+    }
+    for (i, example) in examples.iter().enumerate() {
+        group = f"examples-{i % EXAMPLE_GROUPS + 1}"
+        add(f"example {example}", gui, #["sh", "tools/check-examples.sh", example], only("GUI_EXAMPLE_REPORT", path::join(out, "examples")))
+    }
+    group = "native"
     let windowing = path::join(root, "windowing-gos")
     add("single-instance four tiers", windowing, #["sh", "tests/instance/run.sh"], none)
     if profile == "linux" {
@@ -243,6 +274,7 @@ fn plan(gui: String, root: String, out: String, profile: String) -> Result<Vec<S
         gpu.insert("GUI_RENDERER", "gpu")
         add("native rendering and recovery", toolkit, #["cargo", "run", "--release", "--example", "render-check", "--", "--require-gpu"], gpu)
     }
+    group = "packages"
     for target in CROSS_TARGETS {
         for project in #["gui-gos", "windowing-gos"] {
             let base = path::join(root, project)
@@ -351,7 +383,13 @@ fn gate() -> Result<i64, errors::Error> {
     let gui = path::parent(path::parent(fs::canonicalize(env::program_name())?).unwrap_or("")).unwrap_or("")
     let root = path::parent(gui).unwrap_or("")
     let out = if options.out.is_empty() { fs::temp_dir("gui-release-")? } else { absolute(options.out)? }
-    let steps = plan(gui, root, out, options.profile)?
+    let mut steps = plan(gui, root, out, options.profile)?
+    if !options.group.is_empty() {
+        if options.group == SETUP || !steps.any(|s| s.group == options.group) {
+            return Err(fail(f"unknown group {options.group} in the {options.profile} profile"))
+        }
+        steps = steps.filter(|s| s.group == SETUP || s.group == options.group)
+    }
     if options.list {
         for step in steps {
             println(json::encode(step))
@@ -433,6 +471,7 @@ fn gate() -> Result<i64, errors::Error> {
         rust_gate_toolchain: env::var("RUSTUP_TOOLCHAIN").unwrap_or("1.95.0")
         revisions: revisions
         profile: options.profile
+        group: options.group
         host: host()
         complete_release_acceptance: false
         status: "running"
@@ -474,6 +513,8 @@ fn gate() -> Result<i64, errors::Error> {
     ledger.status = if success { "pass" } else { "fail" }
     ledger.coverage = if options.profile == "portable" {
         "portable checks only"
+    } else if !options.group.is_empty() {
+        f"group {options.group} of the {system()} native host; the profile's other groups and other OS acceptance require their own ledgers"
     } else {
         f"{system()} native host; other OS acceptance requires their native ledgers"
     }
@@ -505,6 +546,7 @@ mod tests {
         let live = path::join(dir, "01.live.txt")
         let step = super::Step {
             name: "streams"
+            group: "core"
             cwd: dir
             command: #["sh", "-c", "echo first; echo second >&2; echo third; exit 3"]
             env: BTreeMap::new()

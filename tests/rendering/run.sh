@@ -31,13 +31,23 @@ while :; do
 done
 export DISPLAY=$display
 binary="$root/gui-engine-gos/rust/gui-engine/target/release/examples/render-check"
-SDL_VIDEO_DRIVER=offscreen GUI_RENDERER=software "$binary" > "$out/software.csv" 2> "$out/software.stderr"
+# Runs one measurement into NAME.csv and NAME.stderr; a failure shows why.
+measure() {
+    name=$1
+    shift
+    if ! env "$@" > "$out/$name.csv" 2> "$out/$name.stderr"; then
+        echo "render-check $name failed:" >&2
+        cat "$out/$name.stderr" >&2
+        exit 1
+    fi
+}
+measure software SDL_VIDEO_DRIVER=offscreen GUI_RENDERER=software "$binary"
 # A forced GPU request must fail over on a driver without acceleration.
-SDL_VIDEO_DRIVER=offscreen GUI_RENDERER=gpu "$binary" > "$out/fallback.csv" 2> "$out/fallback.stderr"
+measure fallback SDL_VIDEO_DRIVER=offscreen GUI_RENDERER=gpu "$binary"
 for driver in x11 wayland; do
     # The unset default must stay in software even on GPU-capable displays.
-    env -u GUI_RENDERER SDL_VIDEO_DRIVER=$driver "$binary" --require-software > "$out/$driver-default.csv" 2> "$out/$driver-default.stderr"
-    SDL_VIDEO_DRIVER=$driver GUI_RENDERER=unknown "$binary" --require-software > "$out/$driver-unknown.csv" 2> "$out/$driver-unknown.stderr"
-    SDL_VIDEO_DRIVER=$driver GUI_RENDERER=gpu "$binary" --require-gpu > "$out/$driver-gpu.csv" 2> "$out/$driver-gpu.stderr"
+    measure "$driver-default" -u GUI_RENDERER SDL_VIDEO_DRIVER=$driver "$binary" --require-software
+    measure "$driver-unknown" SDL_VIDEO_DRIVER=$driver GUI_RENDERER=unknown "$binary" --require-software
+    measure "$driver-gpu" SDL_VIDEO_DRIVER=$driver GUI_RENDERER=gpu "$binary" --require-gpu
 done
 printf 'Rendering report: %s\n' "$out"

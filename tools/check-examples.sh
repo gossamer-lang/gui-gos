@@ -2,7 +2,7 @@
 # Every example with a scripted journey must produce the same semantic
 # transcript on all four tiers; hello-world must build on both native profiles.
 #
-#   tools/check-examples.sh [NAME...]    the named journeys, or all of them
+#   tools/check-examples.sh [NAME...]    the named examples, or all of them
 set -eu
 export GUI_TEST_INLINE_WORK=1
 cd "$(dirname "$0")/.."
@@ -16,12 +16,6 @@ work=$(mktemp -d "$out/run.XXXXXX")
 export XDG_CONFIG_HOME="$out/config" XDG_CACHE_HOME="$work/cache"
 limit=${GUI_FIXTURE_TIMEOUT:-300}
 status=0
-# hello-world is the smallest application and has no scripted journey: it
-# must type-check and build on both native profiles.
-(
-    cd examples/hello-world
-    "$GOS" check . > /dev/null && "$GOS" build . --out-dir "$work/hello-world/debug" > /dev/null && "$GOS" build --release . --out-dir "$work/hello-world/release" > /dev/null
-) && echo "PASS: hello-world (check, debug native, release native)" || { echo "FAILED: hello-world" >&2; status=1; }
 if [ "$#" -eq 0 ]; then
     journeys=
     for manifest in examples/*/packaging.toml; do
@@ -30,9 +24,18 @@ if [ "$#" -eq 0 ]; then
             journeys="$journeys $(basename "$(dirname "$manifest")")"
         fi
     done
-    set -- $journeys
+    set -- hello-world $journeys
 fi
 for name in "$@"; do
+    # hello-world is the smallest application and has no scripted journey:
+    # it must type-check and build on both native profiles.
+    if [ "$name" = hello-world ]; then
+        (
+            cd examples/hello-world
+            "$GOS" check . > /dev/null && "$GOS" build . --out-dir "$work/hello-world/debug" > /dev/null && "$GOS" build --release . --out-dir "$work/hello-world/release" > /dev/null
+        ) && echo "PASS: hello-world (check, debug native, release native)" || { echo "FAILED: hello-world" >&2; status=1; }
+        continue
+    fi
     directory="examples/$name"
     if [ ! -f "$directory/project.toml" ]; then
         echo "MISSING: $name" >&2

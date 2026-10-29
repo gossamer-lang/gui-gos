@@ -31,10 +31,16 @@ env:
 # prepares (tools/fetch.sh). The Rust cores are checked from the checkouts
 # beside gui-gos, and the binding SDK is the one the installed gos names.
 jobs:
+  # The Linux release gate, divided into the groups tools/release-gate.sh
+  # names so they run side by side; each group writes its own ledger.
   linux:
-    name: gate (Linux)
+    name: gate (Linux ${{ matrix.group }})
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [core, rust, gui, journeys, visuals, examples-1, examples-2, examples-3, native, packages]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -56,7 +62,7 @@ jobs:
             libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
             libxss-dev libxfixes-dev libxtst-dev libxkbcommon-dev libwayland-dev \
             wayland-protocols libegl-dev libgl-dev libdecor-0-dev weston xwayland xvfb sway xserver-xephyr x11-utils python3-dbus python3-gi libgl1-mesa-dri \
-            gstreamer1.0-plugins-base gstreamer1.0-plugins-good
+            python3-xlib gstreamer1.0-plugins-base gstreamer1.0-plugins-good
       - name: Install the Gossamer toolchain
         run: |
           curl -fsSL "https://raw.githubusercontent.com/${GOSSAMER_REPO}/main/scripts/install.sh" | sh
@@ -65,13 +71,13 @@ jobs:
         with:
           components: rustfmt, clippy
       - run: gos --version
-      - name: Combined release host gate
+      - name: Release host gate (${{ matrix.group }})
         working-directory: gui-gos
-        run: tools/release-gate.sh "$GITHUB_WORKSPACE/release-linux"
+        run: tools/release-gate.sh "$GITHUB_WORKSPACE/release-linux" --group ${{ matrix.group }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: release-linux-evidence
+          name: release-linux-evidence-${{ matrix.group }}
           path: |
             release-linux/results.json
             release-linux/source-sha256.txt

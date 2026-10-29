@@ -94,7 +94,9 @@ editor, an image viewer and a media player.
 ```
 
 `tools/release-gate.sh OUT` runs every check, packages the examples and
-installs them in clean containers. See [Testing](https://gossamer-lang.org/docs/ecosystem/gui/testing/).
+installs them in clean containers. `--group NAME` runs one share of it
+(`--list` shows each step's group), which is how CI divides the Linux gate
+between parallel jobs. See [Testing](https://gossamer-lang.org/docs/ecosystem/gui/testing/).
 
 ## License
 
