@@ -3,7 +3,8 @@
 Run `./tests/perf/run.sh` from the repository root. `GOS` selects the installed
 compiler; `GUI_PERF_OUT` selects a retained report folder. The runner always
 builds release native, uses software rendering with SDL's offscreen driver,
-disables the accessibility bus and isolates settings and caches. Compilation
+disables the accessibility bus, reaches no session bus (so no desktop service
+replies inside a measurement) and isolates settings and caches. Compilation
 is outside the measurements. All six fixtures run even if a budget fails.
 
 Each fixture prints one CSV record:

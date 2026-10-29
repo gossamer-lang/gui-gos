@@ -141,7 +141,9 @@ fn main() -> Result<(), errors::Error>{
     require(s.semantics(0).dump().contains("document"), "Accessible preview missing")?
     let image_file = path::join(env::temp_dir(), f"gui-rich-image-{process::id()}.png")
     fs::write(image_file, gui::AppIcon::drawn(gui::Icon::Search, 16, gui::Color::white(), gui::Color::rgb(20, 40, 60)).to_png())?
-    s.emit(UiMsg::Text("asset", "asset:sample")); s.click("load-image")?; s.answer_file_dialog("load-image", image_file)?; s.flush()?
+    // A script answers the toolkit's file browser; the native chooser the
+    // button opens on a desktop takes a person.
+    s.emit(UiMsg::Text("asset", "asset:sample")); choose_image(true); s.flush()?; s.answer_file_dialog("load-image", image_file)?; s.flush()?
     await_status(&mut s, "Image loaded")?
     fs::remove_file(image_file)?
     s.click("export-md")?

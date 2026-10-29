@@ -55,13 +55,22 @@ jobs:
           repository: ${{ env.ENGINE_REPO }}
           path: gui-engine-gos
           ref: ${{ env.ENGINE_REF }}
+      # The binding SDK of the installed release, taken by path the way a
+      # source checkout of gos reports it, so the bindings' committed locks
+      # resolve unchanged.
+      - uses: actions/checkout@v6
+        if: matrix.group == 'rust'
+        with:
+          repository: ${{ env.GOSSAMER_REPO }}
+          path: gossamer
+          ref: ${{ env.GOSSAMER_VERSION }}
       - name: Install SDL's build dependencies, display servers and media plug-ins
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake ninja-build pkg-config dbus \
             libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
             libxss-dev libxfixes-dev libxtst-dev libxkbcommon-dev libwayland-dev \
-            wayland-protocols libegl-dev libgl-dev libdecor-0-dev weston xwayland xvfb sway xserver-xephyr x11-utils python3-dbus python3-gi libgl1-mesa-dri \
+            wayland-protocols libegl-dev libgl-dev libdecor-0-dev weston xwayland xvfb sway xserver-xephyr x11-utils x11-xserver-utils python3-dbus python3-gi libgl1-mesa-dri \
             python3-xlib gstreamer1.0-plugins-base gstreamer1.0-plugins-good
       - name: Install the Gossamer toolchain
         run: |
@@ -73,6 +82,8 @@ jobs:
       - run: gos --version
       - name: Release host gate (${{ matrix.group }})
         working-directory: gui-gos
+        env:
+          GOSSAMER_BINDING_PATH: ${{ matrix.group == 'rust' && format('{0}/gossamer/crates/gossamer-binding', github.workspace) || '' }}
         run: tools/release-gate.sh "$GITHUB_WORKSPACE/release-linux" --group ${{ matrix.group }}
       - uses: actions/upload-artifact@v4
         if: always()
@@ -80,7 +91,7 @@ jobs:
           name: release-linux-evidence-${{ matrix.group }}
           path: |
             release-linux/results.json
-            release-linux/source-sha256.txt
+            release-linux/source-sha256*.txt
             release-linux/steps/*.txt
             release-linux/install-*.json
             release-linux/dist/*
@@ -146,6 +157,11 @@ jobs:
       run:
         shell: bash
     steps:
+      # Checkouts keep the committed bytes, so transcripts compare equal
+      # to their LF expectations on Windows too.
+      - name: Keep committed line endings (Windows)
+        if: runner.os == 'Windows'
+        run: git config --global core.autocrlf false
       - uses: actions/checkout@v6
         with:
           path: gui-gos

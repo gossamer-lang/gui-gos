@@ -146,6 +146,20 @@ fn source_hashes(root: String) -> Result<String, errors::Error> {
     Ok(rows.join("\n") + "\n")
 }
 
+/// The files whose hash rows differ between two `source_hashes` manifests:
+/// changed, added, or removed.
+fn changed_files(before: String, after: String) -> Vec<String> {
+    let old = before.lines().iter().collect::<Set<String>>()
+    let new = after.lines().iter().collect::<Set<String>>()
+    let mut files = BTreeSet::new()
+    for row in old.iter().chain(new.iter()) {
+        if !(old.contains(row) && new.contains(row)) {
+            files.insert(row.substring(66, row.byte_len()))
+        }
+    }
+    files.iter().collect()
+}
+
 /// Snapshots the bytes `live` holds now. A service that inherited the step's
 /// output keeps writing only to `live`, so the sealed log never changes.
 fn seal_log(live: String, destination: String) -> Result<(), errors::Error> {
@@ -408,7 +422,7 @@ fn gate() -> Result<i64, errors::Error> {
     }
     let mut required = #["cargo", "sh", gos]
     if options.profile == "linux" {
-        required.extend(#["docker", "Xvfb", "sway", "weston", "Xephyr", "dbus-run-session", "cc"])
+        required.extend(#["docker", "Xvfb", "sway", "weston", "Xephyr", "xdpyinfo", "xrdb", "dbus-run-session", "cc"])
     }
     for tool in required {
         if !which(tool) {
@@ -508,7 +522,14 @@ fn gate() -> Result<i64, errors::Error> {
     }
     // Each host contributes evidence. A portable-only or single-host run cannot
     // certify all supported OSes, even if every command it ran succeeded.
-    let unchanged = source_hashes(root)? == before
+    let after = source_hashes(root)?
+    let unchanged = after == before
+    if !unchanged {
+        fs::write(path::join(out, "source-sha256-after.txt"), after.bytes())?
+        for file in changed_files(before, after) {
+            println(f"CHANGED during the gate: {file}")
+        }
+    }
     let success = unchanged && ledger.steps.all(|r| r.exit_code == 0)
     ledger.status = if success { "pass" } else { "fail" }
     ledger.coverage = if options.profile == "portable" {
@@ -538,6 +559,15 @@ mod tests {
     use std::{errors, fs, path}
     use std::crypto::sha256
     use std::process::{Command, Stdio}
+
+    #[test]
+    fn changed_files_name_each_changed_added_and_removed_file_once() {
+        let a = "1".repeat(64)
+        let b = "2".repeat(64)
+        let before = f"{a}  kept\n{a}  edited\n{a}  removed\n"
+        let after = f"{a}  kept\n{b}  edited\n{a}  added\n"
+        assert_eq(super::changed_files(before, after), #["added", "edited", "removed"])
+    }
 
     #[test]
     fn a_step_log_holds_both_output_streams_in_the_order_written() -> Result<(), errors::Error> {

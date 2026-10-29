@@ -21,6 +21,13 @@ export SDL_VIDEO_DRIVER=offscreen
 export GUI_ACCESSIBILITY=off
 export XDG_CONFIG_HOME="$out/config"
 export XDG_CACHE_HOME="$out/cache"
+# Budgets measure the toolkit alone, so no session bus reaches desktop
+# services whose replies would land inside a measured interval.
+runtime=$(mktemp -d)
+trap 'rm -rf "$runtime"' EXIT
+chmod 700 "$runtime"
+export XDG_RUNTIME_DIR="$runtime"
+unset DBUS_SESSION_BUS_ADDRESS
 "$GOS" build --release tests/perf --out-dir "$out/bin" > "$out/build.txt"
 printf 'fixture,unit,samples,p95,p99,p95_budget,p99_budget\n' > "$out/results.csv"
 status=0
