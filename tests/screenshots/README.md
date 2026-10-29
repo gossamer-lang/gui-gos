@@ -29,6 +29,6 @@ image before keeping it:
 
 ```sh
 cd tests/screenshots
-env -u DBUS_SESSION_BUS_ADDRESS XDG_RUNTIME_DIR="$(mktemp -d)" \
+env DBUS_SESSION_BUS_ADDRESS=disabled: XDG_RUNTIME_DIR="$(mktemp -d)" \
     SDL_VIDEO_DRIVER=offscreen GUI_SCREENSHOT_UPDATE=1 gos run . golden
 ```

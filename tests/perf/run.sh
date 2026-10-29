@@ -27,7 +27,7 @@ runtime=$(mktemp -d)
 trap 'rm -rf "$runtime"' EXIT
 chmod 700 "$runtime"
 export XDG_RUNTIME_DIR="$runtime"
-unset DBUS_SESSION_BUS_ADDRESS
+export DBUS_SESSION_BUS_ADDRESS=disabled:
 "$GOS" build --release tests/perf --out-dir "$out/bin" > "$out/build.txt"
 printf 'fixture,unit,samples,p95,p99,p95_budget,p99_budget\n' > "$out/results.csv"
 status=0

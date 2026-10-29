@@ -14,7 +14,7 @@ out=$(mktemp -d)
 export XDG_CONFIG_HOME="$out/config" XDG_CACHE_HOME="$out/cache"
 trap 'rm -rf "$out"' EXIT HUP INT TERM
 case "${SDL_VIDEO_DRIVER:-}" in
-    x11) dbus-run-session -- xvfb-run -a "$0" --run ;;
+    x11) sh ../windowing-gos/tools/private-bus.sh -- xvfb-run -a "$0" --run ;;
     wayland)
         export XDG_RUNTIME_DIR="$out/runtime" WAYLAND_DISPLAY=gui-test
         mkdir -m 700 "$XDG_RUNTIME_DIR"
@@ -30,6 +30,6 @@ case "${SDL_VIDEO_DRIVER:-}" in
             fi
             sleep 0.1
         done
-        dbus-run-session -- "$0" --run ;;
+        sh ../windowing-gos/tools/private-bus.sh -- "$0" --run ;;
     *) echo 'SDL_VIDEO_DRIVER must be x11 or wayland' >&2; exit 1 ;;
 esac

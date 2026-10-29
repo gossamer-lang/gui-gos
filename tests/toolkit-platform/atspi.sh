@@ -12,7 +12,7 @@ if [ "${1:-}" != --private ]; then
     else
         "$GOS" build tests/toolkit-platform --out-dir "$out/bin" > "$out/build.txt"
     fi
-    GUI_ATSPI_OUT="$out" dbus-run-session -- sh tests/toolkit-platform/atspi.sh --private
+    GUI_ATSPI_OUT="$out" sh ../windowing-gos/tools/private-bus.sh org.a11y.Bus -- sh tests/toolkit-platform/atspi.sh --private
     exit
 fi
 # A socket path is at most 108 bytes, so the runtime directory sits at a short

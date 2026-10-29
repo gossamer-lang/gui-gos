@@ -8,7 +8,7 @@ out=$(cd "$out" && pwd)
 if [ "${1:-}" != --private ]; then
     (cd "$root/gui-engine-gos/rust/gui-engine"; cargo build --release --example render-check)
     { date -u; uname -a; cargo --version; } > "$out/environment.txt"
-    GUI_RENDER_OUT="$out" dbus-run-session -- "$0" --private
+    GUI_RENDER_OUT="$out" sh "$root/windowing-gos/tools/private-bus.sh" -- "$0" --private
     exit
 fi
 # A socket path is at most 108 bytes, so the runtime directory sits at a short

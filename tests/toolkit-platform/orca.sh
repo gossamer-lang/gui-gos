@@ -15,21 +15,7 @@ if [ "${1:-}" != --private ]; then
     # The private session offers only the accessibility bus. Desktop services
     # it would otherwise start on demand (portals, gvfs) join the accessibility
     # bus without a desktop to serve, and Orca waits on their replies.
-    mkdir -p "$out/services"
-    service=$(for dir in /usr/local/share/dbus-1/services /usr/share/dbus-1/services; do test -f "$dir/org.a11y.Bus.service" && echo "$dir/org.a11y.Bus.service" && break; done)
-    test -n "$service" || { echo "orca.sh needs the org.a11y.Bus D-Bus service (at-spi2-core)" >&2; exit 2; }
-    grep -v '^SystemdService=' "$service" > "$out/services/org.a11y.Bus.service"
-    cat > "$out/session.conf" <<CONF
-<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN" "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
-<busconfig>
-  <type>session</type>
-  <listen>unix:tmpdir=/tmp</listen>
-  <auth>EXTERNAL</auth>
-  <servicedir>$out/services</servicedir>
-  <policy context="default"><allow send_destination="*"/><allow receive_sender="*"/><allow own="*"/></policy>
-</busconfig>
-CONF
-    GUI_ORCA_OUT="$out" dbus-run-session --config-file="$out/session.conf" -- sh tests/toolkit-platform/orca.sh --private
+    GUI_ORCA_OUT="$out" sh ../windowing-gos/tools/private-bus.sh org.a11y.Bus -- sh tests/toolkit-platform/orca.sh --private
     exit
 fi
 # A Wayland socket path must fit in 108 bytes, so the runtime directory is short.

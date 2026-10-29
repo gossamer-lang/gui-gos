@@ -230,7 +230,7 @@ fn plan(gui: String, root: String, out: String, profile: String) -> Result<Vec<S
     add("source policy", gui, #["sh", "tools/check-source-policy.sh"], none)
     group = "rust"
     if system() == "Linux" {
-        add("Rust cores and bindings", gui, #["dbus-run-session", "--", "tools/check-rust.sh"], none)
+        add("Rust cores and bindings", gui, #["sh", path::join(root, "windowing-gos/tools/private-bus.sh"), "--", "tools/check-rust.sh"], none)
     } else {
         add("Rust cores and bindings", gui, #["sh", "tools/check-rust.sh"], none)
     }

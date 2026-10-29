@@ -6,6 +6,6 @@ here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 sh "$here/fetch.sh"
 if [ "$(uname -s)" = Linux ] && [ "${GUI_GATE_PRIVATE_BUS:-0}" != 1 ]; then
     export GUI_GATE_PRIVATE_BUS=1
-    exec dbus-run-session -- "${GOS:-gos}" run "$here/release-gate.gos" "$@"
+    exec sh "$here/../../windowing-gos/tools/private-bus.sh" -- "${GOS:-gos}" run "$here/release-gate.gos" "$@"
 fi
 exec "${GOS:-gos}" run "$here/release-gate.gos" "$@"
