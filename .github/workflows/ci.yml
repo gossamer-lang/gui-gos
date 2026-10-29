@@ -12,7 +12,7 @@ permissions:
 env:
   GOSSAMER_REPO: gossamer-lang/gossamer
   # The toolchain release CI installs: the one this library requires.
-  GOSSAMER_VERSION: v0.75.6
+  GOSSAMER_VERSION: v0.75.7
   WINDOWING_REPO: gossamer-lang/windowing-gos
   ENGINE_REPO: gossamer-lang/gui-engine-gos
   # The releases the manifests depend on. The Rust cores and windowing's own

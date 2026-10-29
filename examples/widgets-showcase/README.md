@@ -1,6 +1,6 @@
 # Widget showcase
 
-Requires Gossamer 0.75.6+. Run `gos fetch` once for the tagged windowing-gos
+Requires Gossamer 0.75.7+. Run `gos fetch` once for the tagged windowing-gos
 and gui-engine-gos releases, then `gos run .`, `gos build .`, or
 `gos build --release .` here. Native executable:
 `target/{debug,release}/gui-widgets-showcase`.

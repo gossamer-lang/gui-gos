@@ -5,8 +5,7 @@
 use std::{errors, unicode}
 use std::encoding::json
 
-use crate::editing::search
-use crate::editing::search::SearchOptions
+use crate::editing::search::{SearchOptions, Searcher}
 
 // The most matches one search reports.
 const MATCH_LIMIT: i64 = 100_000
@@ -264,10 +263,7 @@ impl Terminal {
         if query.is_empty() {
             return Ok(out)
         }
-        let refused = search::pattern_error(query, options)
-        if !refused.is_empty() {
-            return Err(errors::new(refused))
-        }
+        let searcher = Searcher::new(query, options).map_err(|why| errors::new(why))?
         let rows = self.rows()?
         let mut first = 0
         while first < rows.len() && out.len() < MATCH_LIMIT {
@@ -279,7 +275,7 @@ impl Terminal {
                 starts.push(line.byte_len())
                 line += rows[at].text
             }
-            for found in search::find_all(line, query, options, MATCH_LIMIT - out.len()) {
+            for found in searcher.find_all(line, MATCH_LIMIT - out.len()) {
                 out.push(Span {
                     start: cell_of(rows, first, starts, found.start.0, false)
                     end: cell_of(rows, first, starts, found.end.0, true)

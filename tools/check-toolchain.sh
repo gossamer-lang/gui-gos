@@ -14,8 +14,8 @@ require_version() {
                             if (actual[i]+0 < required[i]+0) exit 1; }
       exit 0 }'
 }
-if ! require_version "$version" 0.75.6; then
-    echo "Requires Gossamer >= 0.75.6; found $version. Set GOS to the compiler executable." >&2
+if ! require_version "$version" 0.75.7; then
+    echo "Requires Gossamer >= 0.75.7; found $version. Set GOS to the compiler executable." >&2
     exit 1
 fi
 printf '%s\n' "$version"

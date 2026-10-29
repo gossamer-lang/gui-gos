@@ -6,7 +6,7 @@ use std::crypto::sha256
 use std::encoding::{json, toml}
 use std::process::{Command, Stdio}
 
-const LICENSES: [String; 4] = ["dejavu-fonts.txt", "ibm-plex-mono.txt", "sdl3-zlib.txt", "pulldown-cmark.txt"]
+const LICENSES: [String; 5] = ["dejavu-fonts.txt", "ibm-plex-mono.txt", "sdl3-zlib.txt", "pulldown-cmark.txt", "wezterm.txt"]
 const PNG_SIGNATURE: [u8; 8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
 
 struct LinuxPackages {
@@ -318,7 +318,7 @@ fn build_package() -> Result<(), errors::Error> {
     write_text(path::join(notices, "package.json"), json::encode_pretty(metadata) + "\n")?
     write_text(
         path::join(notices, "README.txt")
-        f"{name} {version}\nSDL 3.4.10 is built from sdl3-src and statically linked.\nDejaVu fonts are embedded. See accompanying licenses.\nNative optional-module/runtime requirements are recorded in package.json.\n"
+        f"{name} {version}\nSDL 3.4.10 is built from sdl3-src and statically linked.\nDejaVu fonts are embedded. The terminal emulation is WezTerm's (MIT). See accompanying licenses.\nNative optional-module/runtime requirements are recorded in package.json.\n"
     )?
     let has_icon = fs::is_file(icon)
     let artifact = if platform == "linux" {

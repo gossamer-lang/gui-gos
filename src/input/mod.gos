@@ -191,6 +191,9 @@ pub fn produces_text(key: Key, mods: Mods) -> bool {
     name.byte_len() == 1 || key == Key::Space
 }
 
+// The punctuation keys a shortcut names by their character.
+const PUNCTUATION: String = "=-,./;'[]\\`"
+
 /// A readable key name for labels.
 pub fn key_name(key: Key) -> String {
     match key {
@@ -258,8 +261,9 @@ pub fn key_name(key: Key) -> String {
         Key::F11 => "F11"
         Key::F12 => "F12"
         Key::Menu | Key::Application => "Menu"
-        Key::KpPlus => "+"
-        Key::KpMinus => "-"
+        Key::Char(c) if PUNCTUATION.contains(c) => c.to_string()
+        Key::KpPlus => "NumPlus"
+        Key::KpMinus => "NumMinus"
         _ => "?"
     }
 }
@@ -284,12 +288,17 @@ pub fn key_from_name(name: String) -> Option<Key> {
         "up" => Some(Key::Up)
         "down" => Some(Key::Down)
         "menu" => Some(Key::Menu)
-        "plus" | "+" => Some(Key::KpPlus)
-        "minus" | "-" => Some(Key::KpMinus)
+        "equals" => Some(Key::Char('='))
+        "minus" => Some(Key::Char('-'))
+        "numplus" | "plus" | "+" => Some(Key::KpPlus)
+        "numminus" => Some(Key::KpMinus)
         _ => None
     }
     if named.is_some() {
         return named
+    }
+    if n.len() == 1 && PUNCTUATION.contains(n[0]) {
+        return Some(Key::Char(n[0]))
     }
     // Letters, digits, and function keys by their label.
     let all = #[Key::A, Key::B, Key::C, Key::D, Key::E, Key::F, Key::G, Key::H, Key::I, Key::J, Key::K, Key::L, Key::M
@@ -306,7 +315,7 @@ pub fn key_from_name(name: String) -> Option<Key> {
 
 #[cfg(test)]
 mod tests {
-    use super::{produces_text, KeyStroke, Shortcut}
+    use super::{key_from_name, produces_text, KeyStroke, Shortcut}
     use windowing::Mods
 
     fn ctrl() -> Mods {
@@ -337,6 +346,17 @@ mod tests {
         assert_eq(chord.strokes.len(), 2)
         assert(Shortcut::parse("Hyper+Q").is_none())
         assert(Shortcut::parse("").is_none())
+    }
+
+    #[test]
+    fn the_equals_and_minus_keys_and_their_keypad_twins_name_themselves_apart() {
+        for text in #["Primary+Shift+=", "Primary+Shift+-", "Primary+NumPlus", "Primary+NumMinus"] {
+            let s = Shortcut::parse(text).unwrap()
+            assert_eq(Shortcut::parse(s.label().replace("Ctrl", "Primary")), Some(s))
+        }
+        assert_eq(key_from_name("="), Some(windowing::Key::Char('=')))
+        assert_eq(key_from_name("-"), Some(windowing::Key::Char('-')))
+        assert_eq(key_from_name("NumMinus"), Some(windowing::Key::KpMinus))
     }
 
     #[test]

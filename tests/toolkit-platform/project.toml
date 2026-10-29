@@ -1,7 +1,7 @@
 [project]
 id = "dev.gossamer/gui-toolkit-platform"
 version = "0.1.0"
-gossamer-version = "^v0.75.6"
+gossamer-version = "^v0.75.7"
 entry = "src/main.gos"
 [dependencies]
 "github.com/gossamer-lang/gui-gos" = { path = "../.." }

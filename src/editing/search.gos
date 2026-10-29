@@ -37,53 +37,83 @@ pub fn pattern_error(query: String, options: SearchOptions) -> String {
     }
 }
 
-/// The non-overlapping matches of `query` in `text`, at most `limit` of
-/// them (0 for all). An empty query matches nothing.
-pub fn find_all(text: String, query: String, options: SearchOptions, limit: i64) -> Vec<ByteRange> {
-    let mut out = #[]
-    if options.regex {
-        if query.is_empty() {
+/// A query prepared once to search many texts: its pattern compiled, or
+/// its characters folded.
+pub struct Searcher {
+    options: SearchOptions
+    pattern: Option<regex::Pattern>
+    wanted: Vec<char>
+}
+
+impl Searcher {
+    /// Prepares `query` under `options`, or answers why a regular
+    /// expression does not compile.
+    pub fn new(query: String, options: SearchOptions) -> Result<Searcher, String> {
+        if options.regex && !query.is_empty() {
+            return match regex::new(pattern_source(query, options)) {
+                Ok(p) => Ok(Searcher { options: options, pattern: Some(p), wanted: #[] })
+                Err(e) => Err(e.message())
+            }
+        }
+        let wanted = if options.match_case { query.chars().collect() } else { folded_chars(query) }
+        Ok(Searcher { options: options, pattern: None, wanted: wanted })
+    }
+
+    /// The non-overlapping matches in `text`, at most `limit` of them (0 for
+    /// all). An empty query matches nothing.
+    pub fn find_all(&self, text: String, limit: i64) -> Vec<ByteRange> {
+        let mut out = #[]
+        if let Some(pattern) = self.pattern {
+            for found in regex::find_all(pattern, text) {
+                let start, end, _ = found
+                // An empty match selects nothing.
+                if end > start {
+                    out.push(ByteRange { start: ByteOffset(start), end: ByteOffset(end) })
+                    if limit > 0 && out.len() >= limit {
+                        break
+                    }
+                }
+            }
             return out
         }
-        let Ok(pattern) = regex::new(pattern_source(query, options)) else { return out }
-        for found in regex::find_all(pattern, text) {
-            let start, end, _ = found
-            // An empty match selects nothing.
-            if end > start {
-                out.push(ByteRange { start: ByteOffset(start), end: ByteOffset(end) })
-                if limit > 0 && out.len() >= limit {
-                    break
+        let options = self.options
+        let wanted = self.wanted
+        let m = wanted.len()
+        if m == 0 {
+            return out
+        }
+        let have = FoldedText::of_graphemes(text, !options.match_case)
+        let mut words: Set<i64> = #{}
+        if options.whole_word {
+            for b in word_boundaries(text) { words.insert(b) }
+        }
+        let mut i = 0
+        while i + m <= have.len() {
+            if have.at_boundary(i) && have.at_boundary(i + m) && have.matches_at(wanted, i) {
+                let start, end = have.span(i, i + m)
+                if !options.whole_word || (words.contains(start) && words.contains(end)) {
+                    out.push(ByteRange { start: ByteOffset(start), end: ByteOffset(end) })
+                    if limit > 0 && out.len() >= limit {
+                        break
+                    }
+                    i += m
+                    continue
                 }
             }
+            i += 1
         }
-        return out
+        out
     }
-    let wanted = if options.match_case { query.chars().collect() } else { folded_chars(query) }
-    let m = wanted.len()
-    if m == 0 {
-        return out
+}
+
+/// The non-overlapping matches of `query` in `text`, at most `limit` of
+/// them (0 for all). An empty query, or a regular expression that does not
+/// compile, matches nothing.
+pub fn find_all(text: String, query: String, options: SearchOptions, limit: i64) -> Vec<ByteRange> {
+    match Searcher::new(query, options) {
+        Ok(searcher) => searcher.find_all(text, limit)
+        Err(_) => #[]
     }
-    let have = FoldedText::of_graphemes(text, !options.match_case)
-    let mut words: Set<i64> = #{}
-    if options.whole_word {
-        for b in word_boundaries(text) { words.insert(b) }
-    }
-    let mut i = 0
-    while i + m <= have.len() {
-        if have.at_boundary(i) && have.at_boundary(i + m) && have.matches_at(wanted, i) {
-            let start, end = have.span(i, i + m)
-            if !options.whole_word || (words.contains(start) && words.contains(end)) {
-                out.push(ByteRange { start: ByteOffset(start), end: ByteOffset(end) })
-                if limit > 0 && out.len() >= limit {
-                    break
-                }
-                i += m
-                continue
-            }
-        }
-        i += 1
-    }
-    out
 }
 
 /// The match to select when stepping from the selection `from..to`: the
