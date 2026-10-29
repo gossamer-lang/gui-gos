@@ -926,14 +926,14 @@ fn journey(s: &mut gui::Session, file: String) -> Result<(), errors::Error> {
     let name_rect = s.rect_of("dlg:save-as:doc2:filename").ok_or(errors::new("missing file name field"))?
     let save_rect = s.rect_of("dlg:save-as:doc2:action:choose").ok_or(errors::new("missing Save button"))?
     if name_rect.height < 20 || save_rect.height < 20 || name_rect.intersects(save_rect) { return Err(errors::new("Save As controls overlap or collapse")) }
-    s.screenshot("/tmp/gui-editor-save-dialog.png")?
+    s.screenshot(path::join(env::temp_dir(), "gui-editor-save-dialog.png"))?
     if !s.click("dlg:save-as:doc2:action:choose")? { return Err(errors::new("Save button is not clickable")) }
     wait_for(s, f"Saved {path::file_name(target).unwrap_or(target)}")?
     if fs::read_to_string(target)? != "draft" { return Err(errors::new("Save As wrote different text")) }
     println("save dialog accepts typed path and click: ok")
     s.press(windowing::Key::A, primary)?
     s.type_text("fn main() {\n    let count = 42\n    println(\"Hello\") // syntax colors\n}\n")?
-    s.screenshot("/tmp/gui-editor-syntax.png")?
+    s.screenshot(path::join(env::temp_dir(), "gui-editor-syntax.png"))?
     find_journey(s, primary)?
     let before = s.edit_state(0, "editor-doc2")
     let Some(tab) = s.part_rect(0, "docs:main", 2) else { return Err(errors::new("the document tab strip is not shown")) }
