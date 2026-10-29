@@ -2,7 +2,8 @@
 
 Each scene renders offscreen at scale 1 with the embedded DejaVu fonts only
 (`text::fonts::use_system_fonts(false)`), so the pixels do not depend on the
-machine's installed fonts. A scene's capture must equal its golden PNG in
+machine's installed fonts. The runs reach no session bus, so the desktop's
+settings (its menu font size, accent and contrast) do not reach them either. A scene's capture must equal its golden PNG in
 `golden/` exactly.
 
 | Scene | Shows |
@@ -28,5 +29,6 @@ image before keeping it:
 
 ```sh
 cd tests/screenshots
-SDL_VIDEO_DRIVER=offscreen GUI_SCREENSHOT_UPDATE=1 gos run . golden
+env -u DBUS_SESSION_BUS_ADDRESS XDG_RUNTIME_DIR="$(mktemp -d)" \
+    SDL_VIDEO_DRIVER=offscreen GUI_SCREENSHOT_UPDATE=1 gos run . golden
 ```

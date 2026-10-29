@@ -8,7 +8,7 @@ fn main() -> Result<(), errors::Error> {
     let mut answered = #[false]
     session.set_shell(|msg| {
         if let UiMsg::Dialog(id, outcome) = msg { println(f"{id}: {outcome:?}"); answered[0] = true }
-    }, |_| Widget::label("Choose a test file, then a folder. Results print to the terminal."), || #[])
+    }, |_| Widget::label("Choose a test file, then a folder. Results print to the terminal."), |_| #[])
     session.open_window("main", "Native dialog verification", 640, 240)?
     for req in #[request::open_file("file", "Verify open file", #[]), request::select_folder("folder", "Verify choose folder")] {
         answered[0] = false

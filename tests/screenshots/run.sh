@@ -19,6 +19,10 @@ work=$(mktemp -d "$out/run.XXXXXX")
 export SDL_VIDEO_DRIVER=offscreen
 export XDG_CONFIG_HOME="$work/config"
 export XDG_CACHE_HOME="$work/cache"
+# Scenes show the default desktop, so no session bus reaches a settings portal.
+mkdir -m 700 "$work/runtime"
+export XDG_RUNTIME_DIR="$work/runtime"
+unset DBUS_SESSION_BUS_ADDRESS
 run_tier() {
     tier=$1
     shift

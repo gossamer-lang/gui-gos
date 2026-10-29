@@ -180,7 +180,7 @@ fn main() -> Result<(), errors::Error> {
     if !dump.contains("= \"Text Editor\"") { return Err(errors::new(f"Down then Enter did not take the second proposal: {dump}")) }
     if !s.popup_owners().is_empty() || height() != closed { return Err(errors::new(f"the list did not close back to the field: {height()} != {closed}")) }
     let mut primary = windowing::Mods::default()
-    primary.ctrl = true
+    if gui::input::platform_is_macos() { primary.gui = true } else { primary.ctrl = true }
     s.press(windowing::Key::A, primary)?
     s.type_text("notes")?
     s.advance(1)?

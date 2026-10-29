@@ -98,7 +98,7 @@ fn main() -> Result<(), errors::Error>{
         if p95>p95_limit { return Err(errors::new(f"{kind} p95 {p95} exceeds {p95_limit} ns")) }
         if document.info().bytes != before.bytes + 30 || snapshot.info().bytes != before.bytes { return Err(errors::new("edit changed an immutable snapshot")) }
         if document.resolve(left)?.byte != before.caret || document.resolve(right)?.byte != before.caret + 30 { return Err(errors::new("anchor affinity failed")) }
-        gui::perform(Effect::Work(Work::new("editor", -4, document.info().revision, Operation::SearchDocument(document.id, "aaa", gui::editing::search::SearchOptions { match_case: true, whole_word: false }, 100))))
+        gui::perform(Effect::Work(Work::new("editor", -4, document.info().revision, Operation::SearchDocument(document.id, "aaa", gui::editing::search::SearchOptions { match_case: true, ..gui::editing::search::SearchOptions::default() }, 100))))
         session.flush()?; await_status(&mut session, "search 10")?
         let usage = session.resource_usage()
         if usage.total>usage.limit { return Err(errors::new("document exceeded session byte budget")) }

@@ -440,7 +440,7 @@ fn navigation(m: Model) -> Widget {
 fn view(m: Model) -> Widget {
     let pages = { "controls": controls(m), "collections": collections(m), "dialogs": dialogs(), "pickers": pickers(m), "navigation": navigation(m) }
     let items = #[TabItem::new("controls", "Controls").closable(false), TabItem::new("collections", "Collections").closable(false), TabItem::new("dialogs", "Dialogs").closable(false), TabItem::new("pickers", "Date and color").closable(false), TabItem::new("navigation", "Navigation").closable(false)]
-    let host = tabs::Tabs { id: "pages", items: items, active: m.page, content: pages.get(m.page).unwrap_or(Widget::Empty), pages: pages, workspace: "", add_button: false, detachable: false }
+    let host = tabs::Tabs { id: "pages", items: items, active: m.page, content: pages.get(m.page).unwrap_or(Widget::Empty), pages: pages, workspace: "", add_button: false, detachable: false, joined: false }
     let menu = Widget::menu_bar("menu", #[menus::Menu::new("&View", #[menus::item("gallery.reset"), menus::item("gui.toggle-theme"), menus::item("gui.inspector")]), menus::Menu::new("&Help", #[menus::item("gallery.about")])])
     Widget::column(#[menu, Widget::Tabs(host).grow(1), Widget::muted(m.status).padding(8)], 0)
 }
@@ -466,7 +466,7 @@ fn main() -> Result<(), errors::Error> {
     // The port field says what is wrong until a valid port is typed.
     s.focus("port")?
     let mut primary = windowing::Mods::default()
-    primary.ctrl = true
+    if gui::input::platform_is_macos() { primary.gui = true } else { primary.ctrl = true }
     s.press(windowing::Key::A, primary)?
     s.type_text("80a")?
     let Some(bad) = s.semantics(0).find("port") else { return Err(errors::new("the port field is missing")) }

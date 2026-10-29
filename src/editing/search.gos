@@ -2,6 +2,8 @@
 // whose ends are grapheme cluster boundaries, so a query never matches part
 // of a combined character. Matches are found left to right without overlap.
 
+use std::regex
+
 use crate::editing::word_boundaries
 use crate::text::folding::{FoldedText, folded_chars}
 use crate::text::offsets::{ByteOffset, ByteRange}
@@ -13,12 +15,49 @@ pub struct SearchOptions {
     pub match_case: bool
     /// Accept only matches that start and end on word boundaries.
     pub whole_word: bool
+    /// Read the query as a regular expression (`std::regex` syntax).
+    pub regex: bool
+}
+
+// The pattern a regular-expression query compiles to under `options`.
+fn pattern_source(query: String, options: SearchOptions) -> String {
+    let flags = if options.match_case { "" } else { "(?i)" }
+    if options.whole_word { f"{flags}\\b(?:{query})\\b" } else { f"{flags}{query}" }
+}
+
+/// Why a regular-expression query does not compile, or "" when it does or
+/// the query is plain text.
+pub fn pattern_error(query: String, options: SearchOptions) -> String {
+    if !options.regex || query.is_empty() {
+        return ""
+    }
+    match regex::new(pattern_source(query, options)) {
+        Ok(_) => ""
+        Err(e) => e.message()
+    }
 }
 
 /// The non-overlapping matches of `query` in `text`, at most `limit` of
 /// them (0 for all). An empty query matches nothing.
 pub fn find_all(text: String, query: String, options: SearchOptions, limit: i64) -> Vec<ByteRange> {
     let mut out = #[]
+    if options.regex {
+        if query.is_empty() {
+            return out
+        }
+        let Ok(pattern) = regex::new(pattern_source(query, options)) else { return out }
+        for found in regex::find_all(pattern, text) {
+            let start, end, _ = found
+            // An empty match selects nothing.
+            if end > start {
+                out.push(ByteRange { start: ByteOffset(start), end: ByteOffset(end) })
+                if limit > 0 && out.len() >= limit {
+                    break
+                }
+            }
+        }
+        return out
+    }
     let wanted = if options.match_case { query.chars().collect() } else { folded_chars(query) }
     let m = wanted.len()
     if m == 0 {
@@ -99,7 +138,7 @@ pub fn replace_all(text: String, ranges: Vec<ByteRange>, replacement: String) ->
 #[cfg(test)]
 mod tests {
     use crate::text::offsets::{ByteOffset, ByteRange}
-    use super::{find_all, replace_all, selected, step, SearchOptions}
+    use super::{find_all, pattern_error, replace_all, selected, step, SearchOptions}
 
     fn starts(text: String, query: String, options: SearchOptions) -> Vec<i64> {
         find_all(text, query, options, 0).map(|r| r.start.0)
@@ -113,7 +152,7 @@ mod tests {
     fn matches_fold_case_unless_asked_and_never_overlap() {
         let any = SearchOptions::default()
         assert_eq(starts("Foo foo FOO", "foo", any), #[0, 4, 8])
-        assert_eq(starts("Foo foo FOO", "foo", SearchOptions { match_case: true, whole_word: false }), #[4])
+        assert_eq(starts("Foo foo FOO", "foo", SearchOptions { match_case: true, ..SearchOptions::default() }), #[4])
         assert_eq(starts("aaaa", "aa", any), #[0, 2])
         assert_eq(starts("abc", "", any), #[])
         assert_eq(find_all("Foo foo FOO", "foo", any, 2).len(), 2)
@@ -121,7 +160,7 @@ mod tests {
 
     #[test]
     fn whole_words_reject_matches_inside_identifiers() {
-        let words = SearchOptions { match_case: false, whole_word: true }
+        let words = SearchOptions { whole_word: true, ..SearchOptions::default() }
         assert_eq(starts("let x = xs.len() + x_1 + x", "x", words), #[4, 25])
         assert_eq(starts("foo.bar foobar", "foo", words), #[0])
     }
@@ -171,5 +210,18 @@ mod tests {
         assert_eq(replace_all(text, m, "dog"), "a dog, a dog")
         assert_eq(replace_all(text, #[], "dog"), text)
         assert_eq(replace_all("xx", find_all("xx", "x", SearchOptions::default(), 0), "xx"), "xxxx")
+    }
+
+    #[test]
+    fn a_regular_expression_query_follows_the_case_and_word_options() {
+        let re = SearchOptions { regex: true, ..SearchOptions::default() }
+        assert_eq(starts("err 42, Err 7, error", "err\\s*\\d+", re), #[0, 8])
+        let cased = SearchOptions { match_case: true, ..re }
+        assert_eq(starts("err 42, Err 7", "err\\s*\\d+", cased), #[0])
+        let words = SearchOptions { whole_word: true, ..re }
+        assert_eq(starts("err error err", "err", words), #[0, 10])
+        assert_eq(starts("abc", "x*", re), #[])
+        assert(!pattern_error("(", re).is_empty())
+        assert_eq(pattern_error("(", SearchOptions::default()), "")
     }
 }

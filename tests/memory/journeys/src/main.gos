@@ -145,7 +145,7 @@ fn tabs_strip(m: TabsModel, window: String) -> Widget {
         pages[key] = Widget::text_area(f"editor-{key}", f"text of {key}", 4)
         if active.is_empty() { active = key }
     }
-    Widget::Tabs(tabs::Tabs { id: f"tabs:{window}", items: items, active: active, content: pages.get(active).unwrap_or(Widget::Empty), pages: pages, workspace: "journey", add_button: false, detachable: true })
+    Widget::Tabs(tabs::Tabs { id: f"tabs:{window}", items: items, active: active, content: pages.get(active).unwrap_or(Widget::Empty), pages: pages, workspace: "journey", add_button: false, detachable: true, joined: false })
 }
 
 fn tabs_view(m: TabsModel) -> Widget { tabs_strip(m, "main") }

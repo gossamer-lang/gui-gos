@@ -724,7 +724,13 @@ impl Widget {
 
     /// A menu bar; items run commands from the window's registry.
     pub fn menu_bar(id: String, menus: Vec<menus::Menu>) -> Widget {
-        Widget::MenuBar(menus::MenuBar { id: id, menus: menus })
+        Widget::MenuBar(menus::MenuBar { id: id, menus: menus, joined: false })
+    }
+
+    /// A menu bar joined to the content below it: it takes the field color
+    /// a text area or terminal fills with, and no line divides the two.
+    pub fn joined_menu_bar(id: String, menus: Vec<menus::Menu>) -> Widget {
+        Widget::MenuBar(menus::MenuBar { id: id, menus: menus, joined: true })
     }
 
     /// This widget with a context menu (right-click, Shift+F10, Menu key).
@@ -735,19 +741,26 @@ impl Widget {
     /// A tab strip over `content`, the active tab's content. The
     /// application keeps the tab list and the active key; see `tabs`.
     pub fn tabs(id: String, items: Vec<tabs::TabItem>, active: String, content: Widget) -> Widget {
-        Widget::Tabs(tabs::Tabs { id: id, items: items, active: active, content: content, pages: Map::new(), workspace: "", add_button: true, detachable: false })
+        Widget::Tabs(tabs::Tabs { id: id, items: items, active: active, content: content, pages: Map::new(), workspace: "", add_button: true, detachable: false, joined: false })
+    }
+
+    /// A tab strip joined to the content below it, as a terminal's tabs are:
+    /// the field color, the desktop's menu text size, no dividing line, and
+    /// no new-tab button.
+    pub fn joined_tabs(id: String, items: Vec<tabs::TabItem>, active: String, content: Widget) -> Widget {
+        Widget::Tabs(tabs::Tabs { id: id, items: items, active: active, content: content, pages: Map::new(), workspace: "", add_button: false, detachable: false, joined: true })
     }
 
     /// A tab strip whose tabs can move to a new window (`detach` actions).
     pub fn detachable_tabs(id: String, items: Vec<tabs::TabItem>, active: String, content: Widget) -> Widget {
-        Widget::Tabs(tabs::Tabs { id: id, items: items, active: active, content: content, pages: Map::new(), workspace: "", add_button: true, detachable: true })
+        Widget::Tabs(tabs::Tabs { id: id, items: items, active: active, content: content, pages: Map::new(), workspace: "", add_button: true, detachable: true, joined: false })
     }
 
     /// Retains every page's caret, undo, and scroll state, including inactive pages.
     /// A workspace gives each page one owner across the application's windows.
     pub fn tab_pages(id: String, workspace: String, items: Vec<tabs::TabItem>, active: String, pages: Map<String, Widget>) -> Widget {
         let content = pages.get(active).unwrap_or(Widget::Empty)
-        Widget::Tabs(tabs::Tabs { id: id, items: items, active: active, content: content, pages: pages, workspace: workspace, add_button: true, detachable: true })
+        Widget::Tabs(tabs::Tabs { id: id, items: items, active: active, content: content, pages: pages, workspace: workspace, add_button: true, detachable: true, joined: false })
     }
 
     // ---- custom ----

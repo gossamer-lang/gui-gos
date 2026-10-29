@@ -12,7 +12,7 @@ permissions:
 env:
   GOSSAMER_REPO: gossamer-lang/gossamer
   # The toolchain release CI installs: the one this library requires.
-  GOSSAMER_VERSION: v0.75.5
+  GOSSAMER_VERSION: v0.75.6
   WINDOWING_REPO: gossamer-lang/windowing-gos
   ENGINE_REPO: gossamer-lang/gui-engine-gos
   # The releases the manifests depend on. The Rust cores and windowing's own
@@ -49,13 +49,14 @@ jobs:
           repository: ${{ env.ENGINE_REPO }}
           path: gui-engine-gos
           ref: ${{ env.ENGINE_REF }}
-      - name: Install SDL's build dependencies
+      - name: Install SDL's build dependencies, display servers and media plug-ins
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake ninja-build pkg-config dbus \
             libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
             libxss-dev libxfixes-dev libxtst-dev libxkbcommon-dev libwayland-dev \
-            wayland-protocols libegl-dev libgl-dev libdecor-0-dev weston xwayland xvfb sway xserver-xephyr x11-utils python3-dbus python3-gi libgl1-mesa-dri
+            wayland-protocols libegl-dev libgl-dev libdecor-0-dev weston xwayland xvfb sway xserver-xephyr x11-utils python3-dbus python3-gi libgl1-mesa-dri \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good
       - name: Install the Gossamer toolchain
         run: |
           curl -fsSL "https://raw.githubusercontent.com/${GOSSAMER_REPO}/main/scripts/install.sh" | sh
@@ -174,7 +175,7 @@ jobs:
           Expand-Archive -Path (Get-ChildItem gos-dist\*.zip).FullName -DestinationPath gos-dist\gos
           $bin = (Get-ChildItem gos-dist\gos -Recurse -Filter gos.exe | Select-Object -First 1).DirectoryName
           Add-Content $env:GITHUB_PATH $bin
-          & 'C:\msys64\usr\bin\pacman.exe' -S --noconfirm --needed mingw-w64-x86_64-llvm
+          & 'C:\msys64\usr\bin\pacman.exe' -S --noconfirm --needed mingw-w64-x86_64-llvm mingw-w64-x86_64-gcc
           if ($LASTEXITCODE -ne 0) { throw "pacman failed (exit $LASTEXITCODE)" }
           Add-Content $env:GITHUB_ENV "GOS_LLVM_OPT=C:\msys64\mingw64\bin\opt.exe"
           Add-Content $env:GITHUB_ENV "GOS_LLC=C:\msys64\mingw64\bin\llc.exe"

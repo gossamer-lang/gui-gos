@@ -386,6 +386,9 @@ fn gate() -> Result<i64, errors::Error> {
     base.insert("SDL_VIDEO_DRIVER", "offscreen")
     base.insert("XDG_CONFIG_HOME", path::join(out, "config"))
     base.insert("XDG_CACHE_HOME", path::join(out, "cache"))
+    // Steps that isolate their own XDG_CACHE_HOME still share one build of
+    // each Rust binding set, which gos keys by its sources and profile.
+    base.insert("GOSSAMER_CACHE", path::join(out, "cache"))
     let mut server: Option<process::Child> = None
     defer if let Some(mut x) = server { stop(&mut x) }
     let mut runtime_dir: Option<String> = None

@@ -95,6 +95,10 @@ pub struct Tabs {
     pub add_button: bool
     /// Offers "Move to New Window" in the tab menu.
     pub detachable: bool
+    /// Joins the strip to the content below it: the strip takes the field
+    /// color a text area or terminal fills with, draws no dividing line, and
+    /// labels its tabs at the desktop's menu text size.
+    pub joined: bool
 }
 
 /// The commands a tabbed window offers; add them to `App::commands`.

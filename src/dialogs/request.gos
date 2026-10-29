@@ -141,6 +141,8 @@ pub enum PreferenceKind {
     Toggle
     Text
     Number(f64, f64)
+    /// A whole number from the first bound to the second.
+    Integer(i64, i64)
     Choice(Vec<(String, String)>)
     Color
 }
@@ -201,6 +203,9 @@ pub enum DialogRequest {
     /// Finish takes effect (see `checked`).
     Preferences { id: String, title: String, pages: Vec<PreferencePage>, checked: bool }
     Wizard { id: String, title: String, pages: Vec<WizardPage>, checked: bool }
+    /// A few fields over Cancel and an accept button labelled `accept`,
+    /// answered as `Outcome::Values` keyed by field.
+    Form { id: String, title: String, fields: Vec<PreferenceField>, accept: String }
     About { id: String, name: String, version: String, description: String, credits: String, licenses: String, diagnostics: String, links: Vec<(String, String)> }
 }
 
@@ -218,6 +223,7 @@ impl DialogRequest {
                 DialogRequest::File { id, .. } |
                 DialogRequest::Preferences { id, .. } |
                 DialogRequest::Wizard { id, .. } |
+                DialogRequest::Form { id, .. } |
                 DialogRequest::About { id, .. } => *id
         }
     }
@@ -234,7 +240,8 @@ impl DialogRequest {
                 DialogRequest::Progress { title, .. } |
                 DialogRequest::File { title, .. } |
                 DialogRequest::Preferences { title, .. } |
-                DialogRequest::Wizard { title, .. } => *title
+                DialogRequest::Wizard { title, .. } |
+                DialogRequest::Form { title, .. } => *title
             DialogRequest::About { name, .. } => crate::localization::message("about", "About {name}", 1, { "name": name })
         }
     }
@@ -406,6 +413,8 @@ pub fn toolkit_file(req: DialogRequest) -> DialogRequest {
 pub fn font(id: String, title: String, initial: String) -> DialogRequest { DialogRequest::Font { id: id, title: title, initial: initial } }
 pub fn date(id: String, title: String, initial: String, mode: DateMode, min: String, max: String) -> DialogRequest { DialogRequest::Date { id: id, title: title, initial: initial, mode: mode, min: min, max: max } }
 pub fn preferences(id: String, title: String, pages: Vec<PreferencePage>) -> DialogRequest { DialogRequest::Preferences { id: id, title: title, pages: pages, checked: false } }
+/// A form of `fields` whose accept button reads `accept`.
+pub fn form(id: String, title: String, fields: Vec<PreferenceField>, accept: String) -> DialogRequest { DialogRequest::Form { id: id, title: title, fields: fields, accept: accept } }
 pub fn wizard(id: String, title: String, pages: Vec<WizardPage>) -> DialogRequest { DialogRequest::Wizard { id: id, title: title, pages: pages, checked: false } }
 
 /// `req` (preferences or a wizard) asking the application before a step

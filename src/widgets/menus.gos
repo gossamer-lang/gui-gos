@@ -98,6 +98,9 @@ impl Default for MenuState {
 pub struct MenuBar {
     pub id: String
     pub menus: Vec<Menu>
+    /// Joins the bar to the content below it: the bar takes the field
+    /// color a text area or terminal fills with and draws no dividing line.
+    pub joined: bool
 }
 
 /// A widget with a context menu on right-click, Shift+F10, or the Menu key.

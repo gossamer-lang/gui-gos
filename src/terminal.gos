@@ -2,8 +2,30 @@
 // native pseudo-terminal, and the widget that shows and drives one. A
 // terminal belongs to the session that opened it and closes with it.
 
-use std::errors
+use std::{errors, unicode}
 use std::encoding::json
+
+use crate::editing::search
+use crate::editing::search::SearchOptions
+
+// The most matches one search reports.
+const MATCH_LIMIT: i64 = 100_000
+
+// What a reset feeds the screen, in order. Leaving the alternate screen brings
+// back the program's main screen and cursor. The margins reset between saving
+// and restoring the cursor, since resetting them homes it; colors and
+// character sets reset after the restore, which brings back the saved ones.
+const SOFT_RESET: [String; 9] = [
+    "\u{1b}[?1049l"
+    "\u{1b}7\u{1b}[?6l\u{1b}[r\u{1b}8"
+    "\u{1b}[0m"
+    "\u{1b}(B\u{1b})B\u{f}"
+    "\u{1b}[4l\u{1b}[?7h\u{1b}[?25h\u{1b}[0 q"
+    "\u{1b}[?1l\u{1b}>"
+    "\u{1b}[?9l\u{1b}[?1000l\u{1b}[?1002l\u{1b}[?1003l\u{1b}[?1005l\u{1b}[?1006l\u{1b}[?1015l"
+    "\u{1b}[?1004l\u{1b}[?2004l"
+    "\u{1b}[=0;1u"
+]
 
 /// A terminal's screen size and storage limits.
 pub struct Options {
@@ -73,11 +95,34 @@ pub struct Snapshot {
     pub exit: Option<i64>
     /// Rows the view is scrolled back into history.
     pub scrolled: i64
+    /// Rows of history kept above the screen.
+    pub history: i64
     pub selection: Option<(Cell, Cell)>
     pub reserved_bytes: i64
     pub pid: i64
+    /// A job other than the program runs in the foreground, as a shell's
+    /// command does; closing the terminal would end it.
+    pub busy: bool
     pub queued_input: i64
     pub queued_output: i64
+}
+
+/// One row of a terminal's buffer as text: a wide character is one
+/// character over two cells.
+#[derive(Default, PartialEq)]
+pub struct Row {
+    pub text: String
+    /// The row runs on into the next: the program's line continues there.
+    pub wrapped: bool
+}
+
+/// A stretch of a terminal's buffer, its end excluded. Rows count from the
+/// oldest history row, as `Terminal::rows` answers them, and columns are
+/// cells.
+#[derive(Default, PartialEq, Eq)]
+pub struct Span {
+    pub start: Cell
+    pub end: Cell
 }
 
 /// The widget showing terminal `terminal`. It fills the space it is given,
@@ -108,6 +153,7 @@ enum Answer {
     Rows(i64)
     Text(String)
     Snapshot(Snapshot)
+    Lines(Vec<Row>)
     Done
 }
 
@@ -151,6 +197,20 @@ impl Terminal {
         done(call("paste", self.id, json::encode(text)))
     }
 
+    /// Sends signal `signum` to the job in the terminal's foreground, or to
+    /// the program when nothing else runs there. Windows has no signals and
+    /// refuses.
+    pub fn signal(&self, signum: i64) -> Result<(), errors::Error> {
+        done(call("signal", self.id, json::encode(signum)))
+    }
+
+    /// Sets the character set the program reads and writes, from its next
+    /// output on: a label such as "ISO-8859-1", "windows-1251" or
+    /// "Shift_JIS". "UTF-8" is the default.
+    pub fn set_encoding(&self, label: String) -> Result<(), errors::Error> {
+        done(call("encoding", self.id, json::encode(label)))
+    }
+
     pub fn resize(&self, rows: i64, cols: i64) -> Result<(), errors::Error> {
         done(call("resize", self.id, json::encode((rows, cols))))
     }
@@ -188,6 +248,70 @@ impl Terminal {
         }
     }
 
+    /// Every row of the buffer, the oldest history row first, wherever the
+    /// view is scrolled; the last `Snapshot::rows` rows are the screen.
+    pub fn rows(&self) -> Result<Vec<Row>, errors::Error> {
+        match call("rows", self.id, "null")? {
+            Answer::Lines(rows) => Ok(rows)
+            _ => Err(errors::new("invalid terminal rows answer"))
+        }
+    }
+
+    /// Every match of `query` in the buffer, history included, in order. A
+    /// match may run on across the rows a program's line wrapped onto.
+    pub fn find(&self, query: String, options: SearchOptions) -> Result<Vec<Span>, errors::Error> {
+        let mut out = #[]
+        if query.is_empty() {
+            return Ok(out)
+        }
+        let refused = search::pattern_error(query, options)
+        if !refused.is_empty() {
+            return Err(errors::new(refused))
+        }
+        let rows = self.rows()?
+        let mut first = 0
+        while first < rows.len() && out.len() < MATCH_LIMIT {
+            let mut last = first
+            while last + 1 < rows.len() && rows[last].wrapped { last += 1 }
+            let mut line = String::new()
+            let mut starts = #[]
+            for at in first..last + 1 {
+                starts.push(line.byte_len())
+                line += rows[at].text
+            }
+            for found in search::find_all(line, query, options, MATCH_LIMIT - out.len()) {
+                out.push(Span {
+                    start: cell_of(rows, first, starts, found.start.0, false)
+                    end: cell_of(rows, first, starts, found.end.0, true)
+                })
+            }
+            first = last + 1
+        }
+        Ok(out)
+    }
+
+    /// Scrolls `span` into view, a third of the way down where the history
+    /// allows, and selects it.
+    pub fn reveal(&self, span: Span) -> Result<(), errors::Error> {
+        let shown = self.snapshot()?
+        let top = (span.start.row - shown.rows / 3).clamp(0, shown.history)
+        let back = shown.history - top
+        self.scroll(back - shown.scrolled)?
+        self.select(Cell { row: span.start.row - top, col: span.start.col }, Cell { row: span.end.row - top, col: span.end.col })
+    }
+
+    /// Resets what a program may have left the terminal in - the alternate
+    /// screen, scroll margins, colors and attributes, character sets, modes,
+    /// mouse and keyboard reporting, cursor shape - while the screen keeps its
+    /// text and history, so the program goes on where it was (a shell's prompt
+    /// stays usable). Shows the live screen without a selection.
+    pub fn reset(&self) -> Result<(), errors::Error> {
+        self.feed(SOFT_RESET.join(""))?
+        self.clear_selection()?
+        let back = self.snapshot()?.scrolled
+        self.scroll(-back).map(|_| ())
+    }
+
     /// Ends the program, if any, and releases the terminal.
     pub fn close(&self) {
         let _ = call("close", self.id, "null")
@@ -197,4 +321,15 @@ impl Terminal {
     pub fn view(&self, id: String, label: String, rows: i64 = 24, cols: i64 = 80, font: String = "", font_size: f64 = 0.0) -> crate::Widget {
         crate::Widget::Terminal(View { id: id, terminal: self.id, label: label, rows: rows, cols: cols, font: font, font_size: font_size })
     }
+}
+
+// The cell at byte `at` of a program line made of rows `first..`, where
+// `starts` holds each row's byte offset in the line. An `end` offset on a
+// row boundary closes the row before it.
+fn cell_of(rows: Vec<Row>, first: i64, starts: Vec<i64>, at: i64, end: bool) -> Cell {
+    let mut k = 0
+    while k + 1 < starts.len() && (starts[k + 1] < at || (!end && starts[k + 1] == at)) { k += 1 }
+    let text = rows[first + k].text
+    let within = (at - starts[k]).min(text.byte_len())
+    Cell { row: first + k, col: unicode::str_width(text.substring(0, within)) }
 }

@@ -37,6 +37,8 @@ pub enum TextRole {
     Title
     Hero
     Mono
+    /// Menu bar titles and menu entries, sized as the desktop's own menus.
+    Menu
 }
 
 /// One text role's face: its size in interface units and its weight.
@@ -58,6 +60,8 @@ pub struct Typography {
     pub title: Typeface
     pub hero: Typeface
     pub mono: Typeface
+    /// Body-sized until the desktop names its menu font size.
+    pub menu: Typeface
 }
 
 impl Typography {
@@ -72,6 +76,7 @@ impl Typography {
             title: Typeface { size: 28.0, bold: true, mono: false }
             hero: Typeface { size: 36.0, bold: true, mono: false }
             mono: Typeface { size: 16.0, bold: false, mono: true }
+            menu: Typeface { size: 18.0, bold: false, mono: false }
         }
     }
 
@@ -86,6 +91,7 @@ impl Typography {
             TextRole::Title => self.title
             TextRole::Hero => self.hero
             TextRole::Mono => self.mono
+            TextRole::Menu => self.menu
         }
     }
 }

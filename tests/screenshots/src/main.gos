@@ -76,7 +76,7 @@ fn selected(_m: i64) -> Widget {
 fn select_all(s: &mut gui::Session) -> Result<(), errors::Error> {
     let _ = s.focus("field")?
     let mut primary = windowing::Mods::default()
-    primary.ctrl = true
+    if gui::input::platform_is_macos() { primary.gui = true } else { primary.ctrl = true }
     s.press(windowing::Key::A, primary)
 }
 

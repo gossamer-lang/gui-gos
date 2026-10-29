@@ -133,6 +133,10 @@ pub struct App<M> {
     pub update: Fn(M, UiMsg) -> M
     pub view: Fn(M) -> Widget
     pub commands: Fn(M) -> Vec<Command>
+    /// The commands one window offers, by the window's key, when they
+    /// depend on that window (`window_commands`); unset, every window
+    /// offers `commands`.
+    pub window_commands: Option<Fn(M, String) -> Vec<Command>>
     /// Builds windows opened with `Effect::OpenWindow`, by key.
     pub window_view: Fn(M, String) -> Widget
     pub close_policy: ClosePolicy
@@ -165,6 +169,7 @@ pub fn application<M>(name: String, app_id: String, init: Fn() -> M, update: Fn(
         update: update
         view: view
         commands: |_m| #[]
+        window_commands: None
         window_view: |_m, _k| Widget::Empty
         close_policy: ClosePolicy::Close
         initial_focus: String::new()
@@ -243,6 +248,15 @@ impl<M> App<M> {
         a
     }
 
+    /// The commands each window offers, built from the model and the
+    /// window's key, for state that belongs to one window (which of its tabs
+    /// is active, say). It takes the place of `commands`.
+    pub fn window_commands(self, commands: Fn(M, String) -> Vec<Command>) -> App<M> {
+        let mut a = self
+        a.window_commands = Some(commands)
+        a
+    }
+
     pub fn windows(self, view: Fn(M, String) -> Widget) -> App<M> {
         let mut a = self
         a.window_view = view
@@ -289,11 +303,15 @@ impl<M> App<M> {
         let update = self.update
         let view = self.view
         let cmds = self.commands
+        let window_cmds = self.window_commands
         let window_view = self.window_view
         session.set_shell(
             |m: UiMsg| { cell[0] = update(cell[0], m) }
             |key: String| if key == "main" { view(cell[0]) } else { window_view(cell[0], key) }
-            || cmds(cell[0]))
+            |key: String| match window_cmds {
+                Some(f) => f(cell[0], key)
+                None => cmds(cell[0])
+        })
         if let Some(icon) = self.icon {
             if let Err(e) = session.set_icon(icon) { session.shutdown(); return Err(e) }
         }
