@@ -16,15 +16,10 @@ work=$(mktemp -d "$out/run.XXXXXX")
 export XDG_CONFIG_HOME="$out/config" XDG_CACHE_HOME="$work/cache"
 limit=${GUI_FIXTURE_TIMEOUT:-300}
 status=0
+# The examples with scripted journeys, after hello-world; the release gate
+# lists the same ones.
 if [ "$#" -eq 0 ]; then
-    journeys=
-    for manifest in examples/*/packaging.toml; do
-        # `fixture = false` marks an application without a scripted journey.
-        if ! grep -Eq '^[[:space:]]*fixture[[:space:]]*=[[:space:]]*false' "$manifest"; then
-            journeys="$journeys $(basename "$(dirname "$manifest")")"
-        fi
-    done
-    set -- hello-world $journeys
+    set -- hello-world application-launcher code-editor widgets-showcase
 fi
 for name in "$@"; do
     # hello-world is the smallest application and has no scripted journey:

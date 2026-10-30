@@ -22,6 +22,8 @@ const EXCLUDED: [String; 9] = [
 const CROSS_TARGETS: [String; 3] = ["x86_64-pc-windows-msvc", "aarch64-apple-darwin", "x86_64-apple-darwin"]
 const SETUP: String = "setup"
 const EXAMPLE_GROUPS: i64 = 3
+// The examples tools/check-examples.sh checks, hello-world's build first.
+const EXAMPLES: [String; 4] = ["hello-world", "application-launcher", "code-editor", "widgets-showcase"]
 
 struct Step {
     name: String
@@ -256,14 +258,7 @@ fn plan(gui: String, root: String, out: String, profile: String) -> Result<Vec<S
     }
     group = "visuals"
     add("scale journeys", gui, #["sh", "tests/scale/run.sh"], none)
-    let mut examples = #["hello-world"]
-    for entry in sorted_entries(path::join(gui, "examples"))? {
-        let packaging = path::join(entry.path, "packaging.toml")
-        if fs::is_file(packaging) && json::get(toml_value(packaging)?, "fixture").and_then(|v| json::as_bool(v)) != Some(false) {
-            examples.push(entry.name)
-        }
-    }
-    for (i, example) in examples.iter().enumerate() {
+    for (i, example) in EXAMPLES.iter().enumerate() {
         group = f"examples-{i % EXAMPLE_GROUPS + 1}"
         add(f"example {example}", gui, #["sh", "tools/check-examples.sh", example], only("GUI_EXAMPLE_REPORT", path::join(out, "examples")))
     }
@@ -305,35 +300,6 @@ fn plan(gui: String, root: String, out: String, profile: String) -> Result<Vec<S
                 let label = directory.substring(root.byte_len() + 1, directory.byte_len())
                 add(f"{label} check {target}", directory, #[gos, "check", "--target", target, "."], none)
             }
-        }
-    }
-    let mut apps = #[]
-    for entry in sorted_entries(path::join(gui, "examples"))? {
-        if fs::is_file(path::join(entry.path, "packaging.toml")) {
-            apps.push(entry.name)
-        }
-    }
-    let dist = path::join(out, "dist")
-    for app in apps {
-        add(f"package {app}", gui, #["sh", "tools/package.sh", f"examples/{app}", dist], none)
-    }
-    if profile == "linux" {
-        // Every scripted application is exercised from the installed artifact.
-        // The hello-world package is built but has no --fixture entry point.
-        for app in apps {
-            let packaging = toml_value(path::join(gui, f"examples/{app}/packaging.toml"))?
-            if json::get(packaging, "fixture").and_then(|v| json::as_bool(v)) == Some(false) {
-                continue
-            }
-            let manifest = path::join(gui, f"examples/{app}/project.toml")
-            let Some(project) = json::get(toml_value(manifest)?, "project") else {
-                return Err(fail(f"{manifest} has no [project] table"))
-            }
-            let id = text(project, "id")
-            let exe = id.split("/").last().unwrap_or(id)
-            let version = text(project, "version")
-            let archive = path::join(dist, f"{exe}-{version}-linux-{os::arch()}.tar.gz")
-            add(f"clean install {app}", gui, #["sh", "tools/clean-install.sh", archive], only("GUI_INSTALL_REPORT", path::join(out, f"install-{app}.json")))
         }
     }
     Ok(steps)

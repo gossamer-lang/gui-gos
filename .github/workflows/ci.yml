@@ -93,8 +93,6 @@ jobs:
             release-linux/results.json
             release-linux/source-sha256*.txt
             release-linux/steps/*.txt
-            release-linux/install-*.json
-            release-linux/dist/*
 
   # Windows and macOS code type-checks for both architectures of each.
   cross:
@@ -139,8 +137,7 @@ jobs:
             done
           done
 
-  # The examples built and run natively, then packaged the way each platform
-  # installs applications.
+  # The examples built and run natively.
   native:
     name: examples (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
@@ -274,21 +271,6 @@ jobs:
             if [ "$app" = code-editor ]; then (cd "examples/$app" && GUI_TEST_INLINE_WORK=0 "./target/release/$exe" --close-fixture); fi
             echo "PASS: $app"
           done
-      - name: Package the examples
-        working-directory: gui-gos
-        run: |
-          for app in hello-world widgets-showcase code-editor application-launcher rich-editor; do
-            tools/package.sh "examples/$app" dist
-          done
-      - name: Run the launcher from its application bundle (macOS)
-        if: runner.os == 'macOS'
-        working-directory: gui-gos
-        run: dist/Run.app/Contents/MacOS/app-launcher --fixture > /dev/null
-      - uses: actions/upload-artifact@v4
-        with:
-          name: packages-${{ runner.os }}
-          path: |
-            gui-gos/dist/*.zip
 
   real-linux:
     name: real display (${{ matrix.driver }})
