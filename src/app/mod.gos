@@ -317,6 +317,11 @@ impl Session {
         self.act("click_at", #[f"{x}", f"{y}"])
     }
 
+    /// Right-clicks main-window pixel (`x`, `y`), as a context menu opens.
+    pub fn right_click_at(&mut self, x: i64, y: i64) -> Result<(), errors::Error> {
+        self.act("right_click_at", #[f"{x}", f"{y}"])
+    }
+
     pub fn hover(&mut self, x: i64, y: i64) -> Result<(), errors::Error> {
         self.act("hover", #[f"{x}", f"{y}"])
     }

@@ -54,6 +54,8 @@ fn update(m: Model, msg: UiMsg) -> Model {
                 gui::perform(gui::Effect::Quit)
             }
             Event::Refused(why) => eprintln(f"terminal: {why}")
+            Event::LinkPointed(_) => ()
+            Event::LinkActivated(uri) => gui::perform(gui::Effect::OpenUrl(uri))
         }
         _ => ()
     }

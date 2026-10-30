@@ -45,6 +45,26 @@ fn target() -> String { "macos" }
 #[cfg(windows)]
 fn target() -> String { "windows" }
 
+// The oldest macOS a package runs on, unless MACOSX_DEPLOYMENT_TARGET names
+// another: the version the released toolchain's runtime is built for. The
+// build is told the same version the bundle declares.
+const MACOS_MINIMUM: String = "15.0"
+
+// The CPU a package's compiled code may assume, unless GOS_LLVM_MCPU names
+// another: a package runs on machines other than the one that built it, so
+// it takes a baseline every supported machine has rather than the builder's
+// own features.
+fn cpu_baseline(arch: String) -> String {
+    if arch == "x86_64" { "x86-64-v2" } else { "generic" }
+}
+
+fn configured(name: String, fallback: String) -> String {
+    match env::var(name) {
+        Some(value) if !value.trim().is_empty() => value.trim()
+        _ => fallback
+    }
+}
+
 fn fail(message: String) -> errors::Error { errors::new(f"package: {message}") }
 
 /// A name that is safe as a file name and a shell word.
@@ -229,9 +249,12 @@ fn build_package() -> Result<(), errors::Error> {
     let build = path::join(stage, "build")
     // The build's own output goes to stderr, so stdout carries only the
     // artifact's path.
+    let macos_minimum = configured("MACOSX_DEPLOYMENT_TARGET", MACOS_MINIMUM)
     let mut builder = Command::new(gos)
         .args(#["build", "--release", ".", "--out-dir", build])
         .dir(app)
+        .env("GOS_LLVM_MCPU", configured("GOS_LLVM_MCPU", cpu_baseline(arch)))
+        .env("MACOSX_DEPLOYMENT_TARGET", macos_minimum)
         .stdout(Stdio::Piped)
         .spawn()?
     while let Some(line) = builder.read_stdout_line()? {
@@ -378,7 +401,7 @@ fn build_package() -> Result<(), errors::Error> {
             ("CFBundlePackageType", "APPL")
             ("CFBundleShortVersionString", version)
             ("CFBundleVersion", version)
-            ("LSMinimumSystemVersion", "11.0")
+            ("LSMinimumSystemVersion", macos_minimum)
         ]
         if has_icon {
             let iconset = path::join(stage, "AppIcon.iconset")
@@ -405,7 +428,16 @@ fn build_package() -> Result<(), errors::Error> {
         if fs::exists(archive) {
             fs::remove_file(archive)?
         }
-        require(Command::new("ditto").args(#["-c", "-k", "--keepParent", bundle, archive]), "ditto")?
+        // The archive holds the app and the script that installs it.
+        let shipped = path::join(stage, "shipped")
+        fs::create_dir_all(shipped)?
+        require(Command::new("ditto").args(#[bundle, path::join(shipped, package_name)]), "ditto")?
+        let template = fs::read_to_string(path::join(gui, "tools/package-install-mac.sh"))?
+        fs::write_mode(path::join(shipped, "install.sh"), template.replace("@@APP@@", package_name).replace("@@EXE@@", exe).bytes(), 0o755)?
+        // Finder runs a .command file in Terminal when it is double-clicked.
+        let opener = fs::read_to_string(path::join(gui, "tools/package-install-mac.command"))?
+        fs::write_mode(path::join(shipped, f"Install {name}.command"), opener.bytes(), 0o755)?
+        require(Command::new("ditto").args(#["-c", "-k", shipped, archive]), "ditto")?
         let destination = path::join(out, package_name)
         if fs::exists(destination) {
             fs::remove_dir_all(destination)?
