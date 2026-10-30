@@ -428,15 +428,13 @@ fn build_package() -> Result<(), errors::Error> {
         if fs::exists(archive) {
             fs::remove_file(archive)?
         }
-        // The archive holds the app and the script that installs it.
+        // The archive holds the app and install-mac.sh, which installs it
+        // when run with `bash install-mac.sh`.
         let shipped = path::join(stage, "shipped")
         fs::create_dir_all(shipped)?
         require(Command::new("ditto").args(#[bundle, path::join(shipped, package_name)]), "ditto")?
         let template = fs::read_to_string(path::join(gui, "tools/package-install-mac.sh"))?
-        fs::write_mode(path::join(shipped, "install.sh"), template.replace("@@APP@@", package_name).replace("@@EXE@@", exe).bytes(), 0o755)?
-        // Finder runs a .command file in Terminal when it is double-clicked.
-        let opener = fs::read_to_string(path::join(gui, "tools/package-install-mac.command"))?
-        fs::write_mode(path::join(shipped, f"Install {name}.command"), opener.bytes(), 0o755)?
+        fs::write_mode(path::join(shipped, "install-mac.sh"), template.replace("@@APP@@", package_name).replace("@@EXE@@", exe).bytes(), 0o755)?
         require(Command::new("ditto").args(#["-c", "-k", shipped, archive]), "ditto")?
         let destination = path::join(out, package_name)
         if fs::exists(destination) {

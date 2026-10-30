@@ -1,56 +1,79 @@
 #!/usr/bin/env bash
-# Installs @@APP@@ in /Applications and links its command into the PATH.
+# Install @@APP@@ to /Applications.
 #
-# Usage: bash install.sh
+# Usage: bash install-mac.sh
 #
-# Run it through bash rather than opening it: Gatekeeper checks quarantine
-# when an app launches, not when a shell runs a script, so the quarantine
-# removal and ad-hoc signature below take effect. On macOS Sequoia and later
-# right-click -> Open no longer lets an ad-hoc signed app through.
+# Invoking via `bash` (rather than double-clicking) is what lets the
+# quarantine-removal and ad-hoc re-sign steps actually take effect:
+# Gatekeeper enforces quarantine on app launch, not on interpreted
+# scripts run by a shell. On macOS Sequoia+ right-click -> Open no
+# longer bypasses the "unverified developer" block for ad-hoc signed
+# apps, so this script is the reliable path for unsigned builds.
 set -euo pipefail
 
-here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-app=@@APP@@
-exe=@@EXE@@
-source="$here/$app"
-dest="/Applications/$app"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-[ -d "$source" ] || { echo "error: $app not found beside install.sh" >&2; exit 1; }
+die() { echo "error: $*" >&2; exit 1; }
 
-echo "Installing $app..."
-rm -rf "$dest"
-cp -R "$source" "$dest"
-xattr -dr com.apple.quarantine "$dest" 2>/dev/null || true
-codesign --force --deep --sign - --timestamp=none "$dest" >/dev/null 2>&1 || true
-echo "  Installed to $dest"
+install_app() {
+    local src="$1"
+    local name
+    name="$(basename "$src")"
+    local dest="/Applications/$name"
+
+    [ -d "$src" ] || die "$name not found at $src"
+
+    echo "Installing $name..."
+    rm -rf "$dest"
+    cp -R "$src" "$dest"
+    xattr -dr com.apple.quarantine "$dest" 2>/dev/null || true
+    codesign --force --deep --sign - --timestamp=none "$dest" >/dev/null 2>&1 || true
+    echo "  Installed to $dest"
+}
+
+install_app "$SCRIPT_DIR/@@APP@@"
+
+install_cli_symlink() {
+    local binary="$1"
+    local linkname="$2"
+    local target_dir="$3"
+
+    [ -f "$binary" ] || return 0
+
+    if [ ! -d "$target_dir" ]; then
+        sudo mkdir -p "$target_dir" 2>/dev/null || return 0
+    fi
+
+    sudo rm -f "$target_dir/$linkname" 2>/dev/null || true
+    sudo ln -sf "$binary" "$target_dir/$linkname" 2>/dev/null || return 0
+    echo "  CLI: $target_dir/$linkname"
+}
 
 echo ""
-echo "Linking $exe into the PATH (may prompt for sudo)..."
-for dir in /usr/local/bin /opt/homebrew/bin; do
-    if [ ! -d "$dir" ]; then
-        sudo mkdir -p "$dir" 2>/dev/null || continue
-    fi
-    sudo ln -sf "$dest/Contents/MacOS/$exe" "$dir/$exe" 2>/dev/null || continue
-    echo "  $dir/$exe"
+echo "Installing CLI symlinks (may prompt for sudo)..."
+for bin_dir in /usr/local/bin /opt/homebrew/bin; do
+    install_cli_symlink "/Applications/@@APP@@/Contents/MacOS/@@EXE@@" @@EXE@@ "$bin_dir"
 done
 
 echo ""
-echo "Done. Launch it from /Applications or run: $exe"
+echo "Done. Launch from /Applications or run:"
+echo "  @@EXE@@"
 
-case ":${PATH}:" in
-    *":/usr/local/bin:"* | *":/opt/homebrew/bin:"*) ;;
-    *)
-        case "${SHELL##*/}" in
-            zsh) profile="$HOME/.zshrc" ;;
-            bash) profile="$HOME/.bash_profile" ;;
-            fish) profile="$HOME/.config/fish/config.fish" ;;
-            *) profile="your shell profile" ;;
-        esac
-        echo ""
-        echo "Note: neither /usr/local/bin nor /opt/homebrew/bin is in your PATH, so"
-        echo "'$exe' won't resolve in the shell. Add one of them to $profile:"
-        echo ""
-        echo "    export PATH=\"/usr/local/bin:\$PATH\""
-        echo ""
-        ;;
-esac
+path_has() {
+    case ":${PATH}:" in *":$1:"*) return 0 ;; *) return 1 ;; esac
+}
+if ! path_has /usr/local/bin && ! path_has /opt/homebrew/bin; then
+    case "${SHELL##*/}" in
+        zsh)  shell_rc="$HOME/.zshrc" ;;
+        bash) shell_rc="$HOME/.bash_profile" ;;
+        fish) shell_rc="$HOME/.config/fish/config.fish" ;;
+        *)    shell_rc="your shell profile" ;;
+    esac
+    echo ""
+    echo "Note: neither /usr/local/bin nor /opt/homebrew/bin is in your PATH,"
+    echo "so '@@EXE@@' won't resolve in the shell."
+    echo "Add one of them to $shell_rc. For zsh or bash:"
+    echo ""
+    echo "    export PATH=\"/usr/local/bin:\$PATH\""
+    echo ""
+fi
