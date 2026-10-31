@@ -29,6 +29,9 @@ pub struct TabItem {
     pub dirty: bool
     /// Work in progress: the strip shows activity.
     pub busy: bool
+    /// Something in the tab asks for the user, such as a bell from its
+    /// program: the strip marks the tab in the accent color.
+    pub attention: bool
     /// Pinned tabs sit first, show no close button, and refuse close.
     pub pinned: bool
     pub closable: bool
@@ -36,7 +39,14 @@ pub struct TabItem {
 
 impl TabItem {
     pub fn new(key: String, title: String) -> TabItem {
-        TabItem { key: key, title: title, icon: None, tooltip: String::new(), dirty: false, busy: false, pinned: false, closable: true }
+        TabItem { key: key, title: title, icon: None, tooltip: String::new(), dirty: false, busy: false, attention: false, pinned: false, closable: true }
+    }
+
+    /// Marks the tab for the user, as when its program rings the bell.
+    pub fn attention(self, attention: bool) -> TabItem {
+        let mut t = self
+        t.attention = attention
+        t
     }
 
     pub fn dirty(self, dirty: bool) -> TabItem {

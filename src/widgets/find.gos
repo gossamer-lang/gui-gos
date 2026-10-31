@@ -6,6 +6,7 @@
 use crate::editing::search::SearchOptions
 use crate::localization
 use crate::localization::tr
+use crate::render::icons::Icon
 use crate::widgets::Widget
 use crate::widgets::cx::UiMsg
 use crate::widgets::textinput::{InputKind, TextInput}
@@ -106,6 +107,9 @@ impl FindBar {
                 } else if id == f"{prefix}word" {
                     self.options.whole_word = on
                     FindRequest::Search
+                } else if id == f"{prefix}regex" {
+                    self.options.regex = on
+                    FindRequest::Search
                 } else {
                     FindRequest::Nothing
                 }
@@ -138,15 +142,19 @@ impl FindBar {
         let mut query = TextInput::new(self.query_id(), self.query, tr("Find"), InputKind::Search)
         query.label = tr("Find")
         let found = !self.query.is_empty() && self.count > 0
+        // Options and steps show short faces, named in full for tooltips and
+        // assistive technology, so the query keeps its room in a narrow window.
+        let option = |key: String, face: String, name: String, on: bool| Widget::toggle_button(f"{self.id}:{key}", face, on).tooltip(name).accessible(name)
         let mut rows = #[Widget::row(#[
             Widget::input(query).grow(1)
-            Widget::toggle_button(f"{self.id}:case", tr("Match case"), self.options.match_case)
-            Widget::toggle_button(f"{self.id}:word", tr("Whole words"), self.options.whole_word)
-            Widget::muted(self.summary()).min_width(96)
-            Widget::button(f"{self.id}:previous", tr("Previous")).disabled(!found)
-            Widget::button(f"{self.id}:next", tr("Next")).disabled(!found)
-            Widget::button(f"{self.id}:close", tr("Close"))
-        ], 6)]
+            option("case", "Aa", tr("Match case"), self.options.match_case)
+            option("word", "W", tr("Whole words"), self.options.whole_word)
+            option("regex", ".*", tr("Regular expression"), self.options.regex)
+            Widget::muted(self.summary()).min_width(72)
+            Widget::tool_button(f"{self.id}:previous", Icon::ChevronUp, tr("Previous")).disabled(!found)
+            Widget::tool_button(f"{self.id}:next", Icon::ChevronDown, tr("Next")).disabled(!found)
+            Widget::tool_button(f"{self.id}:close", Icon::Close, tr("Close"))
+        ], 4)]
         if self.replacing {
             let mut replacement = TextInput::new(f"{self.id}:replacement", self.replacement, tr("Replace with"), InputKind::Line)
             replacement.label = tr("Replace with")

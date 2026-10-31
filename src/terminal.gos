@@ -14,7 +14,7 @@ const MATCH_LIMIT: i64 = 100_000
 // back the program's main screen and cursor. The margins reset between saving
 // and restoring the cursor, since resetting them homes it; colors and
 // character sets reset after the restore, which brings back the saved ones.
-const SOFT_RESET: [String; 9] = [
+const SOFT_RESET: [String; 10] = [
     "\u{1b}[?1049l"
     "\u{1b}7\u{1b}[?6l\u{1b}[r\u{1b}8"
     "\u{1b}[0m"
@@ -24,6 +24,7 @@ const SOFT_RESET: [String; 9] = [
     "\u{1b}[?9l\u{1b}[?1000l\u{1b}[?1002l\u{1b}[?1003l\u{1b}[?1005l\u{1b}[?1006l\u{1b}[?1015l"
     "\u{1b}[?1004l\u{1b}[?2004l"
     "\u{1b}[=0;1u"
+    "\u{1b}[?2026l"
 ]
 
 /// A terminal's screen size and storage limits.
@@ -83,6 +84,17 @@ pub enum Event {
     LinkPointed(String)
     /// The user asked to open a link: Ctrl+click, or Command+click on macOS.
     LinkActivated(String)
+    /// The program sent a desktop notification (OSC 9 or 777): its title,
+    /// empty when it gave none, and its body.
+    Notify(String, String)
+    /// The program wrote this text to the clipboard (OSC 52). Programs can
+    /// never read the clipboard back.
+    Clipboard(String)
+    /// The program wrote this text to the primary selection (OSC 52).
+    PrimarySelection(String)
+    /// The user asked to open a file path the screen shows: its absolute
+    /// path and the line and column after it, 0 when it names none.
+    PathActivated(String, i64, i64)
 }
 
 /// A terminal's state.
@@ -129,6 +141,36 @@ pub struct Span {
     pub end: Cell
 }
 
+/// What a stretch of the buffer is to the shell that marked it (OSC 133).
+#[derive(PartialEq, Eq)]
+pub enum ZoneKind {
+    Prompt
+    Input
+    Output
+}
+
+/// A stretch of the buffer the shell marked, its end excluded, in the rows
+/// `Terminal::rows` answers.
+#[derive(PartialEq, Eq)]
+pub struct Zone {
+    pub kind: ZoneKind
+    pub start: Cell
+    pub end: Cell
+}
+
+/// A terminal's colors, each "#rrggbb": the default text and background,
+/// the cursor, the selection and its text, and the sixteen named colors. A
+/// color left empty, or that does not parse, takes the theme's.
+#[derive(Default, PartialEq)]
+pub struct Scheme {
+    pub foreground: String
+    pub background: String
+    pub cursor: String
+    pub selection: String
+    pub selection_text: String
+    pub ansi: Vec<String>
+}
+
 /// The widget showing terminal `terminal`. It fills the space it is given,
 /// and the screen follows that size; `rows` and `cols` are the size it takes
 /// where its parent sets no bound.
@@ -144,6 +186,8 @@ pub struct View {
     pub font: String
     /// The text size in points; zero takes 10.
     pub font_size: f64
+    /// The colors the screen shows; `None` takes the theme's.
+    pub scheme: Option<Scheme>
 }
 
 /// A terminal handle.
@@ -158,6 +202,7 @@ enum Answer {
     Text(String)
     Snapshot(Snapshot)
     Lines(Vec<Row>)
+    Zones(Vec<Zone>)
     Done
 }
 
@@ -291,6 +336,43 @@ impl Terminal {
         Ok(out)
     }
 
+    /// The directory the program works in: the one it last reported (OSC 7),
+    /// else the foreground job's, else the program's own. Empty when none is
+    /// known, as on Windows for a program that reports none.
+    pub fn cwd(&self) -> Result<String, errors::Error> {
+        match call("cwd", self.id, "null")? {
+            Answer::Text(path) => Ok(path)
+            _ => Err(errors::new("invalid terminal directory answer"))
+        }
+    }
+
+    /// The stretches of the buffer the shell marked as prompts, inputs and
+    /// outputs, oldest first; empty for a shell that marks none.
+    pub fn zones(&self) -> Result<Vec<Zone>, errors::Error> {
+        match call("zones", self.id, "null")? {
+            Answer::Zones(zones) => Ok(zones)
+            _ => Err(errors::new("invalid terminal zones answer"))
+        }
+    }
+
+    /// Shows `spans` of the buffer highlighted, as a weaker selection,
+    /// replacing any it showed.
+    pub fn highlight(&self, spans: Vec<Span>) -> Result<(), errors::Error> {
+        done(call("highlight", self.id, json::encode(spans)))
+    }
+
+    pub fn clear_highlight(&self) -> Result<(), errors::Error> {
+        self.highlight(#[])
+    }
+
+    /// Scrolls the view so buffer row `row` is its top row, as far as the
+    /// history allows.
+    pub fn scroll_to_row(&self, row: i64) -> Result<(), errors::Error> {
+        let shown = self.snapshot()?
+        let top = row.clamp(0, shown.history)
+        self.scroll(shown.history - top - shown.scrolled).map(|_| ())
+    }
+
     /// Scrolls `span` into view, a third of the way down where the history
     /// allows, and selects it.
     pub fn reveal(&self, span: Span) -> Result<(), errors::Error> {
@@ -319,8 +401,8 @@ impl Terminal {
     }
 
     /// The widget showing this terminal.
-    pub fn view(&self, id: String, label: String, rows: i64 = 24, cols: i64 = 80, font: String = "", font_size: f64 = 0.0) -> crate::Widget {
-        crate::Widget::Terminal(View { id: id, terminal: self.id, label: label, rows: rows, cols: cols, font: font, font_size: font_size })
+    pub fn view(&self, id: String, label: String, rows: i64 = 24, cols: i64 = 80, font: String = "", font_size: f64 = 0.0, scheme: Option<Scheme> = None) -> crate::Widget {
+        crate::Widget::Terminal(View { id: id, terminal: self.id, label: label, rows: rows, cols: cols, font: font, font_size: font_size, scheme: scheme })
     }
 }
 
