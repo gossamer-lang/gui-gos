@@ -147,7 +147,8 @@ fn main() -> Result<(), errors::Error> {
     assert(session.click("dlg:p:action:defaults")?)
     session.press(windowing::Key::Escape, windowing::Mods::default())?
     assert_eq(session.dialog_ids(), #["p"])
-    assert(session.semantics(0).dump().contains("Discard unapplied settings changes?"))
+    // Preferences and wizards open in a window of their own.
+    assert(session.semantics(1).dump().contains("Discard unapplied settings changes?"))
     assert(session.click("dlg:p:discard")?)
     assert(session.dialog_ids().is_empty())
     println("preferences Apply baseline and dirty Cancel: ok")
@@ -155,7 +156,7 @@ fn main() -> Result<(), errors::Error> {
     session.flush()?
     assert(session.click("dlg:w:action:next")?)
     assert(session.click("dlg:w:action:back")?)
-    assert(session.semantics(0).dump().contains("Ada"))
+    assert(session.semantics(1).dump().contains("Ada"))
     assert(session.click("dlg:w:action:next")?)
     assert(session.click("dlg:w:action:finish")?)
     assert(session.dialog_ids().is_empty())
