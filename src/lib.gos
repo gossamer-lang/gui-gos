@@ -111,7 +111,7 @@ pub type Settings = services::Settings
 pub type AppIcon = services::apps::AppIcon
 
 /// The toolkit version.
-pub const VERSION: String = "0.1.0"
+pub const VERSION: String = "0.1.1"
 
 
 /// The `gui.tab.*` commands a tabbed window offers, with their shortcuts.
@@ -393,5 +393,18 @@ impl<M> Display for App<M> {
 impl<M> Debug for App<M> {
     fn fmt(&self) -> String {
         f"App {{ name: {self.name:?}, app_id: {self.app_id:?} }}"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{errors, fs}
+
+    #[test]
+    fn the_version_is_the_one_the_manifest_releases() -> Result<(), errors::Error> {
+        let manifest = fs::read_to_string("project.toml")?
+        let declared = manifest.lines().find(|line| line.starts_with("version = "))
+        assert_eq(declared, Some(f"version = \"{super::VERSION}\""))
+        Ok(())
     }
 }
