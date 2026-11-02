@@ -8,8 +8,12 @@ use crate::localization
 use crate::localization::tr
 use crate::render::icons::Icon
 use crate::widgets::Widget
+use crate::widgets::completion::{Completion, CompletionItem, MatchMode}
 use crate::widgets::cx::UiMsg
 use crate::widgets::textinput::{InputKind, TextInput}
+
+// The searches a bar remembers, newest first.
+const HISTORY: i64 = 20
 
 /// What the application does after a find bar message.
 #[derive(Debug, PartialEq, Eq)]
@@ -44,12 +48,14 @@ pub struct FindBar {
     pub count: i64
     /// The selected match's index, or -1 when the selection is not a match.
     pub current: i64
+    /// Queries searched for, newest first, which the query field offers.
+    pub history: Vec<String>
 }
 
 impl FindBar {
     /// A closed bar whose controls use ids beginning with `id`.
     pub fn new(id: String) -> FindBar {
-        FindBar { id: id, open: false, replacing: false, query: "", replacement: "", options: SearchOptions::default(), count: 0, current: -1 }
+        FindBar { id: id, open: false, replacing: false, query: "", replacement: "", options: SearchOptions::default(), count: 0, current: -1, history: #[] }
     }
 
     /// Opens the bar, with the replacement row when `replacing`.
@@ -67,6 +73,17 @@ impl FindBar {
     pub fn found(&mut self, count: i64, current: i64) {
         self.count = count.max(0)
         self.current = if current >= 0 && current < self.count { current } else { -1 }
+    }
+
+    /// Remembers the current query as the newest search.
+    pub fn remember(&mut self) {
+        if self.query.is_empty() { return }
+        let query = self.query
+        let mut kept = #[query]
+        for q in self.history {
+            if q != query && kept.len() < HISTORY { kept.push(q) }
+        }
+        self.history = kept
     }
 
     /// "2 of 5", "5 matches", "No matches", or "" before anything is typed.
@@ -98,7 +115,10 @@ impl FindBar {
                 FindRequest::Nothing
             }
             UiMsg::Submit(id, _) => {
-                if id == f"{prefix}query" { FindRequest::Next } else if id == f"{prefix}replacement" { FindRequest::Replace } else { FindRequest::Nothing }
+                if id == f"{prefix}query" {
+                    self.remember()
+                    FindRequest::Next
+                } else if id == f"{prefix}replacement" { FindRequest::Replace } else { FindRequest::Nothing }
             }
             UiMsg::Toggle(id, on) => {
                 if id == f"{prefix}case" {
@@ -119,8 +139,14 @@ impl FindBar {
                     return FindRequest::Nothing
                 }
                 match id.substring(prefix.byte_len(), id.byte_len()) {
-                    "previous" => FindRequest::Previous
-                    "next" => FindRequest::Next
+                    "previous" => {
+                        self.remember()
+                        FindRequest::Previous
+                    }
+                    "next" => {
+                        self.remember()
+                        FindRequest::Next
+                    }
                     "replace" => FindRequest::Replace
                     "replace-all" => FindRequest::ReplaceAll
                     "close" => {
@@ -141,6 +167,9 @@ impl FindBar {
         }
         let mut query = TextInput::new(self.query_id(), self.query, tr("Find"), InputKind::Search)
         query.label = tr("Find")
+        if !self.history.is_empty() {
+            query.completion = Some(Completion::local(self.history.map(|q| CompletionItem::new(q, q)), MatchMode::Substring))
+        }
         let found = !self.query.is_empty() && self.count > 0
         // Options and steps show short faces, named in full for tooltips and
         // assistive technology, so the query keeps its room in a narrow window.
@@ -165,5 +194,24 @@ impl FindBar {
             ], 6))
         }
         Widget::column(rows, 6).padding_xy(8, 6).role(crate::accessibility::Role::Group).accessible(tr("Find and replace"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{FindBar, FindRequest}
+    use crate::widgets::cx::UiMsg
+
+    #[test]
+    fn a_bar_remembers_searches_newest_first_without_repeats() {
+        let mut bar = FindBar::new("find")
+        for q in #["alpha", "beta", "alpha"] {
+            bar.update(UiMsg::Text("find:query", q))
+            assert_eq(bar.update(UiMsg::Submit("find:query", q)), FindRequest::Next)
+        }
+        assert_eq(bar.history, #["alpha", "beta"])
+        bar.update(UiMsg::Text("find:query", ""))
+        bar.update(UiMsg::Click("find:next"))
+        assert_eq(bar.history, #["alpha", "beta"])
     }
 }

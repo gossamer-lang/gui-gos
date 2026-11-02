@@ -111,7 +111,7 @@ pub type Settings = services::Settings
 pub type AppIcon = services::apps::AppIcon
 
 /// The toolkit version.
-pub const VERSION: String = "0.1.2"
+pub const VERSION: String = "0.1.3"
 
 
 /// The `gui.tab.*` commands a tabbed window offers, with their shortcuts.
@@ -152,6 +152,9 @@ pub struct App<M> {
     pub instance_files: Option<Vec<String>>
     /// The icon every window of the application shows.
     pub icon: Option<services::apps::AppIcon>
+    /// Whether the application's windows open see-through, when they can
+    /// be (`transparent`).
+    pub transparent: Option<bool>
 }
 
 /// An application with default settings: an 800 by 600 window titled
@@ -177,6 +180,7 @@ pub fn application<M>(name: String, app_id: String, init: Fn() -> M, update: Fn(
         style: WindowStyle::default()
         instance_files: None
         icon: None
+        transparent: None
     }
 }
 
@@ -265,6 +269,18 @@ impl<M> App<M> {
 
     /// Reports window close requests as `UiMsg::CloseRequested` instead of
     /// closing, so documents can ask to save first.
+    /// Opens the application's windows with surfaces that can be
+    /// see-through, so a view can paint a translucent background, and
+    /// see-through from the start when `transparent` is true;
+    /// `Effect::SetTransparent` switches them while they are open. Dialog
+    /// windows stay opaque. Where no compositor blends windows, a
+    /// translucent pixel shows dark.
+    pub fn transparent(self, transparent: bool) -> App<M> {
+        let mut a = self
+        a.transparent = Some(transparent)
+        a
+    }
+
     pub fn ask_before_close(self) -> App<M> {
         let mut a = self
         a.close_policy = ClosePolicy::Ask
@@ -314,6 +330,10 @@ impl<M> App<M> {
         })
         if let Some(icon) = self.icon {
             if let Err(e) = session.set_icon(icon) { session.shutdown(); return Err(e) }
+        }
+        if let Some(transparent) = self.transparent {
+            if let Err(e) = session.allow_transparency() { session.shutdown(); return Err(e) }
+            if let Err(e) = session.set_transparent(transparent) { session.shutdown(); return Err(e) }
         }
         if let Err(e) = session.prepare_window_with("main", self.title, self.width, self.height, self.style) { session.shutdown(); return Err(e) }
         session.set_close_policy("main", self.close_policy)

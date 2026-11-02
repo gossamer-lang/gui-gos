@@ -24,6 +24,9 @@ pub struct TextStyle {
     pub tab_width: i64
     /// Line height as a multiple of the font's natural height; 0 keeps it.
     pub line_spacing: f64
+    /// Whether standard and contextual ligatures join letters in Latin,
+    /// Greek and Cyrillic text; scripts that need theirs keep them.
+    pub ligatures: bool
 }
 
 /// Horizontal placement of each line within the layout width.
@@ -40,12 +43,12 @@ pub enum TextAlign {
 impl TextStyle {
     /// Regular sans text at `size` pixels.
     pub fn sans(size: f64) -> TextStyle {
-        TextStyle { family: Family::Sans, size: size, bold: false, italic: false, tab_width: 4, line_spacing: 0.0 }
+        TextStyle { family: Family::Sans, size: size, bold: false, italic: false, tab_width: 4, line_spacing: 0.0, ligatures: true }
     }
 
     /// Monospace text at `size` pixels.
     pub fn mono(size: f64) -> TextStyle {
-        TextStyle { family: Family::Monospace, size: size, bold: false, italic: false, tab_width: 4, line_spacing: 0.0 }
+        TextStyle { family: Family::Monospace, size: size, bold: false, italic: false, tab_width: 4, line_spacing: 0.0, ligatures: true }
     }
 
     /// This style in bold.

@@ -95,6 +95,10 @@ pub enum Event {
     /// The user asked to open a file path the screen shows: its absolute
     /// path and the line and column after it, 0 when it names none.
     PathActivated(String, i64, i64)
+    /// A paste of several lines or of control characters waits for the
+    /// application to confirm it (`ViewOptions::confirm_paste`); the
+    /// application pastes the text with `Terminal::paste`.
+    PasteHeld(String)
 }
 
 /// A terminal's state.
@@ -119,6 +123,9 @@ pub struct Snapshot {
     /// A job other than the program runs in the foreground, as a shell's
     /// command does; closing the terminal would end it.
     pub busy: bool
+    /// The program name of that job, where the system names it.
+    #[default]
+    pub job: String
     pub queued_input: i64
     pub queued_output: i64
 }
@@ -188,6 +195,65 @@ pub struct View {
     pub font_size: f64
     /// The colors the screen shows; `None` takes the theme's.
     pub scheme: Option<Scheme>
+    /// How the view draws and handles its terminal beyond font and colors.
+    pub options: ViewOptions
+}
+
+/// How a view draws and handles its terminal beyond its font and colors.
+#[derive(PartialEq)]
+pub struct ViewOptions {
+    /// The cursor's shape: "block", "bar" or "underline".
+    pub cursor: String
+    /// Whether the cursor blinks.
+    pub blink: bool
+    /// Bold text in the eight standard colors takes their bright forms.
+    pub bold_bright: bool
+    /// Letters too close to their background move toward a readable color.
+    pub legible: bool
+    /// Space around the screen, in interface units.
+    pub padding: i64
+    /// When the scrollbar shows: "always", "scrolling" (while the view is
+    /// scrolled back) or "never".
+    pub scrollbar: String
+    /// New output brings a view scrolled back to the live screen.
+    pub scroll_on_output: bool
+    /// Typing brings a view scrolled back to the live screen.
+    pub scroll_on_keystroke: bool
+    /// Characters a double click selects along with letters and digits.
+    pub word_chars: String
+    /// On macOS, Option sends Meta (Escape and the key) rather than the
+    /// character it types.
+    pub option_as_meta: bool
+    /// A selection is copied to the clipboard as well as the primary
+    /// selection.
+    pub copy_on_select: bool
+    /// A paste of several lines or of control characters is held for the
+    /// application to confirm (`Event::PasteHeld`).
+    pub confirm_paste: bool
+    /// The bell flashes the screen.
+    pub flash_bell: bool
+    /// How opaque the default background is, from 0 to 1; below 1 the
+    /// application's windows must be see-through (`App::transparent`).
+    pub opacity: f64
+    /// The height of a row as a multiple of the font's line height, from 0.8
+    /// to 3.
+    pub line_height: f64
+    /// The font's weight on the CSS scale (400 regular); bold text is 300
+    /// heavier, from 700 to 900. The family's nearest faces draw it.
+    pub font_weight: i64
+    /// Whether letters of one style join into the font's ligatures, such as
+    /// a coding font's arrows.
+    pub ligatures: bool
+}
+
+/// What a double click selects besides letters and digits: enough for
+/// paths, URLs and addresses.
+pub const WORD_CHARS: String = "-#%&+,./:=?@_~"
+
+impl Default for ViewOptions {
+    fn default() -> ViewOptions {
+        ViewOptions { cursor: "block", blink: true, bold_bright: false, legible: true, padding: 4, scrollbar: "never", scroll_on_output: false, scroll_on_keystroke: true, word_chars: WORD_CHARS, option_as_meta: true, copy_on_select: false, confirm_paste: false, flash_bell: false, opacity: 1.0, line_height: 1.0, font_weight: 400, ligatures: true }
+    }
 }
 
 /// A terminal handle.
@@ -395,14 +461,22 @@ impl Terminal {
         self.scroll(-back).map(|_| ())
     }
 
+    /// Erases the history above the screen and shows the live screen; the
+    /// screen keeps what it shows.
+    pub fn clear_scrollback(&self) -> Result<(), errors::Error> {
+        self.feed("\u{1b}[3J")?
+        let back = self.snapshot()?.scrolled
+        self.scroll(-back).map(|_| ())
+    }
+
     /// Ends the program, if any, and releases the terminal.
     pub fn close(&self) {
         let _ = call("close", self.id, "null")
     }
 
     /// The widget showing this terminal.
-    pub fn view(&self, id: String, label: String, rows: i64 = 24, cols: i64 = 80, font: String = "", font_size: f64 = 0.0, scheme: Option<Scheme> = None) -> crate::Widget {
-        crate::Widget::Terminal(View { id: id, terminal: self.id, label: label, rows: rows, cols: cols, font: font, font_size: font_size, scheme: scheme })
+    pub fn view(&self, id: String, label: String, rows: i64 = 24, cols: i64 = 80, font: String = "", font_size: f64 = 0.0, scheme: Option<Scheme> = None, options: Option<ViewOptions> = None) -> crate::Widget {
+        crate::Widget::Terminal(View { id: id, terminal: self.id, label: label, rows: rows, cols: cols, font: font, font_size: font_size, scheme: scheme, options: options.unwrap_or(ViewOptions::default()) })
     }
 }
 

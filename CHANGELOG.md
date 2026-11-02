@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.3 - Terminal and settings options
+
+- Builds on gui-engine-gos 0.1.3 and windowing-gos 0.1.1.
+- `terminal::ViewOptions` sets how a terminal view draws and behaves; `Terminal::clear_scrollback` erases its history; snapshots name the foreground job; `Event::PasteHeld` asks before a risky paste.
+- `PreferenceKind::Action`, `Effect::SetWindowSize`, `Effect::SetTransparent` (open windows included) and `App::transparent`.
+- `TextStyle::ligatures` and the terminal view's font weight and ligatures.
+- The find bar offers earlier searches.
+
 ## 0.1.2 - Dialog windows
 
 - Builds on gui-engine-gos 0.1.2: preferences and wizards open in a window of their own that can be moved and resized, long popup lists scroll, and preference help wraps.
