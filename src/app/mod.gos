@@ -456,8 +456,9 @@ impl Session {
     }
 
     /// Activates a launcher after a user request, taking X11 input focus.
-    pub fn activate_window(&mut self, w: i64) -> Result<(), errors::Error> {
-        self.act("activate_window", #[f"{w}"])
+    /// `token` is the Wayland activation token the request carried, if any.
+    pub fn activate_window(&mut self, w: i64, token: String = "") -> Result<(), errors::Error> {
+        self.act("activate_window", #[f"{w}", json::encode(token)])
     }
 
     /// Whether a native window is visible.

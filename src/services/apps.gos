@@ -55,6 +55,13 @@ impl AppIcon {
         }
     }
 
+    /// The SVG document `svg` drawn `size` pixels square, such as an
+    /// application's own icon embedded with a `comptime` read.
+    pub fn from_svg(svg: String, size: i64) -> Result<AppIcon, errors::Error> {
+        let text = gui_engine::app_icon_svg(svg, size).map_err(|e| errors::new(f"drawing an SVG icon: {e}"))?
+        json::decode::<AppIcon>(text).map_err(|e| errors::new(f"an SVG icon did not decode: {e}"))
+    }
+
     /// The icon as a PNG file.
     pub fn to_png(&self) -> Vec<u8> {
         match gui_engine::app_icon_png(json::encode(*self)) {
@@ -708,4 +715,16 @@ pub fn save_history(app_id: String, history: AppHistory) -> Result<(), errors::E
     s.set_list("favorites", history.favorites)
     s.set_list("recent", history.recent)
     services::save_settings(history_file(app_id), s)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn an_svg_document_draws_an_icon_of_the_size_asked() {
+        let svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 10 10\"><rect width=\"10\" height=\"10\" fill=\"#b05e24\"/></svg>"
+        let icon = super::AppIcon::from_svg(svg, 16).unwrap()
+        assert_eq(icon.width, 16)
+        assert_eq(icon.rgba.len(), 16 * 16 * 4)
+        assert(super::AppIcon::from_svg("not svg", 16).is_err())
+    }
 }

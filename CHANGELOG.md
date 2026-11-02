@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.4 - Accent overrides, activation tokens and SVG icons
+
+- Builds on gui-engine-gos 0.1.4.
+- `ThemeOverride` takes an `accent` color for its subtree, which also colors selected rows and completion highlights.
+- `Session::activate_window` takes an optional Wayland activation token.
+- `AppIcon::from_svg` draws an SVG document as an application icon, such as one embedded with a `comptime` read.
+
 ## 0.1.3 - Terminal and settings options
 
 - Builds on gui-engine-gos 0.1.3 and windowing-gos 0.1.1.

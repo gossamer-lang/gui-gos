@@ -198,6 +198,9 @@ pub struct ThemeOverride {
     pub tokens: Option<crate::style::ThemeTokens>
     /// Overrides the keyboard focus outline within this subtree.
     pub focus: Option<crate::style::color::Color>
+    /// Replaces the desktop accent, and the selection derived from it,
+    /// within this subtree.
+    pub accent: Option<crate::style::color::Color>
 }
 
 impl ThemeOverride {
@@ -210,6 +213,7 @@ impl ThemeOverride {
         if let Some(r) = self.rtl { t.rtl = r }
         if self.text_scale > 0.0 { t.text_scale = self.text_scale }
         if let Some(tokens) = self.tokens { t = t.with_tokens(tokens) }
+        if let Some(color) = self.accent { t = t.with_accent(color) }
         if let Some(color) = self.focus { t.focus = color }
         t
     }
@@ -928,7 +932,7 @@ impl Widget {
 
     /// Lays the subtree out right to left (or left to right).
     pub fn direction_rtl(self, rtl: bool) -> Widget {
-        self.themed(ThemeOverride { kind: None, density: None, rtl: Some(rtl), text_scale: 0.0, tokens: None, focus: None })
+        self.themed(ThemeOverride { kind: None, density: None, rtl: Some(rtl), text_scale: 0.0, tokens: None, focus: None, accent: None })
     }
 
     // ---- structure ----
@@ -1078,5 +1082,21 @@ impl Display for Custom {
 impl Debug for Custom {
     fn fmt(&self) -> String {
         f"Custom {{ id: {self.id:?} }}"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::style::Theme
+    use crate::style::color::Color
+
+    #[test]
+    fn a_subtree_accent_replaces_the_desktop_accent_and_selection() {
+        let bronze = Color::rgb(176, 104, 44)
+        let change = super::ThemeOverride { kind: None, density: None, rtl: None, text_scale: 0.0, tokens: None, focus: None, accent: Some(bronze) }
+        let base = Theme::light().with_accent(Color::rgb(30, 100, 220))
+        let t = change.apply(base)
+        assert_eq(t, base.with_accent(bronze))
+        assert_eq(t.selection, t.accent)
     }
 }
