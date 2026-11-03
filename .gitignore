@@ -4,3 +4,6 @@ project.lock
 
 # Release-gate ledgers: the binaries, caches and logs of a local run.
 tests/resources/reports/
+
+# Output saved from local runs.
+*.log

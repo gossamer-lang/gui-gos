@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.5 - Gossamer 0.75.17
+
+- Requires Gossamer 0.75.17 or later.
+- Builds on gui-engine-gos 0.1.5 and windowing-gos 0.1.3: holding a spin box's - or + button keeps stepping, and terminals show echoed input sooner and floods of output about twice as fast.
+
 ## 0.1.4 - Accent overrides, activation tokens and SVG icons
 
 - Builds on gui-engine-gos 0.1.4.
