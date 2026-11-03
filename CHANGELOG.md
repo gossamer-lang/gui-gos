@@ -1,9 +1,13 @@
 # Changelog
 
-## 0.1.5 - Gossamer 0.75.17
+## 0.1.5 - Gossamer 0.75.17, terminal copy mode, link hints and saving
 
 - Requires Gossamer 0.75.17 or later.
-- Builds on gui-engine-gos 0.1.5 and windowing-gos 0.1.3: holding a spin box's - or + button keeps stepping, and terminals show echoed input sooner and floods of output about twice as fast.
+- Builds on gui-engine-gos 0.1.5 and windowing-gos 0.1.3: terminals show output about twice as fast, typed input sooner, and frames evenly under a flood; a terminal's history is bounded by memory; pastes of up to 16 MiB stream; programs can use kitty's keyboard protocol; and holding a spin box's - or + button keeps stepping.
+- `Terminal::copy_mode` starts copy mode, which selects and copies with the keyboard across the screen and the history.
+- `Terminal::hints` labels the links on the screen for a key to open or copy them; `Terminal::leave_mode` ends either mode.
+- `Terminal::save_text` writes a terminal's history or selection to a file, with wrapped rows joined into their lines.
+- `App::remember_size(false)` opens windows at the size the application gives them instead of the size they last closed at; they still open where they were.
 
 ## 0.1.4 - Accent overrides, activation tokens and SVG icons
 

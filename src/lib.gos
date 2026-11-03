@@ -155,6 +155,8 @@ pub struct App<M> {
     /// Whether the application's windows open see-through, when they can
     /// be (`transparent`).
     pub transparent: Option<bool>
+    /// Whether windows open at the size they last closed at.
+    pub remember_size: bool
 }
 
 /// An application with default settings: an 800 by 600 window titled
@@ -181,6 +183,7 @@ pub fn application<M>(name: String, app_id: String, init: Fn() -> M, update: Fn(
         instance_files: None
         icon: None
         transparent: None
+        remember_size: true
     }
 }
 
@@ -281,6 +284,15 @@ impl<M> App<M> {
         a
     }
 
+    /// Whether windows open at the size, and maximized state, they last
+    /// closed with (the default), or at the size the application gives
+    /// them; either way they open where they last were.
+    pub fn remember_size(self, remember: bool) -> App<M> {
+        let mut a = self
+        a.remember_size = remember
+        a
+    }
+
     pub fn ask_before_close(self) -> App<M> {
         let mut a = self
         a.close_policy = ClosePolicy::Ask
@@ -334,6 +346,9 @@ impl<M> App<M> {
         if let Some(transparent) = self.transparent {
             if let Err(e) = session.allow_transparency() { session.shutdown(); return Err(e) }
             if let Err(e) = session.set_transparent(transparent) { session.shutdown(); return Err(e) }
+        }
+        if !self.remember_size {
+            if let Err(e) = session.set_remember_size(false) { session.shutdown(); return Err(e) }
         }
         if let Err(e) = session.prepare_window_with("main", self.title, self.width, self.height, self.style) { session.shutdown(); return Err(e) }
         session.set_close_policy("main", self.close_policy)

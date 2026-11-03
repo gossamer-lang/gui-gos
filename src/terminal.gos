@@ -356,6 +356,39 @@ impl Terminal {
         }
     }
 
+    /// Writes the terminal's text to the file at `path` as UTF-8: the
+    /// selection when `selection` is set, otherwise every row it keeps,
+    /// oldest first, each wrapped row joined into its line. Answers the bytes
+    /// written.
+    pub fn save_text(&self, path: String, selection: bool) -> Result<i64, errors::Error> {
+        match call("save_text", self.id, json::encode((path, selection)))? {
+            Answer::Rows(n) => Ok(n)
+            _ => Err(errors::new("invalid terminal save answer"))
+        }
+    }
+
+    /// Starts copy mode: keys move a cursor of its own over the screen and
+    /// the history, `v` or Space starts a selection, `y` or Enter copies it
+    /// (the cursor's line without one), and Escape or `q` ends the mode.
+    pub fn copy_mode(&self) -> Result<(), errors::Error> {
+        done(call("copy_mode", self.id, "null"))
+    }
+
+    /// Labels each link on the screen; typing a label opens that link, or
+    /// copies it when `copy` is set. Answers how many links there are: with
+    /// none, no labels show.
+    pub fn hints(&self, copy: bool) -> Result<i64, errors::Error> {
+        match call("hints", self.id, json::encode(copy))? {
+            Answer::Rows(n) => Ok(n)
+            _ => Err(errors::new("invalid terminal hints answer"))
+        }
+    }
+
+    /// Ends copy mode or the link hints.
+    pub fn leave_mode(&self) -> Result<(), errors::Error> {
+        done(call("leave_mode", self.id, "null"))
+    }
+
     pub fn snapshot(&self) -> Result<Snapshot, errors::Error> {
         match call("snapshot", self.id, "null")? {
             Answer::Snapshot(shown) => Ok(shown)

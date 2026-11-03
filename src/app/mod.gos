@@ -187,6 +187,13 @@ impl Session {
         self.act("allow_transparency", #[])
     }
 
+    /// Whether windows open from now on at the size they last closed at (the
+    /// default) or at the size the application asks for; either way they
+    /// open where they last were.
+    pub fn set_remember_size(&mut self, remember: bool) -> Result<(), errors::Error> {
+        self.act("set_remember_size", #[if remember { "true" } else { "false" }])
+    }
+
     pub fn set_min_size(&mut self, key: String, width: i64, height: i64) -> Result<(), errors::Error> {
         self.act("set_min_size", #[json::encode(key), f"{width}", f"{height}"])
     }
