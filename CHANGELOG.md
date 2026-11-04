@@ -3,7 +3,7 @@
 ## 0.1.6 - Global shortcuts, fetching and window visibility
 
 - Requires Gossamer 0.76.0 or later.
-- Builds on gui-engine-gos 0.1.6 and windowing-gos 0.1.4.
+- Builds on gui-engine-gos 0.1.7 and windowing-gos 0.1.5.
 - `services::work::Operation::Fetch` GETs a URL on the session's worker and answers `Outcome::Fetched` with the status and body.
 - `Effect::RegisterHotkey` and `UnregisterHotkey`, answered by `UiMsg::Hotkey`; `Effect::SetWindowVisible`, `SetAlwaysOnTop` and `DockTop`.
 - `ViewOptions::scrollbar_side`, `terminal::Event::Focused`, and `ThemeOverride`'s `surface` and `field`.
