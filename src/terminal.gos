@@ -99,6 +99,8 @@ pub enum Event {
     /// application to confirm it (`ViewOptions::confirm_paste`); the
     /// application pastes the text with `Terminal::paste`.
     PasteHeld(String)
+    /// The terminal's view took keyboard focus, as a click on it gives it.
+    Focused
 }
 
 /// A terminal's state.
@@ -215,6 +217,8 @@ pub struct ViewOptions {
     /// When the scrollbar shows: "always", "scrolling" (while the view is
     /// scrolled back) or "never".
     pub scrollbar: String
+    /// Which edge the scrollbar lies along: "right" or "left".
+    pub scrollbar_side: String
     /// New output brings a view scrolled back to the live screen.
     pub scroll_on_output: bool
     /// Typing brings a view scrolled back to the live screen.
@@ -252,7 +256,7 @@ pub const WORD_CHARS: String = "-#%&+,./:=?@_~"
 
 impl Default for ViewOptions {
     fn default() -> ViewOptions {
-        ViewOptions { cursor: "block", blink: true, bold_bright: false, legible: true, padding: 4, scrollbar: "never", scroll_on_output: false, scroll_on_keystroke: true, word_chars: WORD_CHARS, option_as_meta: true, copy_on_select: false, confirm_paste: false, flash_bell: false, opacity: 1.0, line_height: 1.0, font_weight: 400, ligatures: true }
+        ViewOptions { cursor: "block", blink: true, bold_bright: false, legible: true, padding: 4, scrollbar: "never", scrollbar_side: "right", scroll_on_output: false, scroll_on_keystroke: true, word_chars: WORD_CHARS, option_as_meta: true, copy_on_select: false, confirm_paste: false, flash_bell: false, opacity: 1.0, line_height: 1.0, font_weight: 400, ligatures: true }
     }
 }
 

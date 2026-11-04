@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.6 - Global shortcuts, fetching and window visibility
+
+- Requires Gossamer 0.76.0 or later.
+- Builds on gui-engine-gos 0.1.6 and windowing-gos 0.1.4.
+- `services::work::Operation::Fetch` GETs a URL on the session's worker and answers `Outcome::Fetched` with the status and body.
+- `Effect::RegisterHotkey` and `UnregisterHotkey`, answered by `UiMsg::Hotkey`; `Effect::SetWindowVisible`, `SetAlwaysOnTop` and `DockTop`.
+- `ViewOptions::scrollbar_side`, `terminal::Event::Focused`, and `ThemeOverride`'s `surface` and `field`.
+- `TextInput::family` sets a field's text in an installed font family, and `TextInput::font_points` sets its size in points; a line field's height follows that size.
+- A right click leaves a context menu open even where it opens under the pointer.
+- `UiMsg::DockResized` reports a docked window the user resized as fractions of its display.
+- Dialog buttons carry keyboard accelerators, and the arrow keys move between them.
+- `Widget::joined_tab_pages` is a joined strip whose tabs keep their pages and can leave it: to a new window from the tab menu or by dragging out of the window, or into another window's strip of the same workspace.
+
 ## 0.1.5 - Gossamer 0.75.17, terminal copy mode, link hints and saving
 
 - Requires Gossamer 0.75.17 or later.

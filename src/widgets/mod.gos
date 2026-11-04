@@ -201,6 +201,12 @@ pub struct ThemeOverride {
     /// Replaces the desktop accent, and the selection derived from it,
     /// within this subtree.
     pub accent: Option<crate::style::color::Color>
+    /// Replaces the raised surface (a joined tab strip's active tab, a
+    /// popup's body) within this subtree.
+    pub surface: Option<crate::style::color::Color>
+    /// Replaces the field color (inputs, and the ground a joined tab strip
+    /// and menu bar sit on) within this subtree.
+    pub field: Option<crate::style::color::Color>
 }
 
 impl ThemeOverride {
@@ -215,6 +221,8 @@ impl ThemeOverride {
         if let Some(tokens) = self.tokens { t = t.with_tokens(tokens) }
         if let Some(color) = self.accent { t = t.with_accent(color) }
         if let Some(color) = self.focus { t.focus = color }
+        if let Some(color) = self.surface { t.surface = color }
+        if let Some(color) = self.field { t.field = color }
         t
     }
 }
@@ -755,6 +763,17 @@ impl Widget {
         Widget::Tabs(tabs::Tabs { id: id, items: items, active: active, content: content, pages: Map::new(), workspace: "", add_button: false, detachable: false, joined: true })
     }
 
+    /// A joined strip, as `joined_tabs` draws it, that keeps every tab's
+    /// page by key and lets tabs leave it: "Move Tab to New Window" reports
+    /// `UiMsg::TabAction(id, key, "detach")`, a tab dragged out of the window
+    /// `UiMsg::TabDetach(id, key, x, y)` with the drop point on the desktop,
+    /// and a tab dropped on another window's strip of the same `workspace`
+    /// `UiMsg::TabMove(id, key, strip, index)`.
+    pub fn joined_tab_pages(id: String, workspace: String, items: Vec<tabs::TabItem>, active: String, pages: Map<String, Widget>) -> Widget {
+        let content = pages.get(active).unwrap_or(Widget::Empty)
+        Widget::Tabs(tabs::Tabs { id: id, items: items, active: active, content: content, pages: pages, workspace: workspace, add_button: false, detachable: true, joined: true })
+    }
+
     /// A tab strip whose tabs can move to a new window (`detach` actions).
     pub fn detachable_tabs(id: String, items: Vec<tabs::TabItem>, active: String, content: Widget) -> Widget {
         Widget::Tabs(tabs::Tabs { id: id, items: items, active: active, content: content, pages: Map::new(), workspace: "", add_button: true, detachable: true, joined: false })
@@ -932,7 +951,7 @@ impl Widget {
 
     /// Lays the subtree out right to left (or left to right).
     pub fn direction_rtl(self, rtl: bool) -> Widget {
-        self.themed(ThemeOverride { kind: None, density: None, rtl: Some(rtl), text_scale: 0.0, tokens: None, focus: None, accent: None })
+        self.themed(ThemeOverride { kind: None, density: None, rtl: Some(rtl), text_scale: 0.0, tokens: None, focus: None, accent: None, surface: None, field: None })
     }
 
     // ---- structure ----
@@ -1093,7 +1112,7 @@ mod tests {
     #[test]
     fn a_subtree_accent_replaces_the_desktop_accent_and_selection() {
         let bronze = Color::rgb(176, 104, 44)
-        let change = super::ThemeOverride { kind: None, density: None, rtl: None, text_scale: 0.0, tokens: None, focus: None, accent: Some(bronze) }
+        let change = super::ThemeOverride { kind: None, density: None, rtl: None, text_scale: 0.0, tokens: None, focus: None, accent: Some(bronze), surface: None, field: None }
         let base = Theme::light().with_accent(Color::rgb(30, 100, 220))
         let t = change.apply(base)
         assert_eq(t, base.with_accent(bronze))

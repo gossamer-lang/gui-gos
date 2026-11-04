@@ -111,7 +111,7 @@ pub type Settings = services::Settings
 pub type AppIcon = services::apps::AppIcon
 
 /// The toolkit version.
-pub const VERSION: String = "0.1.5"
+pub const VERSION: String = "0.1.6"
 
 
 /// The `gui.tab.*` commands a tabbed window offers, with their shortcuts.

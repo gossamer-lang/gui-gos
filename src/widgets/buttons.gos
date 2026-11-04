@@ -51,11 +51,14 @@ pub struct Button {
     pub expander: bool
     /// A color a tool button shows in place of an icon (a palette swatch).
     pub swatch: Option<Color>
+    /// The byte offset in `label` of the letter that activates the button,
+    /// drawn underlined, or -1 for none.
+    pub accelerator: i64
 }
 
 impl Button {
     pub fn new(id: String, label: String, kind: ButtonKind) -> Button {
-        Button { id: id, label: label, icon: None, kind: kind, command: String::new(), toggled: -1, is_default: false, menu_arrow: false, menu: #[], split: false, expander: false, swatch: None }
+        Button { id: id, label: label, icon: None, kind: kind, command: String::new(), toggled: -1, is_default: false, menu_arrow: false, menu: #[], split: false, expander: false, swatch: None, accelerator: -1 }
     }
 }
 

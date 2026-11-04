@@ -1,6 +1,6 @@
 # Launcher catalog demonstration
 
-Requires Gossamer 0.75.17+. Run `gos fetch` once for the tagged windowing-gos
+Requires Gossamer 0.76.0+. Run `gos fetch` once for the tagged windowing-gos
 and gui-engine-gos releases, then `gos run .` here or build using
 `gos build .` / `gos build --release .`. Native executable:
 `target/{debug,release}/app-launcher`.

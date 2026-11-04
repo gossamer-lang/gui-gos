@@ -18,6 +18,9 @@ pub enum Operation {
     WriteText(String, String)
     Analyze(String, String)
     Complete(Vec<CompletionItem>, String, MatchMode, i64)
+    /// GETs a URL over HTTP or HTTPS with these headers, answered by
+    /// `Outcome::Fetched` with the status and the body as text.
+    Fetch(String, Vec<(String, String)>)
 }
 
 #[derive(PartialEq)]
@@ -46,6 +49,8 @@ pub enum Outcome {
     Analysis(crate::text::syntax::Document)
     Completions(Vec<CompletionItem>)
     Progress(i64, i64)
+    /// A fetch's HTTP status and body.
+    Fetched(i64, String)
     Failed(String)
     Cancelled
 }

@@ -64,6 +64,12 @@ pub struct TextInput {
     /// Source spans for the current committed text, in UTF-8 bytes.
     pub syntax: Vec<crate::text::syntax::Span>
     pub mono: bool
+    /// An installed font family the text is set in; empty keeps the
+    /// theme's face. `mono` takes precedence.
+    pub family: String
+    /// The text size in points, scaled with the theme as interface text
+    /// is; 0 keeps the theme's size.
+    pub font_points: f64
     /// Soft-wrap a text area (otherwise it scrolls horizontally).
     pub wrap: bool
     /// Tab inserts a tab character in a text area instead of moving focus.
@@ -78,7 +84,7 @@ pub struct TextInput {
 
 impl PartialEq for TextInput {
     fn eq(&self, other: TextInput) -> bool {
-        self.id == other.id && self.text == other.text && self.document == other.document && self.rich_document == other.rich_document && self.rich_block == other.rich_block && self.placeholder == other.placeholder && self.kind == other.kind && self.rows == other.rows && self.read_only == other.read_only && self.error == other.error && self.help == other.help && self.label == other.label && self.mask == other.mask && self.max_length == other.max_length && self.leading_icon == other.leading_icon && self.leading_image == other.leading_image
+        self.id == other.id && self.text == other.text && self.document == other.document && self.rich_document == other.rich_document && self.rich_block == other.rich_block && self.placeholder == other.placeholder && self.kind == other.kind && self.rows == other.rows && self.read_only == other.read_only && self.error == other.error && self.help == other.help && self.label == other.label && self.mask == other.mask && self.max_length == other.max_length && self.leading_icon == other.leading_icon && self.leading_image == other.leading_image && self.mono == other.mono && self.family == other.family && self.font_points == other.font_points
     }
 }
 
@@ -114,6 +120,8 @@ impl TextInput {
             leading_image: None
             syntax: #[]
             mono: false
+            family: String::new()
+            font_points: 0.0
             wrap: true
             tab_inserts: false
             required: false
