@@ -77,13 +77,13 @@ fn export(m: Model, id: String, path: String) -> Model {
 fn update(m: Model, msg: UiMsg) -> Model {
     let mut n = m
     match msg {
-        UiMsg::Click(id) => match id {
+        UiMsg::Clicked(id) => match id {
             "fit" => {
                 let _ = n.chart.fit()
             }
             "feed" => {
                 n.feeding = !n.feeding
-                gui::perform(if n.feeding { Effect::Timer("feed", TICK, true) } else { Effect::CancelTimer("feed") })
+                gui::perform(if n.feeding { Effect::StartTimer("feed", TICK, true) } else { Effect::CancelTimer("feed") })
                 n.status = if n.feeding { "Feeding" } else { f"Stopped after {n.fed} samples" }
             }
             "hide" => {
@@ -114,8 +114,8 @@ fn update(m: Model, msg: UiMsg) -> Model {
             _ => ()
         }
         UiMsg::ChartPoint(_, hit) => n.status = f"Picked {hit.name} {hit.x}, {hit.y}"
-        UiMsg::Print(_, Event::Exported { path, bytes }) => n.status = "Saved PDF"
-        UiMsg::Print(_, Event::Failed(why)) => n.status = f"Failed: {why}"
+        UiMsg::PrintProgress(_, Event::Exported { path, bytes }) => n.status = "Saved PDF"
+        UiMsg::PrintProgress(_, Event::Failed(why)) => n.status = f"Failed: {why}"
         _ => ()
     }
     n
@@ -143,7 +143,7 @@ fn view(m: Model) -> Widget {
 }
 
 fn app() -> gui::App<Model> {
-    gui::application("Charts", "dev.gossamer.gui-charts", init, update, view).size(980, 620).focus("chart")
+    gui::application("Charts", "dev.gossamer.gui-charts", init, update, view).size(980, 620).initial_focus("chart")
 }
 
 fn require(value: bool, why: String) -> Result<(), errors::Error> {

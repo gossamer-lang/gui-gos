@@ -14,7 +14,7 @@ use crate::commands::Command
 #[derive(PartialEq, Eq)]
 pub enum Zone { Left, Right, Top, Bottom, Center }
 
-/// A tab dropped on a dock group, reported as `UiMsg::Dock(dock, drop)`.
+/// A tab dropped on a dock group, reported as `UiMsg::TabDocked(dock, drop)`.
 #[derive(PartialEq)]
 pub struct Drop {
     pub pane: String

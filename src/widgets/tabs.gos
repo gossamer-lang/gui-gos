@@ -1,7 +1,7 @@
 // tabs: a window's tab strip and the content of its active tab. The
 // application owns the tab list and which tab is active; the strip reports
 // what the user asked for and the next view shows it. Selecting reports
-// `UiMsg::Tab(id, key)`, a drag reorder reports `UiMsg::Reorder(id, key,
+// `UiMsg::TabSelected(id, key)`, a drag reorder reports `UiMsg::Reordered(id, key,
 // index)`, and every other request (close, close others, close to the
 // right, pin, unpin, move left or right, new, reopen, move to a new window)
 // reports `UiMsg::TabAction(id, key, action)`. The `gui.tab.*` commands

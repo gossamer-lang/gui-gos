@@ -32,7 +32,7 @@ pub struct ScrollState {
     pub x: i64
     pub y: i64
     /// Pointer offset into the thumb while dragging it, or -1.
-    pub drag: i64
+    pub drag_offset: i64
     pub drag_horizontal: bool
 }
 
@@ -41,7 +41,7 @@ impl Default for ScrollState {
         ScrollState {
             x: 0
             y: 0
-            drag: 0
+            drag_offset: 0
             drag_horizontal: false
         }
     }
@@ -189,7 +189,7 @@ impl StateStore {
 
     // Typed accessors: each answers the default state when none is stored.
 
-    pub fn edit(&self, id: String) -> EditState {
+    pub fn edit_state(&self, id: String) -> EditState {
         match self.entries.get(id) {
             Some(WState::Edit(s)) => s
             _ => EditState::default()
@@ -199,18 +199,18 @@ impl StateStore {
     pub fn scroll(&self, id: String) -> ScrollState {
         match self.entries.get(id) {
             Some(WState::Scroll(s)) => s
-            _ => ScrollState { x: 0, y: 0, drag: -1, drag_horizontal: false }
+            _ => ScrollState { x: 0, y: 0, drag_offset: -1, drag_horizontal: false }
         }
     }
 
-    pub fn drag(&self, id: String) -> DragState {
+    pub fn drag_state(&self, id: String) -> DragState {
         match self.entries.get(id) {
             Some(WState::Drag(s)) => s
             _ => DragState::default()
         }
     }
 
-    pub fn choice(&self, id: String) -> ChoiceState {
+    pub fn choice_state(&self, id: String) -> ChoiceState {
         match self.entries.get(id) {
             Some(WState::Choice(s)) => s
             _ => ChoiceState::default()

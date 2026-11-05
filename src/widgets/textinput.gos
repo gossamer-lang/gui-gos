@@ -30,7 +30,7 @@ pub enum InputKind {
 }
 
 /// A text input. The application owns `text`; edits are reported as
-/// `UiMsg::Text(id, text)`.
+/// `UiMsg::TextChanged(id, text)`.
 pub struct TextInput {
     pub id: String
     pub text: String
@@ -49,7 +49,7 @@ pub struct TextInput {
     pub mask: String
     /// Judges the draft; invalid drafts stay editable and are marked. The
     /// host id of the judge (`validated` registers one).
-    pub validate: Option<i64>
+    pub validator: Option<i64>
     /// An error to show under the field (from the application).
     pub error: String
     pub help: String
@@ -93,7 +93,7 @@ impl TextInput {
     /// marked.
     pub fn validated(self, judge: Fn(String) -> Validity) -> TextInput {
         let mut t = self
-        t.validate = Some(crate::app::host::validator(judge))
+        t.validator = Some(crate::app::host::validator(judge))
         t
     }
 
@@ -110,7 +110,7 @@ impl TextInput {
             read_only: false
             max_length: 0
             mask: String::new()
-            validate: None
+            validator: None
             error: String::new()
             help: String::new()
             label: String::new()
@@ -184,7 +184,7 @@ fn from_shown(t: TextInput, st: EditState, offset: i64) -> i64 {
 }
 
 fn state_of(t: TextInput, st: StateStore) -> EditState {
-    let mut s = st.edit(t.id)
+    let mut s = st.edit_state(t.id)
     s.sync(t.text)
     s
 }
@@ -287,11 +287,11 @@ fn completion_range(t: TextInput, s: EditState) -> (i64, i64) {
 /// stale (a newer request, or a revision the text has moved past).
 pub fn deliver(st: &mut StateStore, id: String, request: i64, items: Vec<CompletionItem>, error: String) -> bool {
     let cs_id = f"{id}#completion"
-    let mut cs = st.choice(cs_id)
+    let mut cs = st.choice_state(cs_id)
     if request != cs.request || !cs.open {
         return false
     }
-    if st.edit(id).revision != cs.revision {
+    if st.edit_state(id).revision != cs.revision {
         return false
     }
     if error.is_empty() {
@@ -342,7 +342,7 @@ pub fn input_semantics(t: TextInput, st: StateStore) -> Option<AccessNode> {
     n.invalid = !t.error.is_empty() || !validity.is_empty()
     n.description = caption(t, validity)
     if t.completion.is_some() {
-        let cs = st.choice(f"{t.id}#completion")
+        let cs = st.choice_state(f"{t.id}#completion")
         n.expanded = if cs.open { 1 } else { 0 }
         n.controls = f"{t.id}#completion"
         if cs.open { n.children.push(completion::list_semantics(cs, f"{t.id}#completion", name, t.id, "")) }
@@ -352,7 +352,7 @@ pub fn input_semantics(t: TextInput, st: StateStore) -> Option<AccessNode> {
 
 /// The state's selection for tests: (anchor, caret).
 pub fn selection(st: StateStore, id: String) -> (i64, i64) {
-    let s = st.edit(id)
+    let s = st.edit_state(id)
     (s.anchor, s.caret)
 }
 

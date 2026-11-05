@@ -73,7 +73,7 @@ fn view(m: Model) -> Widget {
 fn app(command: Command) -> gui::App<Model> {
     gui::application("Terminal", "dev.gossamer.gui-terminal", || init(command), update, view)
         .size(760, 520)
-        .focus("terminal")
+        .initial_focus("terminal")
 }
 
 fn require(value: bool, why: String) -> Result<(), errors::Error> {

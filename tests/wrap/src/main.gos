@@ -13,8 +13,8 @@ struct Model {
 fn update(model: Model, message: UiMsg) -> Model {
     let mut next = model
     match message {
-        UiMsg::Click(id) => if id == "change" { next.revision += 1 }
-        UiMsg::Select(_, key) => { next.selected = key; next.commits += 1 }
+        UiMsg::Clicked(id) => if id == "change" { next.revision += 1 }
+        UiMsg::Selected(_, key) => { next.selected = key; next.commits += 1 }
         _ => ()
     }
     next
@@ -44,17 +44,17 @@ fn choice_model_journey() -> Result<(), errors::Error> {
     let mut session = gui::application("Choice model", "dev.gossamer.gui-wrap-choice", || Model::default(), update, view).size(420, 280).start()?
     assert(session.focus("choice")?)
     press(&mut session, Key::Return)
-    assert_eq(session.choice_state(0, "choice").highlight, "a")
-    session.mailbox().post(UiMsg::Click("change"))
+    assert_eq(session.choice_state(0, "choice").highlighted, "a")
+    session.mailbox().post(UiMsg::Clicked("change"))
     session.flush()?
     let changed = session.choice_state(0, "choice")
-    assert_eq(changed.highlight, "c")
+    assert_eq(changed.highlighted, "c")
     assert_eq(changed.items.map(|item| item.key), #["c", "b"])
     press(&mut session, Key::Return)
     assert(session.semantics(0).dump().contains("committed c count 1"))
     assert(session.focus("choice")?)
     press(&mut session, Key::Return)
-    session.mailbox().post(UiMsg::Click("change"))
+    session.mailbox().post(UiMsg::Clicked("change"))
     session.flush()?
     assert(session.choice_state(0, "choice").current().is_none())
     press(&mut session, Key::Return)
@@ -65,7 +65,7 @@ fn choice_model_journey() -> Result<(), errors::Error> {
     let state = session.choice_state(0, "many")
     assert_eq(state.filter, "Dup")
     assert(state.current().is_none())
-    session.mailbox().post(UiMsg::Click("change"))
+    session.mailbox().post(UiMsg::Clicked("change"))
     session.flush()?
     let empty = session.choice_state(0, "many")
     assert_eq(empty.filter, "Dup")

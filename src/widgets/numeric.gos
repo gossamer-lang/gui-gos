@@ -157,7 +157,7 @@ fn spin_text(s: SpinBox) -> String {
 
 
 fn spin_state(s: SpinBox, st: StateStore) -> EditState {
-    let mut e = st.edit(s.id)
+    let mut e = st.edit_state(s.id)
     e.sync(spin_text(s))
     e
 }

@@ -31,7 +31,7 @@ fn editor(text: String) -> Widget {
 }
 
 fn update(text: String, msg: UiMsg) -> String {
-    match msg { UiMsg::Text(id, value) if id == "editor" => value, _ => text }
+    match msg { UiMsg::TextChanged(id, value) if id == "editor" => value, _ => text }
 }
 
 fn start_editor() -> Result<gui::Session, errors::Error> {
@@ -128,13 +128,13 @@ fn idle() -> Result<(), errors::Error> {
     let mut s = gui::app::start("Idle", "dev.gossamer.gui-perf-idle")?
     defer s.shutdown()
     s.open_window("main", "Idle", 320, 200)?
-    gui::perform(Effect::Timer("drain", 0, false))
+    gui::perform(Effect::StartTimer("drain", 0, false))
     s.flush()?
     require(s.step()?, "idle window closed during setup")?
     let done = Shared::new(0)
     s.set_shell(|msg| { if let UiMsg::Timer(tag) = msg && tag == "finish" { let _ = done.update(|_| 1) }; () }, |_| Widget::Empty, |_| #[])
     let frames = s.window_frames(0)
-    gui::perform(Effect::Timer("finish", 60_000, false))
+    gui::perform(Effect::StartTimer("finish", 60_000, false))
     s.flush()?
     let mut wakeups = 0
     while done.get() == 0 {

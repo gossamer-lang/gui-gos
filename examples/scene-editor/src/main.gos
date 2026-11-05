@@ -76,7 +76,7 @@ fn export(m: Model, kind: String, file: String) -> Model {
 fn update(m: Model, msg: UiMsg) -> Model {
     let mut n = m
     match msg {
-        UiMsg::Click(id) => match id {
+        UiMsg::Clicked(id) => match id {
             "rect" | "ellipse" => {
                 n.added += 1
                 let name = f"{id} {n.added}"
@@ -102,8 +102,8 @@ fn update(m: Model, msg: UiMsg) -> Model {
             _ => ()
         }
         UiMsg::Scene(_, info) => n.status = f"{info.nodes} objects, selected: {info.selection.join(", ")}"
-        UiMsg::Print(_, Event::Exported { path, bytes }) => n.status = "Saved PDF"
-        UiMsg::Print(_, Event::Failed(why)) => n.status = f"Failed: {why}"
+        UiMsg::PrintProgress(_, Event::Exported { path, bytes }) => n.status = "Saved PDF"
+        UiMsg::PrintProgress(_, Event::Failed(why)) => n.status = f"Failed: {why}"
         _ => ()
     }
     n
@@ -124,7 +124,7 @@ fn view(m: Model) -> Widget {
 }
 
 fn app() -> gui::App<Model> {
-    gui::application("Scene Editor", "dev.gossamer.gui-scene-editor", init, update, view).size(900, 600).focus("canvas")
+    gui::application("Scene Editor", "dev.gossamer.gui-scene-editor", init, update, view).size(900, 600).initial_focus("canvas")
 }
 
 fn require(value: bool, why: String) -> Result<(), errors::Error> {

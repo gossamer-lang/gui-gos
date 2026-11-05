@@ -460,12 +460,12 @@ impl Terminal {
 
     /// Shows `spans` of the buffer highlighted, as a weaker selection,
     /// replacing any it showed.
-    pub fn highlight(&self, spans: Vec<Span>) -> Result<(), errors::Error> {
+    pub fn set_highlights(&self, spans: Vec<Span>) -> Result<(), errors::Error> {
         done(call("highlight", self.id, json::encode(spans)))
     }
 
     pub fn clear_highlight(&self) -> Result<(), errors::Error> {
-        self.highlight(#[])
+        self.set_highlights(#[])
     }
 
     /// Scrolls the view so buffer row `row` is its top row, as far as the

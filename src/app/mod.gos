@@ -222,7 +222,7 @@ impl Session {
     }
 
     /// Serves later launches' requests through `listener` (from `launch`):
-    /// opened files arrive as `UiMsg::Open`, and activation raises the main
+    /// opened files arrive as `UiMsg::OpenRequested`, and activation raises the main
     /// window. The session wakes for each request itself.
     pub fn serve_instance(&mut self, listener: Listener) -> Result<(), errors::Error> {
         gui_engine::serve_instance(self.id, listener.id).map_err(failed)
@@ -652,31 +652,31 @@ fn claimed(answer: Result<String, String>) -> Launch {
 /// The id of the widget a message is about, or "".
 pub fn msg_id(m: UiMsg) -> String {
     match m {
-        UiMsg::Click(id) |
-            UiMsg::Toggle(id, _) |
-            UiMsg::Check(id, _) |
-            UiMsg::Choose(id, _) |
-            UiMsg::Text(id, _) | UiMsg::DocumentChanged(id, _, _) |
-            UiMsg::Caret(id, _, _) |
-            UiMsg::Submit(id, _) |
-            UiMsg::Select(id, _) |
-            UiMsg::SelectMany(id, _) |
-            UiMsg::Value(id, _) |
-            UiMsg::Range(id, _, _) |
-            UiMsg::Color(id, _) |
-            UiMsg::Date(id, _) |
-            UiMsg::Tab(id, _) |
+        UiMsg::Clicked(id) |
+            UiMsg::Toggled(id, _) |
+            UiMsg::Checked(id, _) |
+            UiMsg::Chosen(id, _) |
+            UiMsg::TextChanged(id, _) | UiMsg::DocumentChanged(id, _, _) |
+            UiMsg::CaretMoved(id, _, _) |
+            UiMsg::Submitted(id, _) |
+            UiMsg::Selected(id, _) |
+            UiMsg::SelectedMany(id, _) |
+            UiMsg::ValueChanged(id, _) |
+            UiMsg::RangeChanged(id, _, _) |
+            UiMsg::ColorChanged(id, _) |
+            UiMsg::DateChanged(id, _) |
+            UiMsg::TabSelected(id, _) |
             UiMsg::TabAction(id, _, _) |
-            UiMsg::TabDrop(id, _, _, _) |
-            UiMsg::TabMove(id, _, _, _) |
-            UiMsg::TabDetach(id, _, _, _) |
-            UiMsg::Expand(id, _, _) |
-            UiMsg::Activate(id, _) |
-            UiMsg::CellEdit(id, _, _, _) |
-            UiMsg::Sort(id, _, _) |
-            UiMsg::ColumnResize(id, _, _) |
-            UiMsg::Reorder(id, _, _) |
-            UiMsg::Split(id, _) |
+            UiMsg::TabDropped(id, _, _, _) |
+            UiMsg::TabMoved(id, _, _, _) |
+            UiMsg::TabDetached(id, _, _, _) |
+            UiMsg::Expanded(id, _, _) |
+            UiMsg::Activated(id, _) |
+            UiMsg::CellEdited(id, _, _, _) |
+            UiMsg::SortRequested(id, _, _) |
+            UiMsg::ColumnResized(id, _, _) |
+            UiMsg::Reordered(id, _, _) |
+            UiMsg::SplitMoved(id, _) |
             UiMsg::DragFinished(id, _) |
             UiMsg::Dropped(id, _) |
             UiMsg::CompletionRequest(id, _, _, _) |

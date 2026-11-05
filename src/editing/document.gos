@@ -49,7 +49,7 @@ fn expect_position(answer: Answer) -> (i64, i64) { if let Answer::Position(a, b)
 impl Document {
     pub fn try_new(text: String) -> Result<Document, errors::Error> { Ok(Document { id: expect_id(call("new", 0, json::encode(text))?) }) }
     pub fn new(text: String) -> Document { Document::try_new(text).unwrap_or_else(|why| panic(f"{why}")) }
-    pub fn layout_ready(&self) -> bool {
+    pub fn is_layout_ready(&self) -> bool {
         match call("layout_ready", self.id, "[]") { Ok(Answer::Flag(ready)) => ready, _ => false }
     }
     pub fn info(&self) -> Info { expect_info(call("info", self.id, "[]").unwrap_or_else(|why| panic(f"{why}"))) }

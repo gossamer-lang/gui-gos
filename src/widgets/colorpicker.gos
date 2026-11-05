@@ -32,7 +32,7 @@ impl ColorPicker {
         let part = id.substring(prefix.byte_len(), id.byte_len())
         let mut color = self.value
         match msg {
-            UiMsg::Text(_, text) if part == "css" => {
+            UiMsg::TextChanged(_, text) if part == "css" => {
                 self.draft = text
                 match crate::style::color::parse(text) {
                     CssColor::Valid(c) => color = c
@@ -40,7 +40,7 @@ impl ColorPicker {
                     CssColor::Invalid(why) | CssColor::Unsupported(why) => { self.error = why; return None }
                 }
             }
-            UiMsg::Value(_, v) => {
+            UiMsg::ValueChanged(_, v) => {
                 let _, s, val = color.hsv_parts()
                 let _, hs, l = color.hsl_parts()
                 match part {
@@ -65,7 +65,7 @@ impl ColorPicker {
                 self.hue = h
                 color = Color::hsv(h, s, v).with_alpha(color.a as i64)
             }
-            UiMsg::Click(_) if part == "original" => color = self.original
+            UiMsg::Clicked(_) if part == "original" => color = self.original
             _ => return None
         }
         if !self.alpha { color.a = 255 }

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.0 - Event and command names
+
+- Builds on gui-engine-gos 0.2.1.
+- The first character typed in a terminal after a full screen TUI app that used kitty's keyboard protocol exits on Ctrl+C or Ctrl+D reaches the shell; it used to be dropped.
+- New text in a field with completions highlights its best match, instead of keeping the row chosen for the earlier text.
+- A window's close button, or any request from the desktop to close a window, leaves the modal dialog it shows open and focuses the window; a second close request no longer cancels a question such as a confirmation to close.
+- A terminal narrowed while a full-screen program runs over a full scrollback returns its shell prompt to its own line, at column zero, when the program exits.
+- `UiMsg` events are named for what happened: `Clicked`, `Toggled`, `Checked`, `Chosen`, `Submitted`, `Selected`, `SelectedMany`, `Expanded`, `Activated`, `Reordered`, `SortRequested`, `OpenRequested`, `OpenUriRequested`, `TextChanged`, `CaretMoved`, `ValueChanged`, `RangeChanged`, `ColorChanged`, `DateChanged`, `TabSelected`, `SplitMoved`, `CellEdited`, `ColumnResized`, `TabMoved`, `TabDropped`, `TabDetached`, `TabMovedToWindow`, `TabDocked`, `WorkFinished`, `PrintProgress` and `WindowFocusChanged` replace `Click`, `Toggle`, `Check`, `Choose`, `Submit`, `Select`, `SelectMany`, `Expand`, `Activate`, `Reorder`, `Sort`, `Open`, `OpenUri`, `Text`, `Caret`, `Value`, `Range`, `Color`, `Date`, `Tab`, `Split`, `CellEdit`, `ColumnResize`, `TabMove`, `TabDrop`, `TabDetach`, `TabToWindow`, `Dock`, `Worked`, `Print` and `WindowFocus`.
+- `Effect` commands say what they do: `StartTimer`, `StartWork`, `ShowToast`, `SetCommands`, `AnswerCompletion`, `AnswerDialogCheck` and `FocusInWindow` replace `Timer`, `Work`, `Toast`, `Commands`, `Complete`, `DialogChecked` and `FocusIn`.
+- State reads as nouns: `ChoiceState.highlighted` and `highlighted_index()`, `EditState.undo_stack` and `redo_stack`, `CompletionItem.insert_text`, `TextInput.validator` and the input dialog's `validator`, `Scroll.fits_content`, `Collection.drag_offer`, `Modifiers.drag_source`, `ScrollState.drag_offset`, and `CollectionState.dragged_column`, `editing_row`, `editing_column`, `dragged_row`, `dragged_row_index` and `dragged_row_y`.
+- Methods say what they do: `StateStore::edit_state`, `choice_state` and `drag_state`, `ChoiceState::type_ahead`, `FindBar::set_matches`, `ModelLog::record_removal` and `record_move`, `App::initial_focus`, `CommandTable::is_chord_pending`, `Document::is_layout_ready`, and `Terminal::set_highlights`.
+- A check control draws as a box or a switch by `kind: CheckKind` instead of `switch: bool`.
+
 ## 0.1.7 - Docking, tab drops and forwarded command lines
 
 - Builds on gui-engine-gos 0.1.8 and windowing-gos 0.1.8: on X11 every press of a global shortcut arrives, and a window it brings forward takes focus.

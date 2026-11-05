@@ -99,16 +99,16 @@ fn apply(m: Model, changes: Vec<Change>) -> Model {
 fn update(m: Model, msg: UiMsg) -> Model {
     let mut n = m
     match msg {
-        UiMsg::Text(id, text) if id == "notes" => {
+        UiMsg::TextChanged(id, text) if id == "notes" => {
             n.notes = text
             n.focused = "editor"
         }
-        UiMsg::Tab(_, pane) => n.focused = pane
+        UiMsg::TabSelected(_, pane) => n.focused = pane
         UiMsg::Command(id) if id.starts_with("show.") => {
             let pane = id.substring(5, id.byte_len())
             match n.layout.group_of(pane) {
                 Some(group) => {
-                    let changes = n.layout.handle(DOCK, UiMsg::Tab(gui::dock::group_strip(DOCK, group), pane))
+                    let changes = n.layout.handle(DOCK, UiMsg::TabSelected(gui::dock::group_strip(DOCK, group), pane))
                     n = apply(n, changes)
                 }
                 None => {
@@ -165,7 +165,7 @@ fn app() -> gui::App<Model> {
         .size(960, 640)
         .windows(window_view)
         .commands(commands)
-        .focus("notes")
+        .initial_focus("notes")
 }
 
 fn require(value: bool, why: String) -> Result<(), errors::Error> {
@@ -197,7 +197,7 @@ fn fixture() -> Result<(), errors::Error> {
     require(dragged.contains("Vertical"), f"dragging the outline tab did not dock it below the editor: {dragged}")?
     println("pointer: dragging a tab to a group's lower edge docks it there")
     // Edge and center drops, as the session reports tabs dropped on groups.
-    s.emit(UiMsg::Dock(DOCK, Drop { pane: "console", group: gui::dock::group_strip(DOCK, 1), zone: Zone::Bottom }))
+    s.emit(UiMsg::TabDocked(DOCK, Drop { pane: "console", group: gui::dock::group_strip(DOCK, 1), zone: Zone::Bottom }))
     s.flush()?
     let after = s.semantics(0).dump()
     require(after.contains("Console") && after.contains("Editor"), f"panes missing after a drop: {after}")?
@@ -227,7 +227,7 @@ fn fixture() -> Result<(), errors::Error> {
     s.flush()?
     let back = fs::read_to_string(layout_file())?
     require(!back.contains(window), f"the floating window remained: {back}")?
-    s.emit(UiMsg::Tab(gui::dock::group_strip(DOCK, 1), "editor"))
+    s.emit(UiMsg::TabSelected(gui::dock::group_strip(DOCK, 1), "editor"))
     s.flush()?
     let main = s.semantics(0).dump()
     require(main.contains("hello dock"), f"the editor lost its text: {main}")?

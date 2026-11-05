@@ -113,6 +113,16 @@ pub fn button_semantics(b: Button, st: StateStore) -> Option<AccessNode> {
     Some(n)
 }
 
+/// How a check control draws its state.
+#[derive(Default, PartialEq, Eq)]
+pub enum CheckKind {
+    /// A box holding a mark.
+    #[default]
+    Box
+    /// A track with a sliding knob.
+    Switch
+}
+
 /// A checkbox or switch.
 #[derive(PartialEq)]
 pub struct Check {
@@ -122,18 +132,21 @@ pub struct Check {
     pub tristate: bool
     /// Clicking a tri-state box cycles through mixed too.
     pub cycle_mixed: bool
-    pub switch: bool
+    pub kind: CheckKind
 }
 
 impl Check {
     pub fn checkbox(id: String, label: String, state: CheckState) -> Check {
-        Check { id: id, label: label, state: state, tristate: false, cycle_mixed: false, switch: false }
+        Check { id: id, label: label, state: state, tristate: false, cycle_mixed: false, kind: CheckKind::Box }
     }
 }
 
-fn indicator_size(theme: Theme, switch: bool) -> Size {
+fn indicator_size(theme: Theme, kind: CheckKind) -> Size {
     let s = theme.indicator()
-    if switch { Size::new(s * 2, s) } else { Size::new(s, s) }
+    match kind {
+        CheckKind::Box => Size::new(s, s)
+        CheckKind::Switch => Size::new(s * 2, s)
+    }
 }
 
 
@@ -147,7 +160,7 @@ fn next_state(k: Check) -> CheckState {
 
 
 pub fn check_semantics(k: Check) -> Option<AccessNode> {
-    let role = if k.switch { Role::Switch } else { Role::CheckBox }
+    let role = if k.kind == CheckKind::Switch { Role::Switch } else { Role::CheckBox }
     let mut n = AccessNode::control(role, k.id, k.label, "toggle")
     n.checked = match k.state {
         CheckState::Unchecked => 0

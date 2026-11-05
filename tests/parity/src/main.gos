@@ -36,7 +36,7 @@ fn show(log: Vec<String>) -> Widget {
 // Opens the second window when asked; counts its openings.
 fn windows_update(opened: i64, msg: UiMsg) -> i64 {
     match msg {
-        UiMsg::Click(id) => {
+        UiMsg::Clicked(id) => {
             if id == "open" {
                 gui::perform(gui::Effect::OpenWindow { key: "second", title: "Second", width: 240, height: 160 })
                 return opened + 1

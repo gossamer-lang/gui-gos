@@ -2,7 +2,7 @@
 // documents laid out on pages; previews; PDF export; and the system's
 // printers. A preview, a PDF and a printed copy come from the same pages.
 // Exports and print jobs run in the background and answer with
-// `UiMsg::Print(job, event)`.
+// `UiMsg::PrintProgress(job, event)`.
 
 use std::errors
 use std::encoding::json

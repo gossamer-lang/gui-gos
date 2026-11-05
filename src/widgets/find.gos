@@ -70,7 +70,7 @@ impl FindBar {
     }
 
     /// Records a search result: the number of matches and the selected one (-1 for none).
-    pub fn found(&mut self, count: i64, current: i64) {
+    pub fn set_matches(&mut self, count: i64, current: i64) {
         self.count = count.max(0)
         self.current = if current >= 0 && current < self.count { current } else { -1 }
     }
@@ -105,7 +105,7 @@ impl FindBar {
     pub fn update(&mut self, msg: UiMsg) -> FindRequest {
         let prefix = f"{self.id}:"
         match msg {
-            UiMsg::Text(id, text) => {
+            UiMsg::TextChanged(id, text) => {
                 if id == f"{prefix}query" {
                     if text == self.query { return FindRequest::Nothing }
                     self.query = text
@@ -114,13 +114,13 @@ impl FindBar {
                 if id == f"{prefix}replacement" { self.replacement = text }
                 FindRequest::Nothing
             }
-            UiMsg::Submit(id, _) => {
+            UiMsg::Submitted(id, _) => {
                 if id == f"{prefix}query" {
                     self.remember()
                     FindRequest::Next
                 } else if id == f"{prefix}replacement" { FindRequest::Replace } else { FindRequest::Nothing }
             }
-            UiMsg::Toggle(id, on) => {
+            UiMsg::Toggled(id, on) => {
                 if id == f"{prefix}case" {
                     self.options.match_case = on
                     FindRequest::Search
@@ -134,7 +134,7 @@ impl FindBar {
                     FindRequest::Nothing
                 }
             }
-            UiMsg::Click(id) => {
+            UiMsg::Clicked(id) => {
                 if !id.starts_with(prefix) {
                     return FindRequest::Nothing
                 }
@@ -206,12 +206,12 @@ mod tests {
     fn a_bar_remembers_searches_newest_first_without_repeats() {
         let mut bar = FindBar::new("find")
         for q in #["alpha", "beta", "alpha"] {
-            bar.update(UiMsg::Text("find:query", q))
-            assert_eq(bar.update(UiMsg::Submit("find:query", q)), FindRequest::Next)
+            bar.update(UiMsg::TextChanged("find:query", q))
+            assert_eq(bar.update(UiMsg::Submitted("find:query", q)), FindRequest::Next)
         }
         assert_eq(bar.history, #["alpha", "beta"])
-        bar.update(UiMsg::Text("find:query", ""))
-        bar.update(UiMsg::Click("find:next"))
+        bar.update(UiMsg::TextChanged("find:query", ""))
+        bar.update(UiMsg::Clicked("find:next"))
         assert_eq(bar.history, #["alpha", "beta"])
     }
 }

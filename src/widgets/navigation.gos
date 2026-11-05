@@ -9,7 +9,7 @@ pub struct Destination { pub key: String, pub label: String, pub icon: Option<cr
 impl Destination {
     pub fn new(key: String, label: String) -> Destination { Destination { key: key, label: label, icon: None, disabled: false } }
 }
-/// Sidebar selection reports UiMsg::Select(id, destination key).
+/// Sidebar selection reports UiMsg::Selected(id, destination key).
 pub fn sidebar(id: String, destinations: Vec<Destination>, selected: String) -> Widget {
     let count = destinations.len()
     let list = Collection::new(id, count, |i| {
@@ -22,7 +22,7 @@ pub fn sidebar(id: String, destinations: Vec<Destination>, selected: String) -> 
     Widget::collection(list.selected(#[selected]).label(crate::localization::tr("Navigation")).empty_text("No destinations").rows(count.max(1))).role(Role::Pane).accessible("Navigation")
 }
 /// Each ancestor is a standard keyboard button named `{id}#{key}`. The current
-/// item is readable text. Activation reports UiMsg::Click with that button id.
+/// item is readable text. Activation reports UiMsg::Clicked with that button id.
 pub fn breadcrumb(id: String, ancestors: Vec<Destination>, current: String) -> Widget {
     let mut children = #[]
     for item in ancestors {
@@ -39,7 +39,7 @@ pub fn accordion(id: String, sections: Vec<(String, String, Widget)>, opened: Ve
     Widget::column(children, 4).key(id).role(Role::Group)
 }
 
-/// The header reports UiMsg::Toggle(id, open); the caller retains expansion.
+/// The header reports UiMsg::Toggled(id, open); the caller retains expansion.
 pub fn disclosure(id: String, title: String, content: Widget, opened: bool) -> Widget {
     let mut header = buttons::Button::new(id, title, buttons::ButtonKind::Flat)
     header.toggled = if opened { 1 } else { 0 }

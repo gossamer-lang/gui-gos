@@ -77,9 +77,9 @@ fn update(m: Model, msg: UiMsg) -> Model {
         return n
     }
     match msg {
-        UiMsg::Text(id, text) if id == "file" => n.file = text
-        UiMsg::Submit(id, text) if id == "file" && !text.trim().is_empty() => n = load(n, text.trim())
-        UiMsg::Click(id) if id == "open" => choose(false)
+        UiMsg::TextChanged(id, text) if id == "file" => n.file = text
+        UiMsg::Submitted(id, text) if id == "file" && !text.trim().is_empty() => n = load(n, text.trim())
+        UiMsg::Clicked(id) if id == "open" => choose(false)
         UiMsg::Dialog(id, outcome) if id == "open" => match outcome {
             Outcome::Paths(paths) => if !paths.is_empty() { n = load(n, paths[0]) }
             // Without a native chooser the toolkit's own file browser asks.
@@ -108,7 +108,7 @@ fn view(m: Model) -> Widget {
 }
 
 fn app() -> gui::App<Model> {
-    gui::application("Media Player", "dev.gossamer.gui-media-player", init, update, view).size(820, 600).focus("video")
+    gui::application("Media Player", "dev.gossamer.gui-media-player", init, update, view).size(820, 600).initial_focus("video")
 }
 
 fn require(value: bool, why: String) -> Result<(), errors::Error> {
@@ -158,11 +158,11 @@ fn fixture() -> Result<(), errors::Error> {
     s.click("player:play")?
     await_status(&mut s, "Ended")?
     println("play: it plays to the end, reporting progress")
-    s.emit(UiMsg::Value("player:seek", 1.0))
+    s.emit(UiMsg::ValueChanged("player:seek", 1.0))
     s.flush()?
     await_status(&mut s, "Paused at 0:01 of 0:02")?
-    s.emit(UiMsg::Value("player:volume", 0.5))
-    s.emit(UiMsg::Toggle("player:mute", true))
+    s.emit(UiMsg::ValueChanged("player:volume", 0.5))
+    s.emit(UiMsg::Toggled("player:mute", true))
     s.flush()?
     s.focus("video")?
     s.press(windowing::Key::Space, windowing::Mods::default())?
@@ -170,7 +170,7 @@ fn fixture() -> Result<(), errors::Error> {
     s.press(windowing::Key::Space, windowing::Mods::default())?
     await_status(&mut s, "Paused")?
     println("controls: seeking, volume, mute and Space on the video")
-    s.emit(UiMsg::Submit("file", "/nonexistent/clip.webm"))
+    s.emit(UiMsg::Submitted("file", "/nonexistent/clip.webm"))
     await_status(&mut s, "Cannot play")?
     println("errors: a missing file says it cannot play")
     s.shutdown()

@@ -84,7 +84,7 @@ fn present(items: Vec<CompletionItem>, key: String) -> bool {
 /// Reconciles an open choice with its source while preserving selection and query.
 pub fn sync_model(ch: Choice, st: &mut StateStore) {
     let id = ch.id()
-    let mut cs = st.choice(id)
+    let mut cs = st.choice_state(id)
     if !cs.open { return }
     let items, loading, error = match ch {
         Choice::One(s) => (s.items, s.loading, s.error)
@@ -102,7 +102,7 @@ pub fn sync_model(ch: Choice, st: &mut StateStore) {
     cs.set_items(ready)
     cs.loading = loading
     cs.error = error
-    let at = cs.highlight_index()
+    let at = cs.highlighted_index()
     cs.first = cs.first.min((cs.items.len() - VISIBLE_ROWS).max(0))
     if at >= 0 {
         if at < cs.first { cs.first = at }
@@ -140,7 +140,7 @@ pub fn choice_semantics(ch: Choice, node: Node, st: StateStore) -> Option<Access
         Choice::One(s) => {
             let mut n = AccessNode::control(Role::ComboBox, s.id, s.label, "open")
             n.value = label_of(s.items, s.selected)
-            let cs = st.choice(s.id)
+            let cs = st.choice_state(s.id)
             n.expanded = if cs.open { 1 } else { 0 }
             if cs.open { n.children.push(completion::list_semantics(cs, f"{s.id}#list", s.label, s.id, s.selected)) }
             if s.loading { n.description = crate::localization::tr("Loading") }
@@ -150,7 +150,7 @@ pub fn choice_semantics(ch: Choice, node: Node, st: StateStore) -> Option<Access
         Choice::Pick(p) => {
             let mut n = AccessNode::control(Role::ComboBox, p.id, p.label, "open")
             n.value = p.selected.map(|k| label_of(p.items, k)).join(", ")
-            let cs = st.choice(p.id)
+            let cs = st.choice_state(p.id)
             n.expanded = if cs.open { 1 } else { 0 }
             let mut i = 0
             for key in p.selected {
@@ -166,7 +166,7 @@ pub fn choice_semantics(ch: Choice, node: Node, st: StateStore) -> Option<Access
         }
         Choice::Commands(p) => {
             let mut n = AccessNode::control(Role::SearchField, p.id, crate::localization::tr("Command search"), "focus")
-            let cs = st.choice(p.id)
+            let cs = st.choice_state(p.id)
             n.value = cs.filter
             n.description = crate::localization::message("choices", "{count} commands", cs.items.len(), Map::new())
             Some(n)

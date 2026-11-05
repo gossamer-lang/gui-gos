@@ -181,7 +181,7 @@ pub enum DialogRequest {
         initial: String
         spec: InputSpec
         /// The host id of the judge of the draft.
-        validate: Option<i64>
+        validator: Option<i64>
     }
     Color { id: String, title: String, initial: Color, alpha: bool }
     Font { id: String, title: String, initial: String }
@@ -315,14 +315,14 @@ pub fn confirm_unsaved(id: String, name: String) -> DialogRequest {
 
 /// A one-line text prompt.
 pub fn prompt(id: String, title: String, label: String, initial: String) -> DialogRequest {
-    DialogRequest::Input { id: id, title: title, label: label, initial: initial, spec: InputSpec::Text, validate: None }
+    DialogRequest::Input { id: id, title: title, label: label, initial: initial, spec: InputSpec::Text, validator: None }
 }
 
 /// A filtered list of (key, label) options. A single choice answers
 /// `Outcome::Action(key)`; with `multiple`, rows are checked and OK answers
 /// `Outcome::Keys` in the options' order.
 pub fn choose(id: String, title: String, label: String, options: Vec<(String, String)>, multiple: bool) -> DialogRequest {
-    DialogRequest::Input { id: id, title: title, label: label, initial: "", spec: InputSpec::Choice(options, multiple), validate: None }
+    DialogRequest::Input { id: id, title: title, label: label, initial: "", spec: InputSpec::Choice(options, multiple), validator: None }
 }
 
 /// Asks whether `origin` may use `what` (notifications, location, ...).
@@ -340,7 +340,7 @@ pub fn permission(id: String, origin: String, what: String) -> DialogRequest {
 /// `parse_location` reads it back.
 pub fn go_to_line(id: String, lines: i64, initial: String) -> DialogRequest {
     let label = crate::localization::message("goto", "Line (1 to {count}), or line:column", lines, Map::new())
-    DialogRequest::Input { id: id, title: crate::localization::tr("Go to Line"), label: label, initial: initial, spec: InputSpec::Text, validate: Some(crate::app::host::validator(|text| location_validity(text, lines))) }
+    DialogRequest::Input { id: id, title: crate::localization::tr("Go to Line"), label: label, initial: initial, spec: InputSpec::Text, validator: Some(crate::app::host::validator(|text| location_validity(text, lines))) }
 }
 
 /// The 1-based line and column of a "line" or "line:column" answer; the
@@ -424,7 +424,7 @@ pub fn wizard(id: String, title: String, pages: Vec<WizardPage>) -> DialogReques
 /// `req` (preferences or a wizard) asking the application before a step
 /// takes effect: Apply, OK, Next or Finish sends `UiMsg::DialogCheck(id,
 /// request, step, values)` and waits, showing it is working, until
-/// `Effect::DialogChecked(id, request, error)` answers. "" lets the step
+/// `Effect::AnswerDialogCheck(id, request, error)` answers. "" lets the step
 /// proceed; an error is shown and the drafts stay for another try. Stop (or
 /// Cancel) abandons the wait, reported as `UiMsg::DialogCheckStopped`.
 pub fn checked(req: DialogRequest) -> DialogRequest {

@@ -121,7 +121,7 @@ fn update(m: Model, msg: UiMsg) -> Model {
             n.apps = found
             n.loading = false
             if let Some((request, query)) = n.waiting {
-                gui::perform(Effect::Complete("run", request, proposals(n, query), ""))
+                gui::perform(Effect::AnswerCompletion("run", request, proposals(n, query), ""))
                 n.waiting = None
             }
             if let Some(text) = n.submitted {
@@ -130,14 +130,14 @@ fn update(m: Model, msg: UiMsg) -> Model {
             }
         }
         UiMsg::CompletionRequest(id, request, query, _) => if id == "run" {
-            if n.loading { n.waiting = Some((request, query)) } else { gui::perform(Effect::Complete("run", request, proposals(n, query), "")) }
+            if n.loading { n.waiting = Some((request, query)) } else { gui::perform(Effect::AnswerCompletion("run", request, proposals(n, query), "")) }
         }
-        UiMsg::Text(id, text) => if id == "run" {
+        UiMsg::TextChanged(id, text) => if id == "run" {
             n.query = text
             n.error = ""
         }
-        UiMsg::Select(id, key) => if id == "run" { n = launch(n, key) }
-        UiMsg::Submit(id, text) => if id == "run" { n = submit(n, text) }
+        UiMsg::Selected(id, key) => if id == "run" { n = launch(n, key) }
+        UiMsg::Submitted(id, text) => if id == "run" { n = submit(n, text) }
         UiMsg::Task(id, outcome) => if id == "launch" {
             match outcome {
                 TaskOutcome::Done(_) => gui::perform(Effect::Quit)
@@ -160,7 +160,7 @@ fn view(m: Model) -> Widget {
 }
 
 fn app() -> gui::App<Model> {
-    gui::application("Run", APP_ID, init, update, view).size(560, 52).frameless().at_top_center().dismissible().grows_for_popups().focus("run").icon(gui::AppIcon::drawn(gui::Icon::Search, 64, gui::Color::rgb(36, 112, 200), gui::Color::white()))
+    gui::application("Run", APP_ID, init, update, view).size(560, 52).frameless().at_top_center().dismissible().grows_for_popups().initial_focus("run").icon(gui::AppIcon::drawn(gui::Icon::Search, 64, gui::Color::rgb(36, 112, 200), gui::Color::white()))
 }
 
 fn main() -> Result<(), errors::Error> {
@@ -212,22 +212,22 @@ mod tests {
         assert_eq(super::proposals(m, "t").map(|i| i.key), #["terminal", "editor", "calculator"])
         assert_eq(super::proposals(m, "e").map(|i| i.key), #["editor", "terminal"])
         // A recent launch leads matches of its kind, not better ones.
-        m = super::update(m, UiMsg::Select("run", "editor"))
+        m = super::update(m, UiMsg::Selected("run", "editor"))
         assert_eq(super::proposals(m, "t").map(|i| i.key), #["editor", "terminal", "calculator"])
-        m = super::update(m, UiMsg::Select("run", "terminal"))
+        m = super::update(m, UiMsg::Selected("run", "terminal"))
         assert_eq(super::proposals(m, "e").map(|i| i.key), #["editor", "terminal"])
     }
 
     #[test]
     fn enter_starts_the_best_match_and_waits_for_the_catalog() {
         let mut m = fixture()
-        m = super::update(m, UiMsg::Submit("run", "edit"))
+        m = super::update(m, UiMsg::Submitted("run", "edit"))
         assert_eq(m.launches, #["editor"])
         let mut early = fixture()
         let catalog = early.apps
         early.apps = #[]
         early.loading = true
-        early = super::update(early, UiMsg::Submit("run", "term"))
+        early = super::update(early, UiMsg::Submitted("run", "term"))
         assert(early.launches.is_empty())
         early = super::update(early, UiMsg::AppsLoaded("catalog", catalog))
         assert_eq(early.launches, #["terminal"])
@@ -236,10 +236,10 @@ mod tests {
     #[test]
     fn enter_on_text_nothing_matches_explains_until_the_text_changes() {
         let mut m = fixture()
-        m = super::update(m, UiMsg::Submit("run", "zzz"))
+        m = super::update(m, UiMsg::Submitted("run", "zzz"))
         assert(m.launches.is_empty())
         assert_eq(m.error, "No application matches \u{201c}zzz\u{201d}")
-        m = super::update(m, UiMsg::Text("run", "zz"))
+        m = super::update(m, UiMsg::TextChanged("run", "zz"))
         assert_eq(m.error, "")
     }
 

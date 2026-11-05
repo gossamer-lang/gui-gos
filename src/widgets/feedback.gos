@@ -74,7 +74,7 @@ pub fn toast(id: String, text: String, action: (String, String)) -> Widget {
 }
 
 /// A short message over the window's bottom edge, opened with
-/// `Effect::Toast`. It closes after `duration` ms (the time pauses while the
+/// `Effect::ShowToast`. It closes after `duration` ms (the time pauses while the
 /// pointer or focus is on it), reporting `Click(id:timeout)`, or through its
 /// action (`Click(id:action)`) or Dismiss (`Click(id:dismiss)`).
 #[derive(PartialEq)]

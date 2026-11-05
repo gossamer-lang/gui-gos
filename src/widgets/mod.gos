@@ -140,7 +140,7 @@ pub struct Modifiers {
     pub key: String
     pub drop_target: bool
     /// What dragging the subtree away offers, when it is a drag source.
-    pub drag: Option<containers::DragSource>
+    pub drag_source: Option<containers::DragSource>
     /// Width / height ratio to keep, or 0.
     pub aspect: f64
     /// A theme override for the subtree: a palette, density, direction.
@@ -178,7 +178,7 @@ impl Default for Modifiers {
             role: None
             key: String::new()
             drop_target: false
-            drag: None
+            drag_source: None
             aspect: 0.0
             theme: None
             decorative: false
@@ -509,23 +509,23 @@ impl Widget {
 
     /// A vertically scrolling viewport over `child`.
     pub fn scroll(id: String, child: Widget) -> Widget {
-        Widget::Scroll(containers::Scroll { id: id, child: child, horizontal: false, vertical: true, fit: false })
+        Widget::Scroll(containers::Scroll { id: id, child: child, horizontal: false, vertical: true, fits_content: false })
     }
 
     /// A vertical scroll as tall as its content, up to the height offered;
     /// inside a flex it takes no more of its share than the content needs.
     pub fn scroll_to_fit(id: String, child: Widget) -> Widget {
-        Widget::Scroll(containers::Scroll { id: id, child: child, horizontal: false, vertical: true, fit: true })
+        Widget::Scroll(containers::Scroll { id: id, child: child, horizontal: false, vertical: true, fits_content: true })
     }
 
     /// A horizontally scrolling strip over `child`, as tall as its content.
     pub fn scroll_horizontal(id: String, child: Widget) -> Widget {
-        Widget::Scroll(containers::Scroll { id: id, child: child, horizontal: true, vertical: false, fit: false })
+        Widget::Scroll(containers::Scroll { id: id, child: child, horizontal: true, vertical: false, fits_content: false })
     }
 
     /// A viewport scrolling on both axes.
     pub fn scroll_both(id: String, child: Widget) -> Widget {
-        Widget::Scroll(containers::Scroll { id: id, child: child, horizontal: true, vertical: true, fit: false })
+        Widget::Scroll(containers::Scroll { id: id, child: child, horizontal: true, vertical: true, fits_content: false })
     }
 
     /// Two panes with a draggable divider; `ratio` (0..1) is the first
@@ -623,7 +623,7 @@ impl Widget {
     /// An on/off switch; emits `Toggle(id, on)`.
     pub fn switch(id: String, label: String, on: bool) -> Widget {
         let mut c = buttons::Check::checkbox(id, label, if on { CheckState::Checked } else { CheckState::Unchecked })
-        c.switch = true
+        c.kind = buttons::CheckKind::Switch
         Widget::Check(c)
     }
 
@@ -766,9 +766,9 @@ impl Widget {
     /// A joined strip, as `joined_tabs` draws it, that keeps every tab's
     /// page by key and lets tabs leave it: "Move Tab to New Window" reports
     /// `UiMsg::TabAction(id, key, "detach")`, a tab dragged out of the window
-    /// `UiMsg::TabDetach(id, key, x, y)` with the drop point on the desktop,
+    /// `UiMsg::TabDetached(id, key, x, y)` with the drop point on the desktop,
     /// and a tab dropped on another window's strip of the same `workspace`
-    /// `UiMsg::TabMove(id, key, strip, index)`.
+    /// `UiMsg::TabMoved(id, key, strip, index)`.
     pub fn joined_tab_pages(id: String, workspace: String, items: Vec<tabs::TabItem>, active: String, pages: Map<String, Widget>) -> Widget {
         let content = pages.get(active).unwrap_or(Widget::Empty)
         Widget::Tabs(tabs::Tabs { id: id, items: items, active: active, content: content, pages: pages, workspace: workspace, add_button: false, detachable: true, joined: true })
@@ -936,7 +936,7 @@ impl Widget {
     /// a move of a few units start a platform drag, answered by
     /// `UiMsg::DragFinished(id, operation)`.
     pub fn drag_source(self, id: String, items: Vec<windowing::DragItem>, operation: windowing::DragOperation) -> Widget {
-        self.decorate(|m| { let mut n = m; n.key = id; n.drag = Some(containers::DragSource { items: items, operation: operation }); n })
+        self.decorate(|m| { let mut n = m; n.key = id; n.drag_source = Some(containers::DragSource { items: items, operation: operation }); n })
     }
 
     pub fn aspect(self, ratio: f64) -> Widget {
@@ -1042,7 +1042,7 @@ impl Widget {
     pub fn fits_content(&self) -> bool {
         match self {
             Widget::Decorated(d) => d.child.fits_content()
-            Widget::Scroll(s) => s.fit
+            Widget::Scroll(s) => s.fits_content
             _ => false
         }
     }

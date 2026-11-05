@@ -60,8 +60,8 @@ pub struct EditState {
     pub preedit: String
     /// Caret position inside the preedit, in bytes.
     pub preedit_caret: i64
-    pub undo: Vec<Snapshot>
-    pub redo: Vec<Snapshot>
+    pub undo_stack: Vec<Snapshot>
+    pub redo_stack: Vec<Snapshot>
     pub last_kind: EditKind
     pub last_time: i64
     pub revision: i64
@@ -85,8 +85,8 @@ impl Default for EditState {
             caret: 0
             preedit: String::new()
             preedit_caret: 0
-            undo: #[]
-            redo: #[]
+            undo_stack: #[]
+            redo_stack: #[]
             last_kind: EditKind::default()
             last_time: 0
             revision: 0
@@ -155,14 +155,14 @@ impl EditState {
     // Records the state before an edit, merging with the previous entry
     // when it continues the same kind of typing.
     fn record(&mut self, kind: EditKind, now: i64) {
-        let continues = kind != EditKind::Other && kind == self.last_kind && now - self.last_time < GROUP_PAUSE && !self.undo.is_empty()
+        let continues = kind != EditKind::Other && kind == self.last_kind && now - self.last_time < GROUP_PAUSE && !self.undo_stack.is_empty()
         if !continues {
-            self.undo.push(self.snapshot())
-            if self.undo.len() > UNDO_LIMIT {
-                let _ = self.undo.remove(0)
+            self.undo_stack.push(self.snapshot())
+            if self.undo_stack.len() > UNDO_LIMIT {
+                let _ = self.undo_stack.remove(0)
             }
         }
-        self.redo = #[]
+        self.redo_stack = #[]
         self.last_kind = kind
         self.last_time = now
     }
@@ -287,8 +287,8 @@ impl EditState {
 
     /// Restores the text and selection before the last edit; answers whether there was one.
     pub fn undo(&mut self) -> bool {
-        let Some(prev) = self.undo.pop() else { return false }
-        self.redo.push(self.snapshot())
+        let Some(prev) = self.undo_stack.pop() else { return false }
+        self.redo_stack.push(self.snapshot())
         self.text = prev.text
         self.anchor = prev.anchor
         self.caret = prev.caret
@@ -299,8 +299,8 @@ impl EditState {
 
     /// Reapplies the last undone edit; answers whether there was one.
     pub fn redo(&mut self) -> bool {
-        let Some(next) = self.redo.pop() else { return false }
-        self.undo.push(self.snapshot())
+        let Some(next) = self.redo_stack.pop() else { return false }
+        self.undo_stack.push(self.snapshot())
         self.text = next.text
         self.anchor = next.anchor
         self.caret = next.caret

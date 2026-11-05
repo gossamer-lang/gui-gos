@@ -113,7 +113,7 @@ pub struct Scroll {
     pub horizontal: bool
     pub vertical: bool
     /// As tall as the content, up to the height offered, instead of filling it.
-    pub fit: bool
+    pub fits_content: bool
 }
 
 /// Scrollbar thickness, pixels.
@@ -200,7 +200,7 @@ pub struct Split {
 }
 
 fn split_ratio(s: Split, st: StateStore) -> f64 {
-    let d = st.drag(s.id)
+    let d = st.drag_state(s.id)
     if d.active { d.start_value } else { s.ratio }
 }
 

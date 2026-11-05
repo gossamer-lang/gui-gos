@@ -148,20 +148,20 @@ impl Player {
     /// Applies a message from `controls(prefix)`, answering whether it was one.
     pub fn handle(&self, prefix: String, msg: UiMsg) -> bool {
         match msg {
-            UiMsg::Click(id) if id == f"{prefix}:play" => {
+            UiMsg::Clicked(id) if id == f"{prefix}:play" => {
                 let playing = self.status().map(|s| s.state == State::Playing).unwrap_or(false)
                 let _ = if playing { self.pause() } else { self.play() }
                 true
             }
-            UiMsg::Value(id, value) if id == f"{prefix}:seek" => {
+            UiMsg::ValueChanged(id, value) if id == f"{prefix}:seek" => {
                 let _ = self.seek((value * 1000.0) as i64)
                 true
             }
-            UiMsg::Value(id, value) if id == f"{prefix}:volume" => {
+            UiMsg::ValueChanged(id, value) if id == f"{prefix}:volume" => {
                 let _ = self.set_volume(value)
                 true
             }
-            UiMsg::Toggle(id, on) if id == f"{prefix}:mute" => {
+            UiMsg::Toggled(id, on) if id == f"{prefix}:mute" => {
                 let _ = self.set_muted(on)
                 true
             }

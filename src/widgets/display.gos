@@ -156,6 +156,6 @@ pub fn badge_semantics(b: Badge) -> Option<AccessNode> {
 /// The text layout cache is shared; this exposes edit state syncing for
 /// tests of selectable labels.
 pub fn selection_of(st: StateStore, id: String) -> (i64, i64) {
-    let s: EditState = st.edit(id)
+    let s: EditState = st.edit_state(id)
     s.selection()
 }

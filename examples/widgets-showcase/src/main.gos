@@ -226,8 +226,8 @@ fn update(m: Model, msg: UiMsg) -> Model {
     let mut n = m
     n.color.update(msg)
     match msg {
-        UiMsg::Tab(_, key) => n.page = key
-        UiMsg::Toggle(id, on) => match id {
+        UiMsg::TabSelected(_, key) => n.page = key
+        UiMsg::Toggled(id, on) => match id {
             "accept" => n.accepted = on
             "messages" => n.messages = on
             "mentions" => n.mentions = on
@@ -239,30 +239,30 @@ fn update(m: Model, msg: UiMsg) -> Model {
             "auto-update" => n.auto_update = on
             _ => ()
         }
-        UiMsg::Check(id, state) => if id == "notifications" {
+        UiMsg::Checked(id, state) => if id == "notifications" {
             let on = state == gui::CheckState::Checked
             n.messages = on
             n.mentions = on
             n.reminders = on
         }
-        UiMsg::Text(id, text) => match id {
+        UiMsg::TextChanged(id, text) => match id {
             "name" => n.name = text
             "port" => n.port = text
             _ => ()
         }
-        UiMsg::Value(id, value) => if id == "volume" || id == "volume-number" { n.volume = value; n.muted = false }
-        UiMsg::Date(id, value) => match id { "date" | "calendar" => n.date = value, "clock" => n.clock = value, "duration" => n.duration = value, _ => () }
-        UiMsg::Choose(id, key) => {
+        UiMsg::ValueChanged(id, value) => if id == "volume" || id == "volume-number" { n.volume = value; n.muted = false }
+        UiMsg::DateChanged(id, value) => match id { "date" | "calendar" => n.date = value, "clock" => n.clock = value, "duration" => n.duration = value, _ => () }
+        UiMsg::Chosen(id, key) => {
             if id.starts_with("appearance:") { n = appearance(n, id, key) }
             if id == "text-size" || id == "text-size-radio" { n.text_size = key }
             if id == "view-mode" { n.view_mode = key }
         }
-        UiMsg::Select(id, key) => if id == "sidebar" { n.mailbox = key; n.status = f"Showing {mailbox_name(key)}" } else { n.selected = key }
-        UiMsg::Expand(_, key, open) => if open { n.collapsed = n.collapsed.filter(|k| k != key) } else if !n.collapsed.contains(key) { n.collapsed.push(key) }
+        UiMsg::Selected(id, key) => if id == "sidebar" { n.mailbox = key; n.status = f"Showing {mailbox_name(key)}" } else { n.selected = key }
+        UiMsg::Expanded(_, key, open) => if open { n.collapsed = n.collapsed.filter(|k| k != key) } else if !n.collapsed.contains(key) { n.collapsed.push(key) }
         UiMsg::Dialog(id, outcome) => n.status = f"The {id} dialog closed: {outcome}"
         UiMsg::DragFinished(_, operation) => n.status = match operation { Some(op) => f"Dropped ({op})", None => "The drag was not dropped" }
         UiMsg::Task(id, outcome) => if id == "desktop" { n.status = match outcome { gui::TaskOutcome::Failed(why) => f"Could not reach the desktop: {why}", _ => "Notification sent" } }
-        UiMsg::Click(id) => {
+        UiMsg::Clicked(id) => {
             if id == "install" { n.status = "Installed" }
             if id == "copy" { gui::perform(Effect::SetClipboard(greeting(n))); n.status = "Copied the greeting" }
             if id == "send" { n.status = "Message sent" }
@@ -273,7 +273,7 @@ fn update(m: Model, msg: UiMsg) -> Model {
             if id == "desktop:notify" { gui::perform(Effect::Notify { id: "desktop", title: "Export finished", body: "\u{201C}Quarterly report.pdf\u{201D} is ready.", urgency: gui::services::desktop::Urgency::Normal }) }
             if id == "desktop:tray" { gui::perform(Effect::SetTray { id: "desktop", icon: None, tooltip: "Widget showcase", items: #[menus::item("gallery.about"), menus::MenuItem::Separator, menus::item("gui.quit")] }) }
             if id == "desktop:untray" { gui::perform(Effect::CloseTray) }
-            if id == "toast" { gui::perform(Effect::Toast(gui::widgets::feedback::Toast::new("saved", "Settings saved").action("undo", "Undo"))) }
+            if id == "toast" { gui::perform(Effect::ShowToast(gui::widgets::feedback::Toast::new("saved", "Settings saved").action("undo", "Undo"))) }
         }
         UiMsg::Command(id) => match id {
             "gallery.reset" => return init()
@@ -476,25 +476,25 @@ fn main() -> Result<(), errors::Error> {
     let Some(good) = s.semantics(0).find("port") else { return Err(errors::new("the port field is missing")) }
     if good.invalid { return Err(errors::new(f"443 is still reported invalid: {good.description}")) }
     // The view switch shows the files in the chosen layout.
-    s.emit(UiMsg::Choose("view-mode", "columns"))
+    s.emit(UiMsg::Chosen("view-mode", "columns"))
     s.flush()?
     if !s.semantics(0).dump().contains("columnheader \"Kind\"") { return Err(errors::new("Columns did not show the files as a table")) }
     if s.focus("sample-button")? { return Err(errors::new("a disabled control took focus")) }
     // The list reaches its last file from the keyboard.
-    s.emit(UiMsg::Tab("pages", "collections"))
+    s.emit(UiMsg::TabSelected("pages", "collections"))
     s.flush()?
     if !s.focus("list")? { return Err(errors::new("the file list is not focusable")) }
     s.press(windowing::Key::End, none)?
     if !s.semantics(0).dump().contains("Installer.deb") { return Err(errors::new("End did not reach the last file")) }
-    s.emit(UiMsg::Tab("pages", "dialogs"))
+    s.emit(UiMsg::TabSelected("pages", "dialogs"))
     s.flush()?
     if !s.click("dialog:info")? { return Err(errors::new("the Information button is not reachable")) }
     if s.dialog_ids() != #["info"] { return Err(errors::new("the information dialog did not open")) }
     s.press(windowing::Key::Escape, none)?
     if !s.dialog_ids().is_empty() { return Err(errors::new("Escape did not close the dialog")) }
     // The appearance switches restyle the window as they are chosen.
-    s.emit(UiMsg::Choose("appearance:theme", "hc-dark"))
-    s.emit(UiMsg::Choose("appearance:scale", "2"))
+    s.emit(UiMsg::Chosen("appearance:theme", "hc-dark"))
+    s.emit(UiMsg::Chosen("appearance:scale", "2"))
     s.flush()?
     let theme = s.window_theme(0)
     if theme.kind != gui::ThemeKind::HighContrastDark || (theme.scale - 2.0).abs() > 1e-9 { return Err(errors::new(f"appearance switches did not apply: {theme.kind:?} at {theme.scale}")) }

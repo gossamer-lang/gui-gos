@@ -18,8 +18,8 @@ struct Picks {
 fn update(m: Picks, msg: UiMsg) -> Picks {
     let mut n = m
     match msg {
-        UiMsg::Select(id, key) => n.log.push(f"{id}={key}")
-        UiMsg::SelectMany(id, keys) => {
+        UiMsg::Selected(id, key) => n.log.push(f"{id}={key}")
+        UiMsg::SelectedMany(id, keys) => {
             n.log.push(f"{id}={keys.join(",")}")
             n.tags = keys
         }
@@ -51,7 +51,7 @@ struct Feed {
 
 fn feed_update(m: Feed, msg: UiMsg) -> Feed {
     let mut n = m
-    if let UiMsg::Click(id) = msg && id == "arrive" {
+    if let UiMsg::Clicked(id) = msg && id == "arrive" {
         n.arrived += 1000
         n.log.inserted(0, 1000)
     }

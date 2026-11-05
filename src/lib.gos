@@ -8,7 +8,7 @@
 //
 //     fn update(count: i64, msg: UiMsg) -> i64 {
 //         match msg {
-//             UiMsg::Click(id) => if id == "more" { count + 1 } else { count }
+//             UiMsg::Clicked(id) => if id == "more" { count + 1 } else { count }
 //             _ => count
 //         }
 //     }
@@ -112,7 +112,7 @@ pub type Settings = services::Settings
 pub type AppIcon = services::apps::AppIcon
 
 /// The toolkit version.
-pub const VERSION: String = "0.1.7"
+pub const VERSION: String = "0.2.0"
 
 
 /// The `gui.tab.*` commands a tabbed window offers, with their shortcuts.
@@ -308,7 +308,7 @@ impl<M> App<M> {
     }
 
     /// Focuses the widget `id` when the first window opens.
-    pub fn focus(self, id: String) -> App<M> {
+    pub fn initial_focus(self, id: String) -> App<M> {
         let mut a = self
         a.initial_focus = id
         a
@@ -316,7 +316,7 @@ impl<M> App<M> {
 
 
     /// Keeps one running instance: a later launch hands `files` (its own
-    /// file arguments) to the first, which receives each as `UiMsg::Open`,
+    /// file arguments) to the first, which receives each as `UiMsg::OpenRequested`,
     /// and exits. Where the platform cannot claim an instance, every launch
     /// runs on its own.
     pub fn single_instance(self, files: Vec<String>) -> App<M> {

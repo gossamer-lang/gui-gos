@@ -9,7 +9,7 @@ struct Model { status: String, progress: i64 }
 
 fn update(model: Model, message: UiMsg) -> Model {
     let mut next = model
-    if let UiMsg::Worked(_, request, _, outcome) = message {
+    if let UiMsg::WorkFinished(_, request, _, outcome) = message {
         match outcome {
             Outcome::Progress(_, _) => next.progress += 1
             Outcome::Text(_, text) => if text == "hello אבג 👩🏽‍💻" { next.status = "read complete" }
@@ -49,7 +49,7 @@ fn await_status(session: &mut gui::Session, status: String) -> Result<(), errors
 }
 
 fn submit(session: &mut gui::Session, request: i64, operation: Operation, status: String) -> Result<(), errors::Error> {
-    gui::perform(Effect::Work(Work::new("document", request, 0, operation)))
+    gui::perform(Effect::StartWork(Work::new("document", request, 0, operation)))
     session.flush()?
     await_status(session, status)
 }

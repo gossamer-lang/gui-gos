@@ -25,8 +25,8 @@ fn greet(m: Model) -> Model {
 
 fn update(m: Model, msg: UiMsg) -> Model {
     match msg {
-        UiMsg::Text(id, text) => if id == "name" { Model { name: text, greeting: m.greeting } } else { m }
-        UiMsg::Submit(id, _) => if id == "name" { greet(m) } else { m }
+        UiMsg::TextChanged(id, text) => if id == "name" { Model { name: text, greeting: m.greeting } } else { m }
+        UiMsg::Submitted(id, _) => if id == "name" { greet(m) } else { m }
         UiMsg::Command(id) => if id == "hello.greet" { greet(m) } else { m }
         _ => m
     }
@@ -58,7 +58,7 @@ fn app() -> gui::App<Model> {
         .title("Hello, Gossamer")
         .size(520, 360)
         .commands(commands)
-        .focus("name")
+        .initial_focus("name")
 }
 
 fn main() -> Result<(), errors::Error> {

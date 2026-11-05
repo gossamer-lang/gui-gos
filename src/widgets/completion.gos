@@ -31,7 +31,7 @@ pub struct CompletionItem {
     pub key: String
     pub label: String
     /// Text inserted on acceptance ("" inserts the label).
-    pub insert: String
+    pub insert_text: String
     pub detail: String
     pub icon: Option<crate::render::icons::Icon>
     /// Decoded application icon, preferred over the built-in glyph.
@@ -48,7 +48,7 @@ impl Default for CompletionItem {
         CompletionItem {
             key: String::new()
             label: String::new()
-            insert: String::new()
+            insert_text: String::new()
             detail: String::new()
             icon: None
             image: None
@@ -72,7 +72,7 @@ impl CompletionItem {
     }
 
     pub fn inserted(&self) -> String {
-        if self.insert.is_empty() { self.label } else { self.insert }
+        if self.insert_text.is_empty() { self.label } else { self.insert_text }
     }
 }
 
@@ -93,7 +93,7 @@ pub enum Source {
     /// The host id of a function answering the items for a query.
     Provider(i64)
     /// The application answers `UiMsg::CompletionRequest` with
-    /// `Effect::Complete` after `debounce` ms.
+    /// `Effect::AnswerCompletion` after `debounce` ms.
     Async(i64)
 }
 
@@ -142,7 +142,7 @@ pub struct ChoiceState {
     pub items: Vec<CompletionItem>
     /// Unfiltered source used to reconcile an open choice after model changes.
     pub model_items: Vec<CompletionItem>
-    pub highlight: String
+    pub highlighted: String
     /// First visible row.
     pub first: i64
     pub query: String
@@ -165,7 +165,7 @@ impl Default for ChoiceState {
             open: false
             items: #[]
             model_items: #[]
-            highlight: String::new()
+            highlighted: String::new()
             first: 0
             query: String::new()
             request: 0
@@ -273,10 +273,10 @@ pub fn sort_ranked(items: &mut Vec<CompletionItem>) {
 
 impl ChoiceState {
     /// Index of the highlighted item, or -1.
-    pub fn highlight_index(&self) -> i64 {
+    pub fn highlighted_index(&self) -> i64 {
         let mut i = 0
         while i < self.items.len() {
-            if self.items[i].key == self.highlight { return i }
+            if self.items[i].key == self.highlighted { return i }
             i += 1
         }
         -1
@@ -288,11 +288,11 @@ impl ChoiceState {
         self.items = items
         self.loading = false
         self.error = ""
-        if self.highlight_index() < 0 || (self.highlight_index() >= 0 && self.items[self.highlight_index()].disabled) {
-            self.highlight = ""
+        if self.highlighted_index() < 0 || (self.highlighted_index() >= 0 && self.items[self.highlighted_index()].disabled) {
+            self.highlighted = ""
             for it in self.items {
                 if !it.disabled {
-                    self.highlight = it.key
+                    self.highlighted = it.key
                     break
                 }
             }
@@ -307,7 +307,7 @@ impl ChoiceState {
         if n == 0 {
             return
         }
-        let mut i = self.highlight_index()
+        let mut i = self.highlighted_index()
         let dir = if step >= 0 { 1 } else { -1 }
         let mut remaining = step.abs().max(1)
         let mut guard = 0
@@ -324,7 +324,7 @@ impl ChoiceState {
         }
         if i < 0 { i = 0 }
         if self.items[i].disabled { return }
-        self.highlight = self.items[i].key
+        self.highlighted = self.items[i].key
         self.reveal(i, rows)
     }
 
@@ -335,7 +335,7 @@ impl ChoiceState {
             i += if last { -1 } else { 1 }
         }
         if i >= 0 && i < n {
-            self.highlight = self.items[i].key
+            self.highlighted = self.items[i].key
             self.reveal(i, rows)
         }
     }
@@ -348,13 +348,13 @@ impl ChoiceState {
 
     /// The highlighted item, when one is highlighted and enabled.
     pub fn current(&self) -> Option<CompletionItem> {
-        let i = self.highlight_index()
+        let i = self.highlighted_index()
         if self.loading || !self.error.is_empty() || i < 0 || self.items[i].disabled { None } else { Some(self.items[i]) }
     }
 
     /// Typeahead: the next enabled item whose label starts with the
     /// accumulated letters (reset after a pause of `pause` ms).
-    pub fn typeahead_key(&mut self, c: String, now: i64, pause: i64) -> Option<String> {
+    pub fn type_ahead(&mut self, c: String, now: i64, pause: i64) -> Option<String> {
         if now - self.typeahead_time > pause {
             self.typeahead = ""
         }
@@ -366,14 +366,14 @@ impl ChoiceState {
         }
         let needle = fold(self.typeahead)
         let n = self.items.len()
-        let start = self.highlight_index()
+        let start = self.highlighted_index()
         let mut k = 1
         if !cycling { k = 0 }
         while k <= n {
             let i = ((start.max(0) + k) % n.max(1))
             let item = self.items[i]
             if !item.disabled && fold(item.label).starts_with(needle) {
-                self.highlight = item.key
+                self.highlighted = item.key
                 return Some(item.key)
             }
             k += 1
@@ -411,7 +411,7 @@ pub fn list_semantics(state: ChoiceState, list_id: String, name: String, item_pr
         let mut item = AccessNode::new(Role::ListItem, it.label)
         item.id = f"{item_prefix}#{it.key}"
         item.description = it.detail
-        item.selected = it.key == state.highlight
+        item.selected = it.key == state.highlighted
         item.checked = if !checked.is_empty() && it.key == checked { 1 } else { -1 }
         item.disabled = it.disabled
         item.pos_in_set = i + 1

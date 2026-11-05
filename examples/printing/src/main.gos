@@ -75,7 +75,7 @@ fn export_path() -> String {
 fn update(m: Model, msg: UiMsg) -> Model {
     let mut n = m
     match msg {
-        UiMsg::Click(id) => match id {
+        UiMsg::Clicked(id) => match id {
             "next" => n.page = (n.page + 1).min(n.pages)
             "previous" => n.page = (n.page - 1).max(1)
             "letter" => {
@@ -103,7 +103,7 @@ fn update(m: Model, msg: UiMsg) -> Model {
             }
             _ => ()
         }
-        UiMsg::Select(id, key) if id == "printer" => n.destination = key
+        UiMsg::Selected(id, key) if id == "printer" => n.destination = key
         UiMsg::Dialog(id, outcome) if id == "export" => match outcome {
             Outcome::Paths(paths) => if !paths.is_empty() {
                 n.status = match n.printed.export_pdf("Quarterly report", paths[0]) {
@@ -118,7 +118,7 @@ fn update(m: Model, msg: UiMsg) -> Model {
             }
             _ => ()
         }
-        UiMsg::Print(_, event) => n.status = match event {
+        UiMsg::PrintProgress(_, event) => n.status = match event {
             Event::Paginated(pages) => f"Laid out {pages} pages"
             Event::Exported { path, bytes } => f"Exported {path}"
             Event::Submitted { job, pages } => f"Sent {pages} pages as {job}"
@@ -224,7 +224,7 @@ fn fixture() -> Result<(), errors::Error> {
     await_status(&mut s, "Cancelled")?
     require(!fs::exists(export_path()), "a cancelled export wrote its file")?
     println("cancel: a cancelled export reports it and writes nothing")
-    s.emit(UiMsg::Select("printer", "gui-printing-no-such-printer"))
+    s.emit(UiMsg::Selected("printer", "gui-printing-no-such-printer"))
     s.click("print")?
     await_status(&mut s, "Print failed:")?
     println("errors: printing to a missing printer reports the spooler's failure")

@@ -100,7 +100,7 @@ pub struct Collection {
     /// Lets the pointer drag rows out: the dragged row keys (the selection,
     /// when a selected row is dragged) to the items offered. Answered by
     /// `UiMsg::DragFinished(id, operation)`.
-    pub drag: Option<i64>
+    pub drag_offer: Option<i64>
     /// Draws a list row's content (after its tree arrow and icon) as the
     /// widget it answers, in place of the label and detail. The widget is
     /// drawn only: the row keeps selection, focus, keyboard and accessibility,
@@ -112,7 +112,7 @@ impl Collection {
     /// A list of `count` rows, `row(i)` describing each, with nothing
     /// selected, fixed-height rows, and no columns.
     pub fn new(id: String, count: i64, row: Fn(i64) -> Row) -> Collection {
-        Collection { id: id, count: count, row: crate::app::host::rows(row), height_of: None, revision: 0, changes: #[], selected: #[], multiple: false, mode: ViewMode::List, columns: #[], sort: (String::new(), true), label: String::new(), empty_text: String::new(), rows: 0, tree: false, drag: None, delegate: None }
+        Collection { id: id, count: count, row: crate::app::host::rows(row), height_of: None, revision: 0, changes: #[], selected: #[], multiple: false, mode: ViewMode::List, columns: #[], sort: (String::new(), true), label: String::new(), empty_text: String::new(), rows: 0, tree: false, drag_offer: None, delegate: None }
     }
 
     /// Rows `height_of(i)` interface units tall instead of one fixed height.
@@ -195,7 +195,7 @@ impl Collection {
     /// Lets the pointer drag rows out as `items(keys)`.
     pub fn draggable(self, items: Fn(Vec<String>) -> Vec<windowing::DragItem>) -> Collection {
         let mut c = self
-        c.drag = Some(crate::app::host::drag_offer(items))
+        c.drag_offer = Some(crate::app::host::drag_offer(items))
         c
     }
 
@@ -250,19 +250,19 @@ pub struct CollectionState {
     /// Pointer drag: 1 header resize, 2 header reorder, 3 a row that may be
     /// dragged out; column key; pointer start.
     pub drag_kind: i64
-    pub drag_column: String
+    pub dragged_column: String
     pub drag_start: i64
     pub drag_width: i64
     /// The cell being edited: (row key, column key), or ("", "").
-    pub edit_row: String
-    pub edit_column: String
+    pub editing_row: String
+    pub editing_column: String
     pub last_click_key: String
     pub last_click_time: i64
     /// The row a press armed for dragging out, where it was pressed, and
     /// whether the press deferred selecting it to the release.
-    pub drag_row: String
-    pub drag_row_index: i64
-    pub drag_row_y: i64
+    pub dragged_row: String
+    pub dragged_row_index: i64
+    pub dragged_row_y: i64
     pub select_on_release: bool
 }
 
@@ -284,16 +284,16 @@ impl Default for CollectionState {
             widths: Map::new()
             order: #[]
             drag_kind: 0
-            drag_column: String::new()
+            dragged_column: String::new()
             drag_start: 0
             drag_width: 0
-            edit_row: String::new()
-            edit_column: String::new()
+            editing_row: String::new()
+            editing_column: String::new()
             last_click_key: String::new()
             last_click_time: 0
-            drag_row: String::new()
-            drag_row_index: -1
-            drag_row_y: 0
+            dragged_row: String::new()
+            dragged_row_index: -1
+            dragged_row_y: 0
             select_on_release: false
         }
     }
@@ -343,8 +343,8 @@ fn col_index(c: Collection, key: String) -> i64 {
 fn start_edit(c: Collection, s: &mut CollectionState, st: &mut StateStore, item: Row, column: String) {
     let ci = col_index(c, column)
     let text = if ci < item.cells.len() { item.cells[ci] } else { item.label }
-    s.edit_row = item.key
-    s.edit_column = column
+    s.editing_row = item.key
+    s.editing_column = column
     let mut e = EditState::default()
     e.sync(text)
     e.select_all()

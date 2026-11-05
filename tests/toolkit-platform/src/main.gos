@@ -11,8 +11,8 @@ fn update(m: Model, msg: UiMsg) -> Model {
     n.color.update(msg)
     match msg {
         UiMsg::Timer(tag) => if tag == "integration-stop" { gui::perform(gui::Effect::Quit) }
-        UiMsg::Date(id, text) => match id { "date" | "calendar" => n.date = text, "time" => n.time = text, "duration" => n.duration = text, _ => () }
-        UiMsg::Click(id) => {
+        UiMsg::DateChanged(id, text) => match id { "date" | "calendar" => n.date = text, "time" => n.time = text, "duration" => n.duration = text, _ => () }
+        UiMsg::Clicked(id) => {
             if id == "integration-stop" { gui::perform(gui::Effect::Quit); return n }
             let req = match id {
                 "pick-color" => request::color("c", "Choose color", n.color.value)
@@ -91,7 +91,7 @@ fn file_browser_journey(session: &mut gui::Session) -> Result<(), errors::Error>
 }
 
 fn main() -> Result<(), errors::Error> {
-    let mut session = gui::application("Toolkit integration", "dev.gossamer.toolkit-integration", init, update, view).size(800, 900).focus("date").start()?
+    let mut session = gui::application("Toolkit integration", "dev.gossamer.toolkit-integration", init, update, view).size(800, 900).initial_focus("date").start()?
     if env::args().contains("--files-fixture") {
         let result = file_browser_journey(&mut session)
         session.shutdown()
@@ -102,7 +102,7 @@ fn main() -> Result<(), errors::Error> {
         println(session.accessibility_status())
         // The client closes through the accessible button. This bounds a
         // failed or abandoned probe without racing slow instrumented queries.
-        gui::perform(gui::Effect::Timer("integration-stop", 90_000, false))
+        gui::perform(gui::Effect::StartTimer("integration-stop", 90_000, false))
         return session.run()
     }
     assert(session.focus("time")?)

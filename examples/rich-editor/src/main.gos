@@ -21,8 +21,8 @@ fn update(m: Model, msg: UiMsg) -> Model {
     match msg {
         UiMsg::RichChanged(_, id, _) => if id == n.document.id { n = refresh(n) }
         UiMsg::RichLink(_, url) => n.status = f"Link: {url}"
-        UiMsg::Text(id, text) => match id { "source" => n.source = text, "asset" => n.asset = text, "file" => n.file = text, _ => () }
-        UiMsg::Click(id) => {
+        UiMsg::TextChanged(id, text) => match id { "source" => n.source = text, "asset" => n.asset = text, "file" => n.file = text, _ => () }
+        UiMsg::Clicked(id) => {
             let info = n.document.info()
             let selection = info.selection
             let start = selection.anchor.byte.min(selection.caret.byte)
@@ -44,11 +44,11 @@ fn update(m: Model, msg: UiMsg) -> Model {
                 "previous" => n.page = (n.page - 16).max(0)
                 "next" => if n.document.outline(n.page + 16, 1).unwrap().len()>0 { n.page += 16 }
                 "import-md" | "import-html" => {
-                    gui::perform(Effect::Work(Work::new("rich-import", 1, info.revision, Operation::ImportRich(if id == "import-md" { Format::Markdown } else { Format::Html }, n.source))))
+                    gui::perform(Effect::StartWork(Work::new("rich-import", 1, info.revision, Operation::ImportRich(if id == "import-md" { Format::Markdown } else { Format::Html }, n.source))))
                     n.status = "Importing"
                 }
                 "export-md" | "export-html" => {
-                    gui::perform(Effect::Work(Work::new("rich-export", 2, info.revision, Operation::ExportRich(n.document.id, if id == "export-md" { Format::Markdown } else { Format::Html }))))
+                    gui::perform(Effect::StartWork(Work::new("rich-export", 2, info.revision, Operation::ExportRich(n.document.id, if id == "export-md" { Format::Markdown } else { Format::Html }))))
                     n.status = "Exporting"
                 }
                 "load-image" => choose_image(false)
@@ -60,14 +60,14 @@ fn update(m: Model, msg: UiMsg) -> Model {
         UiMsg::Dialog(id, outcome) if id == "load-image" => match outcome {
             gui::Outcome::Paths(paths) => if !paths.is_empty() {
                 n.file = paths[0]
-                gui::perform(Effect::Work(Work::new("rich-image", 3, n.document.info().revision, Operation::ReadRichImage(n.document.id, n.asset, n.file))))
+                gui::perform(Effect::StartWork(Work::new("rich-image", 3, n.document.info().revision, Operation::ReadRichImage(n.document.id, n.asset, n.file))))
                 n.status = "Loading image"
             }
             // Without a native chooser the toolkit's own file browser asks.
             gui::Outcome::Unsupported(_) | gui::Outcome::Failed(_) => choose_image(true)
             _ => ()
         }
-        UiMsg::Worked(owner, _, revision, outcome) => match outcome {
+        UiMsg::WorkFinished(owner, _, revision, outcome) => match outcome {
             Outcome::RichImported(record) => {
                 let imported = Document { id: record.document }
                 if revision != n.document.info().revision { imported.close(); n.status = "Import discarded because the document changed" } else {
@@ -99,7 +99,7 @@ fn view(m: Model) -> Widget {
         Widget::row(#[Widget::label("Image source"), Widget::input(gui::TextInput::new("asset", m.asset, "Image source in the document", gui::InputKind::Line)).grow(1), Widget::button("load-image", "Choose PNG...")], 8)
     ], 8, MainAlign::Start, CrossAlign::Stretch).padding(12)
 }
-fn app(document: Document) -> gui::App<Model>{ gui::application("Rich Editor", "dev.gossamer.gui-rich-editor", || init(document), update, view).size(1180, 820).focus("editor") }
+fn app(document: Document) -> gui::App<Model>{ gui::application("Rich Editor", "dev.gossamer.gui-rich-editor", || init(document), update, view).size(1180, 820).initial_focus("editor") }
 fn require(value: bool, why: String) -> Result<(), errors::Error>{ if value { Ok(()) } else { Err(errors::new(why)) } }
 fn await_status(s: &mut gui::Session, status: String) -> Result<(), errors::Error>{
     let deadline = time::monotonic_nanos() + 30_000_000_000
@@ -143,7 +143,7 @@ fn main() -> Result<(), errors::Error>{
     fs::write(image_file, gui::AppIcon::drawn(gui::Icon::Search, 16, gui::Color::white(), gui::Color::rgb(20, 40, 60)).to_png())?
     // A script answers the toolkit's file browser; the native chooser the
     // button opens on a desktop takes a person.
-    s.emit(UiMsg::Text("asset", "asset:sample")); choose_image(true); s.flush()?; s.answer_file_dialog("load-image", image_file)?; s.flush()?
+    s.emit(UiMsg::TextChanged("asset", "asset:sample")); choose_image(true); s.flush()?; s.answer_file_dialog("load-image", image_file)?; s.flush()?
     await_status(&mut s, "Image loaded")?
     fs::remove_file(image_file)?
     s.click("export-md")?

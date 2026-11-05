@@ -58,15 +58,15 @@ fn choose(toolkit: bool) {
 fn update(m: Model, msg: UiMsg) -> Model {
     let mut n = m
     match msg {
-        UiMsg::Text(id, text) if id == "file" => n.file = text
-        UiMsg::Submit(id, text) if id == "file" && !text.trim().is_empty() => n = load(n, text.trim())
+        UiMsg::TextChanged(id, text) if id == "file" => n.file = text
+        UiMsg::Submitted(id, text) if id == "file" && !text.trim().is_empty() => n = load(n, text.trim())
         UiMsg::Dialog(id, outcome) if id == "open" => match outcome {
             Outcome::Paths(paths) => if !paths.is_empty() { n = load(n, paths[0]) }
             // Without a native chooser the toolkit's own file browser asks.
             Outcome::Unsupported(_) | Outcome::Failed(_) => choose(true)
             _ => ()
         }
-        UiMsg::Click(id) => match id {
+        UiMsg::Clicked(id) => match id {
             "open" => choose(false)
             "reload" => {
                 let _ = n.viewer.reload()
@@ -110,7 +110,7 @@ fn view(m: Model) -> Widget {
 }
 
 fn app() -> gui::App<Model> {
-    gui::application("Image Viewer", "dev.gossamer.gui-image-viewer", init, update, view).size(760, 600).focus("image")
+    gui::application("Image Viewer", "dev.gossamer.gui-image-viewer", init, update, view).size(760, 600).initial_focus("image")
 }
 
 fn require(value: bool, why: String) -> Result<(), errors::Error> {

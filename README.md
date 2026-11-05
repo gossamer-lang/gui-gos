@@ -16,7 +16,7 @@ struct Model {
 
 fn update(m: Model, msg: UiMsg) -> Model {
     match msg {
-        UiMsg::Click(id) if id == "add" => Model { count: m.count + 1 }
+        UiMsg::Clicked(id) if id == "add" => Model { count: m.count + 1 }
         _ => m
     }
 }
@@ -47,7 +47,7 @@ export, charts, a scene canvas, an image viewer and a media player.
 ```toml
 # project.toml
 [dependencies]
-"github.com/gossamer-lang/gui-gos" = { git = "https://github.com/gossamer-lang/gui-gos", tag = "v0.1.7" }
+"github.com/gossamer-lang/gui-gos" = { git = "https://github.com/gossamer-lang/gui-gos", tag = "v0.2.0" }
 ```
 
 Then run `gos fetch`, which also fetches gui-engine-gos and windowing-gos at

@@ -41,7 +41,7 @@ fn report(journey: String, phase: String, iterations: i64) {
 
 fn windows_update(m: i64, msg: UiMsg) -> i64 {
     match msg {
-        UiMsg::Click(id) => {
+        UiMsg::Clicked(id) => {
             if id == "open" { gui::perform(Effect::OpenWindow { key: "second", title: "Second", width: 320, height: 200 }) }
             m + 1
         }
@@ -78,7 +78,7 @@ fn windows_journey(n: i64) -> Result<(), errors::Error> {
 
 fn popups_update(m: String, msg: UiMsg) -> String {
     match msg {
-        UiMsg::Select(_, key) => key
+        UiMsg::Selected(_, key) => key
         _ => m
     }
 }
@@ -120,12 +120,12 @@ struct TabsModel {
 fn tabs_update(m: TabsModel, msg: UiMsg) -> TabsModel {
     let mut n = m
     match msg {
-        UiMsg::TabDetach(_, key, _, _) => {
+        UiMsg::TabDetached(_, key, _, _) => {
             let window = f"window-{key}"
             n.windows[key] = window
             gui::perform(Effect::OpenWindow { key: window, title: key, width: 320, height: 200 })
         }
-        UiMsg::TabMove(_, key, strip, _) => {
+        UiMsg::TabMoved(_, key, strip, _) => {
             let source = n.windows.get(key).unwrap_or("main")
             n.windows[key] = strip.substring(5, strip.byte_len())
             if source != "main" { gui::perform(Effect::CloseWindow(source)) }
@@ -154,10 +154,10 @@ fn tabs_journey(n: i64) -> Result<(), errors::Error> {
     let mut s = gui::application("Tabs journey", "dev.gossamer.gui-journey-tabs", || TabsModel { windows: Map::new() }, tabs_update, tabs_view).windows(tabs_strip).size(400, 240).start()?
     for i in 0..(WARMUP + n) {
         if i == WARMUP { report("tabs", "warm", i) }
-        s.emit(UiMsg::TabDetach("tabs:main", "two", 40, 40))
+        s.emit(UiMsg::TabDetached("tabs:main", "two", 40, 40))
         s.flush()?
         if s.window_count() != 2 { return Err(errors::new("tearing off did not open a window")) }
-        s.emit(UiMsg::TabMove("tabs:window-two", "two", "tabs:main", 1))
+        s.emit(UiMsg::TabMoved("tabs:window-two", "two", "tabs:main", 1))
         s.flush()?
         if s.window_count() != 1 { return Err(errors::new("merging did not close the window")) }
     }

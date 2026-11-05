@@ -14,9 +14,9 @@ fn update(model: Model, message: UiMsg) -> Model {
     match message {
         UiMsg::DocumentChanged(_, _, revision) => {
             next.status = f"revision {revision}"
-            gui::perform(Effect::Work(Work::new("editor", -3, revision, Operation::AnalyzeDocument(next.document.id, "gos"))))
+            gui::perform(Effect::StartWork(Work::new("editor", -3, revision, Operation::AnalyzeDocument(next.document.id, "gos"))))
         }
-        UiMsg::Worked(_, request, revision, outcome) => {
+        UiMsg::WorkFinished(_, request, revision, outcome) => {
             if request < 0 && revision != next.document.info().revision { return next }
             match outcome {
                 Outcome::Search(ranges) => next.status = f"search {ranges.len()}"
@@ -98,7 +98,7 @@ fn main() -> Result<(), errors::Error>{
         if p95>p95_limit { return Err(errors::new(f"{kind} p95 {p95} exceeds {p95_limit} ns")) }
         if document.info().bytes != before.bytes + 30 || snapshot.info().bytes != before.bytes { return Err(errors::new("edit changed an immutable snapshot")) }
         if document.resolve(left)?.byte != before.caret || document.resolve(right)?.byte != before.caret + 30 { return Err(errors::new("anchor affinity failed")) }
-        gui::perform(Effect::Work(Work::new("editor", -4, document.info().revision, Operation::SearchDocument(document.id, "aaa", gui::editing::search::SearchOptions { match_case: true, ..gui::editing::search::SearchOptions::default() }, 100))))
+        gui::perform(Effect::StartWork(Work::new("editor", -4, document.info().revision, Operation::SearchDocument(document.id, "aaa", gui::editing::search::SearchOptions { match_case: true, ..gui::editing::search::SearchOptions::default() }, 100))))
         session.flush()?; await_status(&mut session, "search 10")?
         let usage = session.resource_usage()
         if usage.total>usage.limit { return Err(errors::new("document exceeded session byte budget")) }
@@ -112,12 +112,12 @@ fn main() -> Result<(), errors::Error>{
         if !document.info().dirty { return Err(errors::new("stale save incorrectly cleared dirty state")) }
         snapshot.close()
         document.release_anchor(left); document.release_anchor(right)
-        gui::perform(Effect::Work(Work::new("session", 1, 0, Operation::SaveSession(file, #[Record { key: "doc", document: document.id }], "view metadata"))))
+        gui::perform(Effect::StartWork(Work::new("session", 1, 0, Operation::SaveSession(file, #[Record { key: "doc", document: document.id }], "view metadata"))))
         session.flush()?
         await_status(&mut session, "checkpoint saved")?
         // Restoring replaces the native document and preserves its unsaved body,
         // undo/redo and selection without serializing the file through the shell.
-        gui::perform(Effect::Work(Work::new("session", 2, 0, Operation::RestoreSession(file))))
+        gui::perform(Effect::StartWork(Work::new("session", 2, 0, Operation::RestoreSession(file))))
         session.flush()?
         await_status(&mut session, "checkpoint restored")?
         let restored = session.document(0, "editor")
