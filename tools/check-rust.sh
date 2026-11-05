@@ -2,6 +2,8 @@
 # Formatting, Clippy and tests for the Rust cores and bindings of the
 # windowing-gos and gui-engine-gos checkouts beside this one. Run from each
 # crate so its .cargo configuration applies.
+#
+#   tools/check-rust.sh [CRATE...]    the named crates, or all of them
 set -eu
 RUSTUP_TOOLCHAIN=${RUSTUP_TOOLCHAIN:-1.95.0}
 export RUSTUP_TOOLCHAIN
@@ -20,7 +22,10 @@ case "$sdk" in
         sdk_ref=
         ;;
 esac
-for crate in windowing-gos/rust/gos-windowing windowing-gos/rust/binding gui-engine-gos/rust/gui-engine gui-engine-gos/rust/binding; do
+if [ "$#" -eq 0 ]; then
+    set -- windowing-gos/rust/gos-windowing windowing-gos/rust/binding gui-engine-gos/rust/gui-engine gui-engine-gos/rust/binding
+fi
+for crate in "$@"; do
     (
         cd "$root/$crate"
         cargo fmt --all --check

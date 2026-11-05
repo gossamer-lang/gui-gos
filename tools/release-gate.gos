@@ -21,6 +21,13 @@ const EXCLUDED: [String; 9] = [
 ]
 const CROSS_TARGETS: [String; 3] = ["x86_64-pc-windows-msvc", "aarch64-apple-darwin", "x86_64-apple-darwin"]
 const SETUP: String = "setup"
+// The gate group of each Rust crate.
+const RUST_CRATES: [(String, String); 4] = [
+    ("rust-windowing", "windowing-gos/rust/gos-windowing")
+    ("rust-windowing-binding", "windowing-gos/rust/binding")
+    ("rust-engine", "gui-engine-gos/rust/gui-engine")
+    ("rust-engine-binding", "gui-engine-gos/rust/binding")
+]
 const EXAMPLE_GROUPS: i64 = 3
 // The examples tools/check-examples.sh checks, hello-world's build first.
 const EXAMPLES: [String; 4] = ["hello-world", "application-launcher", "code-editor", "widgets-showcase"]
@@ -230,17 +237,24 @@ fn plan(gui: String, root: String, out: String, profile: String) -> Result<Vec<S
     group = "core"
     add("release evidence sealing", gui, #[gos, "test", "tools/release-gate.gos"], none)
     add("source policy", gui, #["sh", "tools/check-source-policy.sh"], none)
-    group = "rust"
-    if system() == "Linux" {
-        add("Rust cores and bindings", gui, #["sh", path::join(root, "windowing-gos/tools/private-bus.sh"), "--", "tools/check-rust.sh"], none)
-    } else {
-        add("Rust cores and bindings", gui, #["sh", "tools/check-rust.sh"], none)
+    // Each Rust crate is a group of its own, as is each project's parity
+    // run, so no one host builds them all.
+    for (name, crate) in RUST_CRATES {
+        group = name
+        let command = if system() == "Linux" {
+            #["sh", path::join(root, "windowing-gos/tools/private-bus.sh"), "--", "tools/check-rust.sh", crate]
+        } else {
+            #["sh", "tools/check-rust.sh", crate]
+        }
+        add(f"Rust {crate}", gui, command, none)
     }
     for project in #["windowing-gos", "gui-gos"] {
         let directory = path::join(root, project)
-        group = if project == "gui-gos" { "gui" } else { "core" }
+        let name = if project == "gui-gos" { "gui" } else { "windowing" }
+        group = name
         add(f"{project} quick-check", directory, #["sh", "quick-check.sh"], none)
         add(f"{project} unit tests", directory, #[gos, "test", "."], none)
+        group = f"{name}-parity"
         add(f"{project} four-tier parity", directory, #["sh", "tests/parity/run.sh"], none)
     }
     let reported = #[

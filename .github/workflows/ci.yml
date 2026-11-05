@@ -40,7 +40,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: [core, rust, gui, journeys, visuals, examples-1, examples-2, examples-3, native, packages]
+        group: [core, rust-windowing, rust-windowing-binding, rust-engine, rust-engine-binding, windowing, windowing-parity, gui, gui-parity, journeys, visuals, examples-1, examples-2, examples-3, native, packages]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -59,7 +59,7 @@ jobs:
       # source checkout of gos reports it, so the bindings' committed locks
       # resolve unchanged.
       - uses: actions/checkout@v6
-        if: matrix.group == 'rust'
+        if: endsWith(matrix.group, '-binding')
         with:
           repository: ${{ env.GOSSAMER_REPO }}
           path: gossamer
@@ -83,7 +83,7 @@ jobs:
       - name: Release host gate (${{ matrix.group }})
         working-directory: gui-gos
         env:
-          GOSSAMER_BINDING_PATH: ${{ matrix.group == 'rust' && format('{0}/gossamer/crates/gossamer-binding', github.workspace) || '' }}
+          GOSSAMER_BINDING_PATH: ${{ endsWith(matrix.group, '-binding') && format('{0}/gossamer/crates/gossamer-binding', github.workspace) || '' }}
         run: tools/release-gate.sh "$GITHUB_WORKSPACE/release-linux" --group ${{ matrix.group }}
       - uses: actions/upload-artifact@v4
         if: always()
