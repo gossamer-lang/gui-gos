@@ -44,6 +44,9 @@ for name in "$@"; do
         if [ "$name" = rich-editor ]; then export GUI_TEST_INLINE_WORK=0; fi
         export XDG_CONFIG_HOME="$out/$name/config"
         export XDG_CACHE_HOME="$work/cache"
+        # The limit bounds a fixture's run; checking first builds the Rust
+        # bindings into the cache the runs load them from.
+        "$GOS" check . > "$out/$name/check.txt" || exit 1
         GOS_RUN_ENGINE=vm GOS_JIT=0 timeout -k 5 "$limit" "$GOS" run . -- --fixture > "$out/$name/vm.txt" || exit 1
         GOS_RUN_ENGINE=vm GOS_JIT=1 GOS_JIT_STATS=1 GOSSAMER_JIT_THRESHOLD=1 timeout -k 5 "$limit" "$GOS" run . -- --fixture > "$out/$name/jit.txt" 2> "$out/$name/jit-stats.txt" || exit 1
         awk '/gos-jit-stats: compiled=/ { split($0, a, "compiled="); total += a[2]+0 } END { exit total > 0 ? 0 : 1 }' "$out/$name/jit-stats.txt" || { echo "No JIT entries installed: $name" >&2; exit 1; }
