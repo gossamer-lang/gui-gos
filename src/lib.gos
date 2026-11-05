@@ -33,6 +33,7 @@ pub type Session = app::Session
 pub type ClosePolicy = app::ClosePolicy
 pub type WindowStyle = app::WindowStyle
 pub type Effect = app::effects::Effect
+pub type Edge = app::effects::Edge
 pub type Mailbox = app::Mailbox
 pub type Launch = app::Launch
 pub type Listener = app::Listener
@@ -111,7 +112,7 @@ pub type Settings = services::Settings
 pub type AppIcon = services::apps::AppIcon
 
 /// The toolkit version.
-pub const VERSION: String = "0.1.6"
+pub const VERSION: String = "0.1.7"
 
 
 /// The `gui.tab.*` commands a tabbed window offers, with their shortcuts.
@@ -150,6 +151,11 @@ pub struct App<M> {
     /// Files a later launch hands to the running instance, when the
     /// application keeps one instance.
     pub instance_files: Option<Vec<String>>
+    /// The command line a later launch hands to the running instance, which
+    /// receives it as `UiMsg::CommandLine`.
+    pub instance_command_line: Option<Vec<String>>
+    /// The name the single instance is claimed under; the app id when empty.
+    pub instance: String
     /// The icon every window of the application shows.
     pub icon: Option<services::apps::AppIcon>
     /// Whether the application's windows open see-through, when they can
@@ -181,6 +187,8 @@ pub fn application<M>(name: String, app_id: String, init: Fn() -> M, update: Fn(
         grows_for_popups: false
         style: WindowStyle::default()
         instance_files: None
+        instance_command_line: None
+        instance: String::new()
         icon: None
         transparent: None
         remember_size: true
@@ -317,6 +325,23 @@ impl<M> App<M> {
         a
     }
 
+    /// Keeps one running instance: a later launch hands its command line
+    /// `arguments` and working directory to the first, which receives them as
+    /// `UiMsg::CommandLine`, and exits.
+    pub fn single_instance_command_line(self, arguments: Vec<String>) -> App<M> {
+        let mut a = self
+        a.instance_command_line = Some(arguments)
+        a
+    }
+
+    /// Claims the single instance under `name` instead of the app id, so one
+    /// application can keep more than one kind of instance.
+    pub fn instance(self, name: String) -> App<M> {
+        let mut a = self
+        a.instance = name
+        a
+    }
+
     /// Opens the first window and answers the session without running the
     /// loop (tests and embedding drive `step`).
     pub fn start(self) -> Result<Session, errors::Error> {
@@ -376,11 +401,18 @@ impl<M> App<M> {
             }
             return fs::write(path, icon.to_png()).map_err(|e| errors::wrap(e, f"writing the icon to {path}"))
         }
-        let Some(files) = self.instance_files else {
-            let mut session = self.begin(true)?
-            return session.run()
+        let name = if self.instance.is_empty() { self.app_id } else { self.instance }
+        let claim = match self.instance_command_line {
+            Some(arguments) => launch_command_line(name, arguments)
+            None => match self.instance_files {
+                Some(files) => launch(name, files)
+                None => {
+                    let mut session = self.begin(true)?
+                    return session.run()
+                }
+            }
         }
-        let listener = match launch(self.app_id, files) {
+        let listener = match claim {
             Launch::Forwarded => return Ok(())
             Launch::Failed(error) => return Err(errors::new(error))
             Launch::Alone => {
@@ -417,6 +449,13 @@ pub fn start(name: String, app_id: String) -> Result<Session, errors::Error> {
 /// process already runs.
 pub fn launch(app_id: String, files: Vec<String>) -> Launch {
     app::launch(app_id, files)
+}
+
+/// Claims the single instance named `instance`, handing it this launch's
+/// command line `arguments`, read in the working directory, when another
+/// process already runs.
+pub fn launch_command_line(instance: String, arguments: Vec<String>) -> Launch {
+    app::launch_command_line(instance, arguments)
 }
 
 impl<M> Display for App<M> {

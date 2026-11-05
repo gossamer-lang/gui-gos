@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.7 - Docking, tab drops and forwarded command lines
+
+- Builds on gui-engine-gos 0.1.8 and windowing-gos 0.1.8: on X11 every press of a global shortcut arrives, and a window it brings forward takes focus.
+- `Effect::Dock(window, Edge, length, depth)` docks a window along any edge of its display, and `Effect::SetOnAllDesktops` shows it on every virtual desktop (X11, macOS); a docked window resizes from its edge facing the display.
+- `UiMsg::TabToWindow(strip, key, window)` reports a tab dropped onto another window away from any strip there.
+- `App::single_instance_command_line(arguments)` hands a later launch's command line to the running instance as `UiMsg::CommandLine(directory, arguments)`, and `App::instance(name)` names the instance apart from the app id.
+
 ## 0.1.6 - Global shortcuts, fetching and window visibility
 
 - Requires Gossamer 0.76.0 or later.

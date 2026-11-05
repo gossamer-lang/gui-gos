@@ -629,7 +629,18 @@ pub enum Launch {
 /// paths resolved against the working directory) to it when another
 /// process already runs.
 pub fn launch(app_id: String, files: Vec<String>) -> Launch {
-    match gui_engine::claim(app_id, json::encode(files)) {
+    claimed(gui_engine::claim(app_id, json::encode(files)))
+}
+
+/// Claims the single instance named `instance`, handing it this launch's
+/// command line `arguments`, read in the working directory, when another
+/// process already runs.
+pub fn launch_command_line(instance: String, arguments: Vec<String>) -> Launch {
+    claimed(gui_engine::claim_command_line(instance, json::encode(arguments)))
+}
+
+fn claimed(answer: Result<String, String>) -> Launch {
+    match answer {
         Ok(answered) => match answered.to_i64() {
             Some(id) => Launch::Primary(Listener { id: id })
             None => if wire::text(answered) == "forwarded" { Launch::Forwarded } else { Launch::Alone }
