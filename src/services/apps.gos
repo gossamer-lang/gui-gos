@@ -629,7 +629,7 @@ pub fn with_icons(entries: Vec<AppEntry>, size: i64) -> Vec<AppEntry> {
 // ---- the platform catalog ----
 
 /// The applications installed for this user, by name.
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
 pub fn installed() -> Vec<AppEntry> {
     let locale = env::var("LC_ALL").unwrap_or(env::var("LC_MESSAGES").unwrap_or(env::var("LANG").unwrap_or("")))
     let desktops = env::var("XDG_CURRENT_DESKTOP").unwrap_or("").split(":").filter(|d| !d.is_empty())

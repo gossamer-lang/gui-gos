@@ -18,8 +18,8 @@ env:
   # The releases the manifests depend on. The Rust cores and windowing's own
   # native tests are checked out at the same tags; set these repository
   # variables together to check a newer compatibility set.
-  WINDOWING_REF: ${{ vars.WINDOWING_REF || 'v0.1.8' }}
-  ENGINE_REF: ${{ vars.ENGINE_REF || 'v0.2.1' }}
+  WINDOWING_REF: ${{ vars.WINDOWING_REF || 'v0.1.10' }}
+  ENGINE_REF: ${{ vars.ENGINE_REF || 'v0.2.5' }}
   RUSTUP_TOOLCHAIN: 1.95.0
   # Every job that needs no real display draws into SDL's offscreen driver.
   SDL_VIDEO_DRIVER: offscreen
@@ -32,7 +32,9 @@ env:
 # beside gui-gos, and the binding SDK is the one the installed gos names.
 jobs:
   # The Linux release gate, divided into the groups tools/release-gate.sh
-  # names so they run side by side; each group writes its own ledger.
+  # names so they run side by side; each group writes its own ledger. The
+  # groups are sized to finish in under half an hour each, and the workflow's
+  # jobs stay within the 20 a free organization runs at once.
   linux:
     name: gate (Linux ${{ matrix.group }})
     runs-on: ubuntu-latest
@@ -40,7 +42,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: [core, rust-windowing, rust-windowing-binding, rust-engine, rust-engine-binding, windowing, windowing-parity, gui, gui-parity, journeys, visuals, examples-1, examples-2, examples-3, native, packages]
+        group: [core, rust-windowing, rust-engine, gui-parity, wrap, journeys, visuals, examples-1, examples-2, examples-3, native, packages]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -59,7 +61,7 @@ jobs:
       # source checkout of gos reports it, so the bindings' committed locks
       # resolve unchanged.
       - uses: actions/checkout@v6
-        if: endsWith(matrix.group, '-binding')
+        if: startsWith(matrix.group, 'rust-')
         with:
           repository: ${{ env.GOSSAMER_REPO }}
           path: gossamer
@@ -83,7 +85,7 @@ jobs:
       - name: Release host gate (${{ matrix.group }})
         working-directory: gui-gos
         env:
-          GOSSAMER_BINDING_PATH: ${{ endsWith(matrix.group, '-binding') && format('{0}/gossamer/crates/gossamer-binding', github.workspace) || '' }}
+          GOSSAMER_BINDING_PATH: ${{ startsWith(matrix.group, 'rust-') && format('{0}/gossamer/crates/gossamer-binding', github.workspace) || '' }}
         run: tools/release-gate.sh "$GITHUB_WORKSPACE/release-linux" --group ${{ matrix.group }}
       - uses: actions/upload-artifact@v4
         if: always()
@@ -94,57 +96,17 @@ jobs:
             release-linux/source-sha256*.txt
             release-linux/steps/*.txt
 
-  # Windows and macOS code type-checks for both architectures of each.
-  cross:
-    name: cross-target check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          path: gui-gos
-      - uses: actions/checkout@v6
-        with:
-          repository: ${{ env.WINDOWING_REPO }}
-          path: windowing-gos
-          ref: ${{ env.WINDOWING_REF }}
-      - uses: actions/checkout@v6
-        with:
-          repository: ${{ env.ENGINE_REPO }}
-          path: gui-engine-gos
-          ref: ${{ env.ENGINE_REF }}
-      # Checking a package builds its Rust bindings, and with them SDL.
-      - name: Install SDL's build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake ninja-build pkg-config \
-            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
-            libxss-dev libxfixes-dev libxtst-dev libxkbcommon-dev libwayland-dev \
-            wayland-protocols libegl-dev libgl-dev libdecor-0-dev
-      - name: Install the Gossamer toolchain
-        run: |
-          curl -fsSL "https://raw.githubusercontent.com/${GOSSAMER_REPO}/main/scripts/install.sh" | sh
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - name: Fetch the tagged dependencies
-        working-directory: gui-gos
-        run: tools/fetch.sh
-      - name: Check every package for Windows and macOS
-        working-directory: gui-gos
-        run: |
-          for target in x86_64-pc-windows-msvc aarch64-apple-darwin x86_64-apple-darwin; do
-            for dir in . examples/*/; do
-              echo "== $dir for $target"
-              (cd "$dir" && gos check --target "$target" .)
-            done
-          done
-
-  # The examples built and run natively.
+  # The Rust cores, the platform probes, and the examples built and run
+  # natively, each part a job of its own per platform so none runs long.
   native:
-    name: examples (${{ matrix.name }})
+    name: ${{ matrix.part }} (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 120
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
+        name: [macOS, Windows]
+        part: [rust, platform, journeys]
         include:
           - name: macOS
             os: macos-latest
@@ -206,9 +168,11 @@ jobs:
         working-directory: gui-gos
         run: tools/fetch.sh
       - name: Rust cores and bindings (format, Clippy, tests)
+        if: matrix.part == 'rust'
         working-directory: gui-gos
         run: tools/check-rust.sh
       - name: Native display and accessibility provider probes
+        if: matrix.part == 'platform'
         working-directory: windowing-gos
         env:
           SDL_VIDEO_DRIVER: ${{ runner.os == 'Windows' && 'windows' || 'cocoa' }}
@@ -218,7 +182,7 @@ jobs:
           (cd tests/uia && gos build --release .)
           if [ "$RUNNER_OS" = macOS ]; then (cd tests/uia && ./target/release/windowing-uia --self-check); fi
       - name: UI Automation client (Windows)
-        if: runner.os == 'Windows'
+        if: matrix.part == 'platform' && runner.os == 'Windows'
         working-directory: windowing-gos/tests/uia
         shell: pwsh
         env:
@@ -228,25 +192,35 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "building UIA client failed" }
           .\run.ps1
       - name: Native single-instance foreground handoff
+        if: matrix.part == 'platform'
         working-directory: windowing-gos/rust/gos-windowing
         env:
           SDL_VIDEO_DRIVER: ${{ runner.os == 'Windows' && 'windows' || 'cocoa' }}
         run: |
           cargo run --release --example instance-check
           cargo run --release --example platform-check
+      # Both fixtures build at once, sharing one build of the Rust bindings,
+      # then run one after the other.
       - name: Native document and resource worker journeys
+        if: matrix.part == 'journeys'
         working-directory: gui-gos
         env:
           SDL_VIDEO_DRIVER: ${{ runner.os == 'Windows' && 'windows' || 'cocoa' }}
           GUI_TEST_INLINE_WORK: "0"
           GUI_ACCESSIBILITY: "off"
         run: |
+          pids=
           for fixture in resources documents; do
-            gos build --release "tests/$fixture" --out-dir "native-$fixture"
+            gos build --release "tests/$fixture" --out-dir "native-$fixture" &
+            pids="$pids $!"
+          done
+          for pid in $pids; do wait "$pid"; done
+          for fixture in resources documents; do
             "./native-$fixture/gui-$fixture" > "native-$fixture.txt"
             diff -u "tests/$fixture/expected.txt" "native-$fixture.txt"
           done
       - name: Native software rendering remains the default
+        if: matrix.part == 'platform'
         working-directory: gui-engine-gos/rust/gui-engine
         env:
           SDL_VIDEO_DRIVER: ${{ runner.os == 'Windows' && 'windows' || 'cocoa' }}
@@ -254,12 +228,14 @@ jobs:
           unset GUI_RENDERER
           cargo run --release --example render-check -- --require-software
       - name: Native GPU compositor readback, resize and recovery
+        if: matrix.part == 'platform'
         working-directory: gui-engine-gos/rust/gui-engine
         env:
           SDL_VIDEO_DRIVER: ${{ runner.os == 'Windows' && 'windows' || 'cocoa' }}
           GUI_RENDERER: gpu
         run: cargo run --release --example render-check -- --require-gpu
       - name: Build and run the example journeys (release native)
+        if: matrix.part == 'journeys'
         working-directory: gui-gos
         env:
           SDL_VIDEO_DRIVER: ${{ runner.os == 'Windows' && 'windows' || 'cocoa' }}
@@ -306,15 +282,21 @@ jobs:
             wayland-protocols libegl-dev libgl-dev libdecor-0-dev
           curl -fsSL "https://raw.githubusercontent.com/${GOSSAMER_REPO}/main/scripts/install.sh" | sh
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      # The programs build at once, the Gossamer ones sharing one build of
+      # the Rust bindings.
       - name: Build native journeys
         working-directory: gui-gos
         run: |
           ./tools/check-toolchain.sh
           tools/fetch.sh
+          pids=
           for dir in ../windowing-gos/tests/smoke examples/widgets-showcase examples/code-editor; do
-            (cd "$dir" && gos build --release .)
+            (cd "$dir" && gos build --release .) &
+            pids="$pids $!"
           done
-          (cd ../gui-engine-gos/rust/gui-engine && cargo build --release --example render-check)
+          (cd ../gui-engine-gos/rust/gui-engine && cargo build --release --example render-check) &
+          pids="$pids $!"
+          for pid in $pids; do wait "$pid"; done
       - name: Run native journeys on a real display server
         working-directory: gui-gos
         env:

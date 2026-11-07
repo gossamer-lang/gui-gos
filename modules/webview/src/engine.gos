@@ -7,17 +7,17 @@ use std::errors
 
 use crate::Runner
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
 pub fn run(runner: Runner) -> Result<(), errors::Error> {
     linux::run(runner)
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
 pub fn wake() {
     linux::wake()
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
 pub fn run(runner: Runner) -> Result<(), errors::Error> {
     let why = "web pages need WebKitGTK, which this platform does not provide here"
     runner.events.send(crate::Event::Unavailable(why))
@@ -25,10 +25,10 @@ pub fn run(runner: Runner) -> Result<(), errors::Error> {
     Err(errors::new(why))
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
 pub fn wake() {}
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
 mod linux {
     use std::{env, errors, ffi, path}
     use std::ffi::Ptr

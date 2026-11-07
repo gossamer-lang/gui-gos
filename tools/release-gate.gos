@@ -21,12 +21,13 @@ const EXCLUDED: [String; 9] = [
 ]
 const CROSS_TARGETS: [String; 3] = ["x86_64-pc-windows-msvc", "aarch64-apple-darwin", "x86_64-apple-darwin"]
 const SETUP: String = "setup"
-// The gate group of each Rust crate.
+// The gate group of each Rust crate: a project's core and binding share one,
+// since the binding builds the core again.
 const RUST_CRATES: [(String, String); 4] = [
     ("rust-windowing", "windowing-gos/rust/gos-windowing")
-    ("rust-windowing-binding", "windowing-gos/rust/binding")
+    ("rust-windowing", "windowing-gos/rust/binding")
     ("rust-engine", "gui-engine-gos/rust/gui-engine")
-    ("rust-engine-binding", "gui-engine-gos/rust/binding")
+    ("rust-engine", "gui-engine-gos/rust/binding")
 ]
 const EXAMPLE_GROUPS: i64 = 3
 // The examples tools/check-examples.sh checks, hello-world's build first.
@@ -75,6 +76,9 @@ struct Options {
 #[cfg(target_os = "linux")]
 fn system() -> String { "Linux" }
 
+#[cfg(target_os = "freebsd")]
+fn system() -> String { "FreeBSD" }
+
 #[cfg(target_os = "macos")]
 fn system() -> String { "Darwin" }
 
@@ -85,7 +89,13 @@ fn fail(message: String) -> errors::Error { errors::new(f"release-gate: {message
 
 fn parse_options() -> Result<Options, errors::Error> {
     let mut out = ""
-    let mut profile = if system() == "Linux" { "linux" } else { "native" }
+    // FreeBSD has no profile of its own: its desktop checks are the Linux ones,
+    // which need Weston and Docker, so it defaults to the portable steps.
+    let mut profile = match system() {
+        "Linux" => "linux"
+        "FreeBSD" => "portable"
+        _ => "native"
+    }
     let mut group = ""
     let mut list = false
     let args = env::args()
@@ -237,24 +247,27 @@ fn plan(gui: String, root: String, out: String, profile: String) -> Result<Vec<S
     group = "core"
     add("release evidence sealing", gui, #[gos, "test", "tools/release-gate.gos"], none)
     add("source policy", gui, #["sh", "tools/check-source-policy.sh"], none)
-    // Each Rust crate is a group of its own, as is each project's parity
-    // run, so no one host builds them all.
+    // Each project's Rust crates are a group of their own, so no one host
+    // builds them all.
     for (name, crate) in RUST_CRATES {
         group = name
-        let command = if system() == "Linux" {
+        let command = if system() == "Linux" || system() == "FreeBSD" {
             #["sh", path::join(root, "windowing-gos/tools/private-bus.sh"), "--", "tools/check-rust.sh", crate]
         } else {
             #["sh", "tools/check-rust.sh", crate]
         }
         add(f"Rust {crate}", gui, command, none)
     }
+    // gui-gos's four-tier parity is the longest of these steps, so it runs
+    // apart; the rest join the core group.
     for project in #["windowing-gos", "gui-gos"] {
         let directory = path::join(root, project)
-        let name = if project == "gui-gos" { "gui" } else { "windowing" }
-        group = name
+        group = "core"
         add(f"{project} quick-check", directory, #["sh", "quick-check.sh"], none)
         add(f"{project} unit tests", directory, #[gos, "test", "."], none)
-        group = f"{name}-parity"
+        if project == "gui-gos" {
+            group = "gui-parity"
+        }
         add(f"{project} four-tier parity", directory, #["sh", "tests/parity/run.sh"], none)
     }
     let reported = #[
@@ -267,7 +280,12 @@ fn plan(gui: String, root: String, out: String, profile: String) -> Result<Vec<S
         ("performance budgets", "tests/perf/run.sh", "GUI_PERF_OUT")
     ]
     for (name, script, variable) in reported {
-        group = if name == "screenshots" || name == "memory lifetimes" || name == "performance budgets" { "visuals" } else { "journeys" }
+        // The wrapper journey alone takes as long as the other three together.
+        group = match name {
+            "screenshots" | "memory lifetimes" | "performance budgets" => "visuals"
+            "wrapper" => "wrap"
+            _ => "journeys"
+        }
         add(name, gui, #["sh", script], only(variable, path::join(out, name.replace(" ", "-"))))
     }
     group = "visuals"

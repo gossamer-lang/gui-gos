@@ -10,7 +10,7 @@ use std::encoding::json
 use windowing
 
 /// The directory an application keeps its settings in, created on demand:
-/// `$XDG_CONFIG_HOME/<app>` (default `~/.config/<app>`) on Linux,
+/// `$XDG_CONFIG_HOME/<app>` (default `~/.config/<app>`) on Linux and FreeBSD,
 /// `~/Library/Application Support/<app>` on macOS, `%APPDATA%\<app>` on
 /// Windows.
 pub fn config_dir(app_id: String) -> String {
@@ -45,7 +45,7 @@ pub fn remove_test_config(root: String) {
     let _ = fs::remove_dir_all(root)
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
 fn config_base() -> String {
     let xdg = env::var("XDG_CONFIG_HOME").unwrap_or("")
     if !xdg.is_empty() { return xdg }
@@ -65,7 +65,7 @@ fn config_base() -> String {
 }
 
 /// The directory an application keeps rebuildable data in, which callers
-/// create: `$XDG_CACHE_HOME/<app>` (default `~/.cache/<app>`) on Linux,
+/// create: `$XDG_CACHE_HOME/<app>` (default `~/.cache/<app>`) on Linux and FreeBSD,
 /// `~/Library/Caches/<app>` on macOS, `%LOCALAPPDATA%\<app>` on Windows; under
 /// `<root>/cache` when `set_config_root` gave a root.
 pub fn cache_dir(app_id: String) -> String {
@@ -73,7 +73,7 @@ pub fn cache_dir(app_id: String) -> String {
     path::join(base, sanitize(app_id))
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
 fn cache_base() -> String {
     let xdg = env::var("XDG_CACHE_HOME").unwrap_or("")
     if !xdg.is_empty() { return xdg }

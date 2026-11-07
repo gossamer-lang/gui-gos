@@ -2,7 +2,7 @@
 // extern block per library; `g_signal_connect_data` has one alias per
 // handler signature.
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "freebsd"))]
 pub mod native {
     use std::ffi
     use std::ffi::Ptr
