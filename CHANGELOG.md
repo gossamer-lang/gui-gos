@@ -2,7 +2,7 @@
 
 ## 0.2.1 - FreeBSD desktops
 
-- Builds on windowing-gos 0.1.10 and gui-engine-gos 0.2.5: installed fallback fonts are mapped instead of read into memory, hidden windows let their frames go, and Wayland windows present through shared memory without loading the GPU driver.
+- Builds on windowing-gos 0.1.11 and gui-engine-gos 0.2.6: installed fallback fonts are mapped instead of read into memory, hidden windows let their frames go, Wayland windows present through shared memory without loading the GPU driver, and windows under libdecor no longer hang while they open.
 - Applications run on FreeBSD desktops (X11 or Wayland, with a D-Bus session bus) as they do on Linux: settings and caches under `$XDG_CONFIG_HOME` and `$XDG_CACHE_HOME`, the installed-application list from desktop entries, and the single-instance claim. The release gate runs there with its portable profile.
 - The web view renders pages and runs scripts through WebKitGTK 4.1 on FreeBSD (`pkg install webkit2-gtk_41`), as on Linux.
 
