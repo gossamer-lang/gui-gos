@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2 - Less CPU for terminal output
+
+- Builds on gui-engine-gos 0.2.7: a terminal whose output scrolls draws only the rows that came in, and a frame's raster work runs on workers that stay parked between frames.
+
 ## 0.2.1 - FreeBSD desktops
 
 - Builds on windowing-gos 0.1.11 and gui-engine-gos 0.2.6: installed fallback fonts are mapped instead of read into memory, hidden windows let their frames go, Wayland windows present through shared memory without loading the GPU driver, and windows under libdecor no longer hang while they open.
