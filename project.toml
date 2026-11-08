@@ -1,13 +1,21 @@
 [project]
 id = "github.com/gossamer-lang/gui-gos"
-version = "0.2.2"
-gossamer-version = "^v0.76.0"
+version = "0.2.3"
+gossamer-version = "^v0.78.0"
 authors = ["Dan Pozmanter"]
 license = "Apache 2.0"
 
 [lib]
 name = "gui"
 
+# The engine's optional parts, which an application may leave out.
+[features]
+default = ["markup", "svg", "jpeg", "gif"]
+markup = ["gui_engine/markup"]
+svg = ["gui_engine/svg"]
+jpeg = ["gui_engine/jpeg"]
+gif = ["gui_engine/gif"]
+
 [dependencies]
-"github.com/gossamer-lang/windowing-gos" = { git = "https://github.com/gossamer-lang/windowing-gos", tag = "v0.1.11" }
-"github.com/gossamer-lang/gui-engine-gos" = { git = "https://github.com/gossamer-lang/gui-engine-gos", tag = "v0.2.7" }
+"github.com/gossamer-lang/windowing-gos" = { git = "https://github.com/gossamer-lang/windowing-gos", tag = "v0.1.12" }
+"github.com/gossamer-lang/gui-engine-gos" = { git = "https://github.com/gossamer-lang/gui-engine-gos", tag = "v0.2.8", default-features = false }

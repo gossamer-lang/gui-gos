@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.3 - Optional engine parts
+
+- The engine's optional parts are features of gui-gos too (`markup`, `svg`, `jpeg`, `gif`), all on by default; an application that depends on gui-gos and gui-engine-gos with `default-features = false` builds without them.
+- Builds on gui-engine-gos 0.2.8, which also fixes a large paste stalling in a terminal, and windowing-gos 0.1.12, whose SDL no longer loses a wake from another thread. Requires Gossamer 0.78.0.
+
 ## 0.2.2 - Less CPU for terminal output
 
 - Builds on gui-engine-gos 0.2.7: a terminal whose output scrolls draws only the rows that came in, and a frame's raster work runs on workers that stay parked between frames.
