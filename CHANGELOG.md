@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.4 - Quieter when idle, faster when scrolling
+
+- Builds on gui-engine-gos 0.2.9: a caret stops blinking and stays lit 10 seconds after the last input or terminal output, and terminal output that scrolls past a full scrollback parses about 20% faster.
+- Builds on windowing-gos 0.1.13: on macOS, quiet windows free their spare display buffers and programs load fewer system frameworks.
+
 ## 0.2.3 - Optional engine parts
 
 - The engine's optional parts are features of gui-gos too (`markup`, `svg`, `jpeg`, `gif`), all on by default; an application that depends on gui-gos and gui-engine-gos with `default-features = false` builds without them.
