@@ -16,6 +16,9 @@ export SDL_VIDEO_DRIVER=offscreen
 export XDG_CONFIG_HOME="$out/config"
 export XDG_CACHE_HOME="$out/cache"
 echo "Toolkit report: $out"
+# The limit bounds the fixture's runs; checking first builds the Rust
+# bindings into the cache the runs load them from.
+"$GOS" check tests/toolkit-platform > "$out/check.txt"
 GOS_JIT=0 timeout -k 5 300 "$GOS" run tests/toolkit-platform > "$out/vm.txt"
 GOS_JIT=1 GOS_JIT_STATS=1 GOSSAMER_JIT_THRESHOLD=1 timeout -k 5 300 "$GOS" run tests/toolkit-platform > "$out/jit.txt" 2> "$out/jit-stats.txt"
 awk '/gos-jit-stats: compiled=/ { split($0, a, "compiled="); total += a[2]+0 } END { exit total > 0 ? 0 : 1 }' "$out/jit-stats.txt"
