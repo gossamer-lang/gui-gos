@@ -1,9 +1,25 @@
 // Which fonts text may use; the toolkit keeps the font registry.
 
+use std::errors
+
 use gui_engine
 
 /// Lets text fall back to installed fonts (the default), or keeps it to the
 /// fonts bundled with the toolkit, as reproducible screenshots need.
 pub fn use_system_fonts(enabled: bool) {
     gui_engine::use_system_fonts(enabled)
+}
+
+/// Registers the font in `data` (a TTF or OTF file, or every face of a TTC),
+/// answering the families it adds; text names them as any other family.
+pub fn register(data: Vec<u8>) -> Result<Vec<String>, errors::Error> {
+    gui_engine::register_font(data).map_err(|e| errors::new(e))
+}
+
+/// Registers the font file at `path` at once, answering the families it adds.
+/// Text drawn in an installed family it holds needs no wait for the installed
+/// fonts' catalog, so the first frame already draws in it. A system file is
+/// mapped rather than read into memory.
+pub fn register_file(path: String) -> Result<Vec<String>, errors::Error> {
+    gui_engine::register_font_file(path).map_err(|e| errors::new(e))
 }

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.6 - Fonts from a file
+
+- `text::fonts::register_file` and `text::fonts::register` add a font file or font data, every face of a collection, at once, so the first frame can already draw in an installed family instead of switching to it once the installed fonts are read.
+- A registered variable font with no bold face beside it also draws its family's bold.
+- Builds on gui-engine-gos 0.2.15 and windowing-gos 0.1.18.
+
 ## 0.2.5 - Shells start at their window's size
 
 - A terminal's program starts once its view sizes the screen, so a shell draws its first prompt once. `terminal::Event::NotStarted` reports a program that could not start then.
