@@ -724,7 +724,14 @@ impl Widget {
 
     /// An inline command palette over the window's commands.
     pub fn command_palette(id: String) -> Widget {
-        Widget::Choice(choices::Choice::Commands(choices::Palette { id: id, placeholder: "Search commands" }))
+        Widget::Choice(choices::Choice::Commands(choices::Palette { id: id, placeholder: "Search commands", items: None, empty: "" }))
+    }
+
+    /// A list shown like the command palette over `items`, kept in their
+    /// order and narrowed to those holding what is typed; the one chosen is
+    /// reported as `UiMsg::Chosen(id, key)`. With no items it says `empty`.
+    pub fn quick_pick(id: String, items: Vec<CompletionItem>, placeholder: String, empty: String) -> Widget {
+        Widget::Choice(choices::Choice::Commands(choices::Palette { id: id, placeholder: placeholder, items: Some(items), empty: empty }))
     }
 
     /// Items from (key, label) pairs.

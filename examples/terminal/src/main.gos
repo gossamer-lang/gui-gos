@@ -49,7 +49,7 @@ fn update(m: Model, msg: UiMsg) -> Model {
             Event::Title(title) => gui::perform(gui::Effect::SetTitle("main", if title.is_empty() { "Terminal" } else { title }))
             Event::Bell => ()
             Event::Exited(_) => gui::perform(gui::Effect::Quit)
-            Event::Failed(why) => {
+            Event::Failed(why) | Event::NotStarted(why) => {
                 eprintln(f"terminal: {why}")
                 gui::perform(gui::Effect::Quit)
             }
@@ -59,7 +59,7 @@ fn update(m: Model, msg: UiMsg) -> Model {
             Event::PathActivated(path, _, _) => gui::perform(gui::Effect::OpenUrl(f"file://{path}"))
             Event::Clipboard(text) => gui::perform(gui::Effect::SetClipboard(text))
             Event::PasteHeld(text) => if let Err(why) = m.terminal.paste(text) { eprintln(f"terminal: {why}") }
-            Event::Notify(_, _) | Event::PrimarySelection(_) | Event::Focused => ()
+            Event::Notify(_, _) | Event::PrimarySelection(_) | Event::Focused | Event::Foreground(_, _) => ()
         }
         _ => ()
     }

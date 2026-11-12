@@ -88,6 +88,14 @@ impl Command {
     pub fn shortcut_label(&self) -> String {
         if self.shortcuts.is_empty() { "" } else { self.shortcuts[0].label() }
     }
+
+    /// The command as the palette names it: its category first, as in
+    /// "View: Zoom In", so a group's commands sort together and a command
+    /// reads apart from like-named ones of another group.
+    pub fn palette_label(&self) -> String {
+        if self.category.is_empty() { return self.label }
+        crate::localization::message("commands", "{category}: {command}", 1, { "category": self.category, "command": self.label })
+    }
 }
 
 /// What a key press did to the shortcut state.

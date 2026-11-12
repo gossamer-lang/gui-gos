@@ -76,6 +76,9 @@ pub enum Event {
     Exited(i64)
     /// The program could not be waited for.
     Failed(String)
+    /// The program could not start once the screen was sized, so the
+    /// terminal runs none.
+    NotStarted(String)
     /// The screen could not take the size of its view within its byte limit,
     /// and keeps the size it has.
     Refused(String)
@@ -101,6 +104,12 @@ pub enum Event {
     PasteHeld(String)
     /// The terminal's view took keyboard focus, as a click on it gives it.
     Focused
+    /// What runs in front and where: the program name of the job in the
+    /// terminal's foreground, empty while the program itself is in front
+    /// (or where the system names no job), and the directory `cwd` reports.
+    /// Sent once the program starts and again when either changes, as
+    /// output arrives.
+    Foreground(String, String)
 }
 
 /// A terminal's state.
@@ -295,7 +304,10 @@ impl Terminal {
     }
 
     /// Runs `command` on the terminal; its output arrives as the session
-    /// runs, and `Event::Exited` reports its end.
+    /// runs, and `Event::Exited` reports its end. The program starts once a
+    /// view or `resize` sizes the screen, so it starts at that size; a
+    /// terminal no view shows (a tab in the back of a window) starts after a
+    /// short wait, at the size a view last gave the session's terminals.
     pub fn spawn(&self, command: Command) -> Result<(), errors::Error> {
         done(call("spawn", self.id, json::encode(command)))
     }

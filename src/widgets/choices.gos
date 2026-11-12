@@ -46,11 +46,16 @@ pub struct Picker {
     pub error: String
 }
 
-/// A command search list shown inline.
+/// A search list shown inline: over the window's commands, which it runs,
+/// or over `items`, the one chosen reported as `UiMsg::Chosen(id, key)`.
 #[derive(PartialEq)]
 pub struct Palette {
     pub id: String
     pub placeholder: String
+    /// The entries a quick pick offers, in the order it lists them.
+    pub items: Option<Vec<CompletionItem>>
+    /// What a quick pick with no entries at all says.
+    pub empty: String
 }
 
 #[derive(PartialEq)]
@@ -114,19 +119,29 @@ pub fn sync_model(ch: Choice, st: &mut StateStore) {
 // ---- select ----
 
 
-/// The palette's entries for `query`: matching commands, enabled first.
+/// The palette's entries for `query`: the commands whose name, with its
+/// category, holds the query anywhere as typed (ignoring case), so "pri"
+/// finds "File: New Private Tab"; enabled ones first, each group by name.
 pub fn palette_items(registry: Vec<crate::commands::Command>, query: String) -> Vec<CompletionItem> {
     let mut items = #[]
     for c in registry {
         if !c.visible { continue }
-        let mut it = CompletionItem::new(c.id, c.label)
+        let label = c.palette_label()
+        let mut typed: Vec<(i64, i64)> = #[]
+        if !query.is_empty() {
+            let score, ranges = completion::match_label(label, query, MatchMode::Substring)
+            if score <= 0.0 { continue }
+            typed = ranges
+        }
+        let mut it = CompletionItem::new(c.id, label)
         it.detail = c.shortcut_label()
         it.category = c.category
         it.disabled = !c.enabled
-        it.score = if c.enabled { 1.0 } else { 0.0 }
+        it.matches = typed
         items.push(it)
     }
-    completion::rank(items, query, MatchMode::Fuzzy, 200)
+    items.sort_by_key(|it| (it.disabled, it.label))
+    items
 }
 
 

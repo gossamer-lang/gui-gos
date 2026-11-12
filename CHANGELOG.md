@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.5 - Shells start at their window's size
+
+- A terminal's program starts once its view sizes the screen, so a shell draws its first prompt once. `terminal::Event::NotStarted` reports a program that could not start then.
+- `Widget::quick_pick` lists an application's own items the way the palette lists commands, narrowed to those holding what is typed, and reports the one chosen.
+- Closing a terminal hangs it up instead of killing its program, so a shell saves its history before it ends.
+- `terminal::Event::Foreground` names the job running in front of a terminal's program and its directory, each time either changes.
+- The command palette finds the commands holding what is typed anywhere in their name, which it shows after its category ("View: Zoom In"), and Tab completes the search to the highlighted command. It shows as one panel, only as tall as the commands it lists.
+- Builds on gui-engine-gos 0.2.14 and windowing-gos 0.1.17: lighter repaints and less CPU for terminal output, and on macOS scrolling without copying and a cursor that blinks without repainting.
+
 ## 0.2.4 - Quieter when idle, faster when scrolling
 
 - Builds on gui-engine-gos 0.2.9: a caret stops blinking and stays lit 10 seconds after the last input or terminal output, and terminal output that scrolls past a full scrollback parses about 20% faster.
