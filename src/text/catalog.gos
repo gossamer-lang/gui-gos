@@ -7,6 +7,9 @@ pub struct FontRecord {
     /// The face's index in its file (non-zero inside a collection).
     pub index: i64
     pub family: String
+    /// The family its name ID 1 gives where it differs from `family`
+    /// ("Lilex Light" of "Lilex"), as fontconfig and older settings name it.
+    pub legacy_family: String
     pub style: String
     pub bold: bool
     pub italic: bool

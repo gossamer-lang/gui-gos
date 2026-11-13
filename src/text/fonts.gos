@@ -10,6 +10,15 @@ pub fn use_system_fonts(enabled: bool) {
     gui_engine::use_system_fonts(enabled)
 }
 
+/// Readies installed family `family` before any text needs it, asking the
+/// platform's font service (fontconfig, Core Text, the Windows font registry)
+/// for its files, so the first frame already draws in it instead of switching
+/// to it once the installed fonts are read. Answers whether the family has a
+/// face: bundled, loaded, or found now.
+pub fn preload(family: String) -> bool {
+    gui_engine::preload_font_family(family)
+}
+
 /// Registers the font in `data` (a TTF or OTF file, or every face of a TTC),
 /// answering the families it adds; text names them as any other family.
 pub fn register(data: Vec<u8>) -> Result<Vec<String>, errors::Error> {

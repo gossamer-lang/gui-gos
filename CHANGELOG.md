@@ -1,10 +1,13 @@
 # Changelog
 
-## 0.2.6 - Fonts from a file
+## 0.2.6 - System fonts from the first frame
 
-- `text::fonts::register_file` and `text::fonts::register` add a font file or font data, every face of a collection, at once, so the first frame can already draw in an installed family instead of switching to it once the installed fonts are read.
+- `text::fonts::preload` readies an installed family before any text needs it, asking fontconfig, Core Text or the Windows font registry for its files, so the first frame already draws in it instead of switching to it once the installed fonts are read.
+- `text::fonts::register_file` and `text::fonts::register` add a font file or font data, every face of a collection, at once.
+- A family named by its style-specific name ("Lilex Light" of the family "Lilex"), as fontconfig and desktop settings name it, draws in that face instead of the fallback. `FontRecord::legacy_family` carries that name.
 - A registered variable font with no bold face beside it also draws its family's bold.
-- Builds on gui-engine-gos 0.2.15 and windowing-gos 0.1.18.
+- A timer no longer wakes the event loop before it is due when the system clock is being corrected.
+- Builds on gui-engine-gos 0.2.17 and windowing-gos 0.1.19.
 
 ## 0.2.5 - Shells start at their window's size
 
