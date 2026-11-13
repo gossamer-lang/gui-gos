@@ -5,6 +5,8 @@
 use std::{errors, unicode}
 use std::encoding::json
 
+use gui_engine
+
 use crate::editing::search::{SearchOptions, Searcher}
 
 // The most matches one search reports.

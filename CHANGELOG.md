@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.7 - One clipboard
+
+- `services::clipboard` uses the engine's clipboard, so `use_memory(true)` also catches a terminal's own copies and a program's OSC 52 writes, which before reached only the system clipboard. Builds on gui-engine-gos 0.2.18.
+- Each module imports what it uses, so the library builds with a Gossamer that keeps a module's imports to itself.
+
 ## 0.2.6 - System fonts from the first frame
 
 - `text::fonts::preload` readies an installed family before any text needs it, asking fontconfig, Core Text or the Windows font registry for its files, so the first frame already draws in it instead of switching to it once the installed fonts are read.

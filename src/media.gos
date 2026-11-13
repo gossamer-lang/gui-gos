@@ -8,6 +8,8 @@
 use std::errors
 use std::encoding::json
 
+use gui_engine
+
 use crate::{UiMsg, Widget}
 
 /// Where a player's sound goes.

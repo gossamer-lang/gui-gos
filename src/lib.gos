@@ -27,7 +27,7 @@
 
 use std::{env, errors, fs}
 
-use crate::{accessibility, commands, dialogs, editing, geometry, input, services, style, text, widgets}
+use crate::{accessibility, app, commands, dialogs, editing, geometry, input, render, services, style, text, widgets}
 
 pub type Session = app::Session
 pub type ClosePolicy = app::ClosePolicy
@@ -112,7 +112,7 @@ pub type Settings = services::Settings
 pub type AppIcon = services::apps::AppIcon
 
 /// The toolkit version.
-pub const VERSION: String = "0.2.6"
+pub const VERSION: String = "0.2.7"
 
 
 /// The `gui.tab.*` commands a tabbed window offers, with their shortcuts.

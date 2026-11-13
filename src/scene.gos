@@ -7,6 +7,8 @@
 use std::errors
 use std::encoding::json
 
+use gui_engine
+
 use crate::render::vector::Path
 
 /// What an object draws.

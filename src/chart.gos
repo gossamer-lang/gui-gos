@@ -6,6 +6,8 @@
 use std::errors
 use std::encoding::json
 
+use gui_engine
+
 /// How values map to an axis.
 #[derive(PartialEq)]
 pub enum Scale {

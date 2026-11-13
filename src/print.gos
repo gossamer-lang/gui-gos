@@ -7,6 +7,8 @@
 use std::errors
 use std::encoding::json
 
+use gui_engine
+
 use crate::render::display::DrawOp
 
 /// A sheet size in points (1/72 inch), portrait.

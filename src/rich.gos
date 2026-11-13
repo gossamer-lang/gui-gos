@@ -3,6 +3,8 @@
 use std::errors
 use std::encoding::json
 
+use gui_engine
+
 #[derive(PartialEq, Eq)]
 pub enum Format { Markdown, Html }
 #[derive(Default, PartialEq, Eq)]

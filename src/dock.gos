@@ -8,6 +8,8 @@
 use std::encoding::json
 use std::errors
 
+use gui_engine
+
 use crate::commands::Command
 
 /// Where a pane lands relative to a group.
