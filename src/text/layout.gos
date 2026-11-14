@@ -27,6 +27,9 @@ pub struct TextStyle {
     /// Whether standard and contextual ligatures join letters in Latin,
     /// Greek and Cyrillic text; scripts that need theirs keep them.
     pub ligatures: bool
+    /// OpenType feature settings separated by spaces or commas, such as
+    /// `ss01 zero -calt` or `cv01=2`; ones that do not parse are left out.
+    pub features: String
 }
 
 /// Horizontal placement of each line within the layout width.
@@ -43,12 +46,12 @@ pub enum TextAlign {
 impl TextStyle {
     /// Regular sans text at `size` pixels.
     pub fn sans(size: f64) -> TextStyle {
-        TextStyle { family: Family::Sans, size: size, bold: false, italic: false, tab_width: 4, line_spacing: 0.0, ligatures: true }
+        TextStyle { family: Family::Sans, size: size, bold: false, italic: false, tab_width: 4, line_spacing: 0.0, ligatures: true, features: "" }
     }
 
     /// Monospace text at `size` pixels.
     pub fn mono(size: f64) -> TextStyle {
-        TextStyle { family: Family::Monospace, size: size, bold: false, italic: false, tab_width: 4, line_spacing: 0.0, ligatures: true }
+        TextStyle { family: Family::Monospace, size: size, bold: false, italic: false, tab_width: 4, line_spacing: 0.0, ligatures: true, features: "" }
     }
 
     /// This style in bold.

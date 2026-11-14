@@ -98,9 +98,9 @@ pub struct Engine {
 
 /// The engine thread's side, handed to `run`.
 pub struct Runner {
-    pub (package) commands: Receiver<Command>
-    pub (package) events: Sender<Event>
-    pub (package) mailbox: Option<gui::Mailbox>
+    pub(package) commands: Receiver<Command>
+    pub(package) events: Sender<Event>
+    pub(package) mailbox: Option<gui::Mailbox>
 }
 
 /// A new engine. Pages can be opened at once; their commands wait until
@@ -165,7 +165,7 @@ impl Engine {
         self.next.get()
     }
 
-    pub (package) fn send(&self, command: Command) {
+    pub(package) fn send(&self, command: Command) {
         self.commands.send(command)
         engine::wake()
     }

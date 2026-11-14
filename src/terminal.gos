@@ -288,6 +288,23 @@ pub struct ViewOptions {
     /// Whether letters of one style join into the font's ligatures, such as
     /// a coding font's arrows.
     pub ligatures: bool
+    /// OpenType feature settings for the text, such as `ss01 zero -calt` or
+    /// `cv01=2`, separated by spaces or commas.
+    pub font_features: String
+    /// Variation axis settings for the font, such as `wdth=90 slnt=-5`; the
+    /// weight comes from `font_weight`.
+    pub font_variations: String
+    /// The family bold text draws in; empty draws it in the font's family.
+    pub bold_font: String
+    /// The weight bold text draws at; 0 draws it 300 heavier than
+    /// `font_weight` (700 to 900), or at 700 in `bold_font`.
+    pub bold_weight: i64
+    /// The family italic text draws in; empty draws it in the font's own
+    /// italic, or slants the upright face where the family has none.
+    pub italic_font: String
+    /// The family bold italic text draws in; empty draws it in the bold
+    /// font's italic.
+    pub bold_italic_font: String
 }
 
 /// What a double click selects besides letters and digits: enough for
@@ -296,7 +313,7 @@ pub const WORD_CHARS: String = "-#%&+,./:=?@_~"
 
 impl Default for ViewOptions {
     fn default() -> ViewOptions {
-        ViewOptions { cursor: "block", blink: true, bold_bright: false, legible: true, padding: 4, scrollbar: "never", scrollbar_side: "right", scroll_on_output: false, scroll_on_keystroke: true, word_chars: WORD_CHARS, option_as_meta: true, copy_on_select: false, confirm_paste: false, flash_bell: false, opacity: 1.0, line_height: 1.0, font_weight: 400, ligatures: true }
+        ViewOptions { cursor: "block", blink: true, bold_bright: false, legible: true, padding: 4, scrollbar: "never", scrollbar_side: "right", scroll_on_output: false, scroll_on_keystroke: true, word_chars: WORD_CHARS, option_as_meta: true, copy_on_select: false, confirm_paste: false, flash_bell: false, opacity: 1.0, line_height: 1.0, font_weight: 400, ligatures: true, font_features: "", font_variations: "", bold_font: "", bold_weight: 0, italic_font: "", bold_italic_font: "" }
     }
 }
 
