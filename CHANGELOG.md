@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.8 - Mailbox at start
+
+- `App::on_mailbox` hands the session's mailbox to the application once the session starts, so a goroutine started before it runs, such as one waiting on a file, can post it messages.
+
 ## 0.2.7 - One clipboard
 
 - `services::clipboard` uses the engine's clipboard, so `use_memory(true)` also catches a terminal's own copies and a program's OSC 52 writes, which before reached only the system clipboard. Builds on gui-engine-gos 0.2.18.

@@ -1,5 +1,5 @@
 use std::errors
-use std::sync::channel
+use std::sync::{channel, channel_unbounded}
 
 use gui::{EditState, TaskOutcome, UiMsg, Widget}
 use gui::text::offsets
@@ -140,6 +140,16 @@ fn main() -> Result<(), errors::Error> {
     assert(dump.contains("tasks job0=0, job1=1, job2=4"))
     session.shutdown()
     println("channels: worker posts reach the session in order")
+
+    let handed, mailboxes = channel_unbounded()
+    let mut hooked = gui::application("Parity", "dev.gossamer.gui-parity", || #[], record, show).on_mailbox(|m| handed.send(m)).start()?
+    let Some(posting) = mailboxes.recv() else { return Err(errors::new("the session handed no mailbox")) }
+    let poster = spawn(|| posting.post(UiMsg::Task("hooked", TaskOutcome::Done("posted"))))
+    assert_eq(poster.join(), Ok(()))
+    assert(hooked.flush().is_ok())
+    assert(hooked.semantics(0).dump().contains("hooked=posted"))
+    hooked.shutdown()
+    println("mailbox hook: the session handed its mailbox at start, and a post through it arrived")
 
     two_windows()
 }

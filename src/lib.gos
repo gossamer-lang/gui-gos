@@ -112,7 +112,7 @@ pub type Settings = services::Settings
 pub type AppIcon = services::apps::AppIcon
 
 /// The toolkit version.
-pub const VERSION: String = "0.2.7"
+pub const VERSION: String = "0.2.8"
 
 
 /// The `gui.tab.*` commands a tabbed window offers, with their shortcuts.
@@ -163,6 +163,9 @@ pub struct App<M> {
     pub transparent: Option<bool>
     /// Whether windows open at the size they last closed at.
     pub remember_size: bool
+    /// Receives the session's mailbox once the session starts
+    /// (`on_mailbox`).
+    pub mailbox_hook: Option<Fn(Mailbox)>
 }
 
 /// An application with default settings: an 800 by 600 window titled
@@ -192,6 +195,7 @@ pub fn application<M>(name: String, app_id: String, init: Fn() -> M, update: Fn(
         icon: None
         transparent: None
         remember_size: true
+        mailbox_hook: None
     }
 }
 
@@ -301,6 +305,16 @@ impl<M> App<M> {
         a
     }
 
+    /// Hands `f` the session's mailbox once the session starts, so a
+    /// goroutine started before the application runs, such as one waiting
+    /// on a file or a socket, can post it messages. A launch that hands its
+    /// command line to an instance already running starts no session.
+    pub fn on_mailbox(self, f: Fn(Mailbox)) -> App<M> {
+        let mut a = self
+        a.mailbox_hook = Some(f)
+        a
+    }
+
     pub fn ask_before_close(self) -> App<M> {
         let mut a = self
         a.close_policy = ClosePolicy::Ask
@@ -365,6 +379,7 @@ impl<M> App<M> {
                 Some(f) => f(cell[0], key)
                 None => cmds(cell[0])
         })
+        if let Some(hook) = self.mailbox_hook { hook(session.mailbox()) }
         if let Some(icon) = self.icon {
             if let Err(e) = session.set_icon(icon) { session.shutdown(); return Err(e) }
         }

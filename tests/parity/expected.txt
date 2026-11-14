@@ -8,4 +8,5 @@ syntax: cached lines and byte offsets
 completion: stable matching
 modules: probe module matches the running OS family
 channels: worker posts reach the session in order
+mailbox hook: the session handed its mailbox at start, and a post through it arrived
 windows: a second window opens apart; a closed window's state is disposed
