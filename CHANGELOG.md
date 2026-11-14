@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.9 - Program status and attention requests
+
+- `terminal::Event::Status` carries what a terminal's program reports of its state (OSC 7501): idle, working, blocked with what it waits for, done, error, or clear, with its app name, task id, progress and message.
+- `terminal::Event::Attention` reports a program's request for attention (OSC 1337 RequestAttention), and kitty's notifications (OSC 99) arrive as `Event::Notify`.
+- Builds on gui-engine-gos 0.2.21.
+
 ## 0.2.8 - Folder watches, mailbox at start
 
 - `Effect::WatchFolder` delivers `UiMsg::FolderChanged` once as the watch begins and then each time a file in the folder is made, removed, renamed or written, from a thread that runs only while the watch does; `Effect::UnwatchFolder` ends it.

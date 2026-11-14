@@ -89,7 +89,7 @@ pub enum Event {
     LinkPointed(String)
     /// The user asked to open a link: Ctrl+click, or Command+click on macOS.
     LinkActivated(String)
-    /// The program sent a desktop notification (OSC 9 or 777): its title,
+    /// The program sent a desktop notification (OSC 9, 99 or 777): its title,
     /// empty when it gave none, and its body.
     Notify(String, String)
     /// The program wrote this text to the clipboard (OSC 52). Programs can
@@ -112,6 +112,35 @@ pub enum Event {
     /// Sent once the program starts and again when either changes, as
     /// output arrives.
     Foreground(String, String)
+    /// The program reported what it or one of its tasks is doing (OSC 7501,
+    /// the Program Status Protocol). The terminal answers the protocol's
+    /// query, so programs that ask know to report.
+    Status(Status)
+    /// The program asked for the user's attention (true), or withdrew its
+    /// request (false), as iTerm2's `OSC 1337 ; RequestAttention` does.
+    Attention(bool)
+}
+
+/// What a program reported about itself or one of its tasks (OSC 7501).
+#[derive(Default, PartialEq, Eq)]
+pub struct Status {
+    /// The record reported on: a `/`-separated path, empty for the program's
+    /// own.
+    pub id: String
+    /// `idle`, `working`, `blocked`, `done` or `error`; `clear` removes the
+    /// record and those under it, or every record when `id` is empty.
+    pub state: String
+    /// The program's stable name, empty when it gave none.
+    pub app: String
+    /// What a `blocked` program waits for: `permission`, `question` or
+    /// `auth`; empty otherwise.
+    pub kind: String
+    /// Percent done while `working` or `blocked`, or -1 when not known.
+    pub progress: i64
+    /// A short label for the record.
+    pub title: String
+    /// One line on what the program is doing, or why it waits.
+    pub msg: String
 }
 
 /// A terminal's state.
