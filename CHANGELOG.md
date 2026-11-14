@@ -1,8 +1,10 @@
 # Changelog
 
-## 0.2.8 - Mailbox at start
+## 0.2.8 - Folder watches, mailbox at start
 
+- `Effect::WatchFolder` delivers `UiMsg::FolderChanged` once as the watch begins and then each time a file in the folder is made, removed, renamed or written, from a thread that runs only while the watch does; `Effect::UnwatchFolder` ends it.
 - `App::on_mailbox` hands the session's mailbox to the application once the session starts, so a goroutine started before it runs, such as one waiting on a file, can post it messages.
+- Builds on gui-engine-gos 0.2.20.
 
 ## 0.2.7 - One clipboard
 
