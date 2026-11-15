@@ -5,7 +5,8 @@
 - `TextStyle::features` turns OpenType features on or off, such as `ss01 zero -calt` or `cv01=2`.
 - `terminal::ViewOptions` takes font features, variation axis settings, and the fonts and weight of bold, italic and bold italic text.
 - Text is shaped by harfrust and fonts are read through skrifa: every script HarfBuzz shapes, CFF2 and variable fonts, `COLR` and `sbix` color emoji, bitmap fonts, and real italics.
-- Requires Gossamer 0.79.0 and builds on gui-engine-gos 0.2.22.
+- Terminal output and pastes no longer stall when the loop runs late for a frame it held a terminal's wake for.
+- Requires Gossamer 0.79.0 and builds on gui-engine-gos 0.2.23.
 
 ## 0.2.9 - Program status and attention requests
 
