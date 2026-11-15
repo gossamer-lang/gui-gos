@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.11 - No busy loop behind a hidden terminal
+
+- A terminal no window shows, such as a tab in the back, no longer keeps the loop awake.
+- Builds on gui-engine-gos 0.2.24.
+
 ## 0.2.10 - Font features and styles
 
 - `TextStyle::features` turns OpenType features on or off, such as `ss01 zero -calt` or `cv01=2`.
