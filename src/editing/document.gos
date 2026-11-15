@@ -63,7 +63,10 @@ impl Document {
     pub fn replace(&self, revision: i64, start: i64, end: i64, text: String) -> Result<Info, errors::Error> {
         Ok(expect_info(call("replace", self.id, json::encode((revision, start.max(0), end.max(0), text)))?))
     }
-    pub fn freeze(&self) -> Document { Document { id: expect_id(call("freeze", self.id, "[]").unwrap_or_else(|why| panic(f"{why}"))) } }
+    /// A snapshot of the document as it is now; fails when the session's memory
+    /// or handle budget cannot hold one more.
+    pub fn try_freeze(&self) -> Result<Document, errors::Error> { Ok(Document { id: expect_id(call("freeze", self.id, "[]")?) }) }
+    pub fn freeze(&self) -> Document { self.try_freeze().unwrap_or_else(|why| panic(f"{why}")) }
     pub fn try_mark_saved(&self, snapshot: Document) -> Result<(), errors::Error>{ let _ = call("saved", self.id, json::encode(snapshot.id))?; Ok(()) }
     pub fn mark_saved(&self, snapshot: Document) { self.try_mark_saved(snapshot).unwrap_or_else(|why| panic(f"Could not record save marker: {why}")) }
     pub fn close(&self) { let _ = call("close", self.id, "[]") }

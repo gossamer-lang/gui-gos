@@ -201,9 +201,11 @@ fn localized(op: String, args: String) -> String {
     }
 }
 
-/// Makes `catalog` the one every translation reads.
-pub fn install(catalog: Catalog) {
-    let _ = localized("install", json::encode(catalog))
+/// Makes `catalog` the one every translation reads; fails, keeping the
+/// installed one, when it is larger than the toolkit holds.
+pub fn install(catalog: Catalog) -> Result<(), errors::Error> {
+    gui_engine::localize("install", json::encode(catalog)).map_err(|why| errors::new(why))?
+    Ok(())
 }
 
 /// The installed catalog's locale.

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0 - Version numbers that mean what they say
+
+- 0.2.3 through 0.2.12 should have been minor releases, not patches: they raised the minimum Gossamer (0.78 in 0.2.3, 0.79 in 0.2.10), changed terminal behavior, and added struct fields and enum variants. From now on, any release that can break a build bumps the minor version.
+- `rich::Document::info`, `block`, `text` and `freeze` return a `Result` instead of panicking when the document is closed, a block is gone, or the answer is too large.
+- `editing::Document::try_freeze` returns an error when there isn't room for a snapshot; `freeze` still panics then.
+- `localization::install` returns an error for a catalog too large to hold, instead of panicking.
+- Builds on gui-engine-gos 0.3.0.
+
 ## 0.2.12 - Old font caches cleaned up
 
 - Font cache files in older formats are deleted after 30 days unused.

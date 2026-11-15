@@ -291,8 +291,8 @@ mod tests {
 
     #[test]
     fn standard_command_labels_and_categories_are_translated() {
-        install(Catalog { locale: PSEUDO_LOCALE, messages: #[] })
-        defer install(Catalog { locale: "en", messages: #[] })
+        assert(install(Catalog { locale: PSEUDO_LOCALE, messages: #[] }).is_ok())
+        defer { let _ = install(Catalog { locale: "en", messages: #[] }) }
         for c in super::standard_commands() {
             assert(c.label.starts_with("[") && c.category.starts_with("["), f"{c.id}: {c.label} / {c.category}")
         }

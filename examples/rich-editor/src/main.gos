@@ -14,8 +14,15 @@ fn choose_image(toolkit: bool) {
     let req = request::open_file("load-image", "Choose PNG", #[request::FileFilter { name: "PNG images", patterns: #["*.png"] }])
     gui::perform(Effect::OpenDialog(if toolkit { request::toolkit_file(req) } else { req }))
 }
-fn apply(document: Document, edits: Vec<Edit>) -> Result<gui::rich::Info, errors::Error>{ document.transact(document.info().revision, edits) }
-fn refresh(m: Model) -> Model { let mut n = m; n.block = n.document.info().selection.caret.block; n.generation += 1; n }
+fn apply(document: Document, edits: Vec<Edit>) -> Result<gui::rich::Info, errors::Error>{ document.transact(document.info()?.revision, edits) }
+fn refresh(m: Model) -> Model {
+    let mut n = m
+    if let Ok(info) = n.document.info() { n.block = info.selection.caret.block }
+    n.generation += 1
+    n
+}
+// The document's revision now, or -1 once it is closed, which no answer carries.
+fn current_revision(document: Document) -> i64 { document.info().map(|info| info.revision).unwrap_or(-1) }
 fn update(m: Model, msg: UiMsg) -> Model {
     let mut n = m
     match msg {
@@ -23,7 +30,13 @@ fn update(m: Model, msg: UiMsg) -> Model {
         UiMsg::RichLink(_, url) => n.status = f"Link: {url}"
         UiMsg::TextChanged(id, text) => match id { "source" => n.source = text, "asset" => n.asset = text, "file" => n.file = text, _ => () }
         UiMsg::Clicked(id) => {
-            let info = n.document.info()
+            let info = match n.document.info() {
+                Ok(info) => info
+                Err(why) => {
+                    n.status = f"Could not edit: {why}"
+                    return n
+                }
+            }
             let selection = info.selection
             let start = selection.anchor.byte.min(selection.caret.byte)
             let end = selection.anchor.byte.max(selection.caret.byte)
@@ -60,7 +73,7 @@ fn update(m: Model, msg: UiMsg) -> Model {
         UiMsg::Dialog(id, outcome) if id == "load-image" => match outcome {
             gui::Outcome::Paths(paths) => if !paths.is_empty() {
                 n.file = paths[0]
-                gui::perform(Effect::StartWork(Work::new("rich-image", 3, n.document.info().revision, Operation::ReadRichImage(n.document.id, n.asset, n.file))))
+                gui::perform(Effect::StartWork(Work::new("rich-image", 3, current_revision(n.document), Operation::ReadRichImage(n.document.id, n.asset, n.file))))
                 n.status = "Loading image"
             }
             // Without a native chooser the toolkit's own file browser asks.
@@ -70,11 +83,11 @@ fn update(m: Model, msg: UiMsg) -> Model {
         UiMsg::WorkFinished(owner, _, revision, outcome) => match outcome {
             Outcome::RichImported(record) => {
                 let imported = Document { id: record.document }
-                if revision != n.document.info().revision { imported.close(); n.status = "Import discarded because the document changed" } else {
+                if revision != current_revision(n.document) { imported.close(); n.status = "Import discarded because the document changed" } else {
                     gui::perform(Effect::CancelWork("rich-export")); gui::perform(Effect::CancelWork("rich-image")); n.document.close(); n = init(imported); n.status = "Imported"
                 }
             }
-            Outcome::RichExported(id, text) => if id == n.document.id && revision == n.document.info().revision { n.source = text; n.status = "Exported" } else { n.status = "Export discarded because the document changed" }
+            Outcome::RichExported(id, text) => if id == n.document.id && revision == current_revision(n.document) { n.source = text; n.status = "Exported" } else { n.status = "Export discarded because the document changed" }
             Outcome::RichImageLoaded(id, _) => if id == n.document.id { n.status = "Image loaded"; n.generation += 1 }
             Outcome::Failed(why) => n.status = f"Failed: {why}"
             Outcome::Cancelled => n.status = f"Cancelled {owner}"
@@ -91,7 +104,7 @@ fn view(m: Model) -> Widget {
     field.label = "Edit selected block"
     let preview = m.document.preview("preview", m.page, 16).unwrap()
     Widget::flex(gui::Axis::Vertical, #[
-        Widget::flow(#[Widget::button("bold", "Bold"), Widget::button("italic", "Italic"), Widget::button("underline", "Underline"), Widget::button("strike", "Strike"), Widget::button("heading", "Heading"), Widget::button("paragraph", "Paragraph"), Widget::button("list", "List"), Widget::button("quote", "Quote"), Widget::button("split", "Split"), Widget::button("indent", "Indent"), Widget::button("outdent", "Outdent"), Widget::button("undo", "Undo").disabled(!m.document.info().can_undo), Widget::button("redo", "Redo").disabled(!m.document.info().can_redo)], 6)
+        Widget::flow(#[Widget::button("bold", "Bold"), Widget::button("italic", "Italic"), Widget::button("underline", "Underline"), Widget::button("strike", "Strike"), Widget::button("heading", "Heading"), Widget::button("paragraph", "Paragraph"), Widget::button("list", "List"), Widget::button("quote", "Quote"), Widget::button("split", "Split"), Widget::button("indent", "Indent"), Widget::button("outdent", "Outdent"), Widget::button("undo", "Undo").disabled(!m.document.info().map(|info| info.can_undo).unwrap_or(false)), Widget::button("redo", "Redo").disabled(!m.document.info().map(|info| info.can_redo).unwrap_or(false))], 6)
         Widget::row(#[Widget::scroll("outline", Widget::column(outline, 4)).width(220), Widget::flex(gui::Axis::Vertical, #[Widget::input(field).height(160), Widget::scroll("preview-scroll", preview).grow(1)], 8, MainAlign::Start, CrossAlign::Stretch).grow(1)], 8).grow(1)
         Widget::row(#[Widget::button("previous", "Previous blocks"), Widget::button("next", "Next blocks"), Widget::label(m.status)], 8)
         Widget::input(gui::TextInput::new("source", m.source, "Markdown or supported HTML", gui::InputKind::Area)).height(140)
@@ -109,32 +122,33 @@ fn main() -> Result<(), errors::Error>{
     if !env::args().contains("--fixture") { return app(Document::default()).run() }
     let document = Document::import(Format::Markdown, SAMPLE)?
     let mut s = app(document).start()?
-    let block = document.info().selection.caret.block
+    let block = document.info()?.selection.caret.block
     let mut primary = windowing::Mods::default()
     if gui::input::platform_is_macos() { primary.gui = true } else { primary.ctrl = true }
     s.type_text("👩‍💻é ")?
-    require(document.block(block).text.starts_with("👩‍💻é "), "Unicode typing failed")?
+    require(document.block(block)?.text.starts_with("👩‍💻é "), "Unicode typing failed")?
     s.press(windowing::Key::Z, primary)?
-    require(document.block(block).text == "Notes", "Undo did not restore heading")?
+    require(document.block(block)?.text == "Notes", "Undo did not restore heading")?
     s.press(windowing::Key::Y, primary)?
     s.press(windowing::Key::A, primary)?
     s.click("bold")?
-    require(document.block(block).spans[0].marks.strong, "Toolbar formatting lost selection")?
+    require(document.block(block)?.spans[0].marks.strong, "Toolbar formatting lost selection")?
     s.focus("editor")?
     s.press(windowing::Key::End, windowing::Mods::default())?
     s.press(windowing::Key::Return, windowing::Mods::default())?
-    let right = document.info().selection.caret.block
-    require(right != block && document.block(right).text.is_empty(), f"Enter did not split block={block} right={right} text={document.block(right).text} root={document.outline(0,10)}")?
+    let right = document.info()?.selection.caret.block
+    let split = document.block(right)?.text
+    require(right != block && split.is_empty(), f"Enter did not split block={block} right={right} text={split} root={document.outline(0,10)}")?
     s.type_text("New paragraph")?
-    require(document.block(right).text == "New paragraph", "Typing after split used the wrong block")?
+    require(document.block(right)?.text == "New paragraph", "Typing after split used the wrong block")?
     s.click("list")?
     s.click("split")?
-    require(document.block(document.info().selection.caret.block).text.is_empty(), "List split did not create a new item")?
+    require(document.block(document.info()?.selection.caret.block)?.text.is_empty(), "List split did not create a new item")?
     s.click("outdent")?
-    let snap = document.freeze()
+    let snap = document.freeze()?
     let source = snap.export(Format::Html)?
     let copied = Document::import(Format::Html, source)?
-    require(copied.text() == document.text(), "HTML round trip lost text")?
+    require(copied.text()? == document.text()?, "HTML round trip lost text")?
     copied.close(); snap.close()
     let bad = Document::import(Format::Html, "<p onclick=\"alert(1)\">unsafe</p>")
     require(bad.is_err(), "Unsafe HTML accepted")?

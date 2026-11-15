@@ -196,9 +196,16 @@ fn save(m: Model, key: String, file: String) -> Model {
         n.docs[i].language = language
         gui::perform(Effect::StartWork(Work::new(f"editor-{key}", -3, n.docs[i].revision, Operation::AnalyzeDocument(n.docs[i].document.id, language))))
     }
+    let snapshot = match n.docs[i].document.try_freeze() {
+        Ok(snapshot) => snapshot
+        Err(why) => {
+            n.status = f"Could not save: {why}"
+            return n
+        }
+    }
     n.docs[i].pending_saves = 1
     n.docs[i].saving.close()
-    n.docs[i].saving = n.docs[i].document.freeze()
+    n.docs[i].saving = snapshot
     gui::perform(Effect::StartWork(Work::new(f"editor-{key}", -2, n.docs[i].saving.id, Operation::WriteDocument(n.docs[i].saving.id, file))))
     n.status = f"Saving {path::file_name(file).unwrap_or(file)}"
     n
@@ -403,9 +410,12 @@ fn task(m: Model, id: String, outcome: TaskOutcome) -> Model {
         TaskOutcome::Done(text) => {
             if kind == "load" {
                 n.docs[i].set_text(text)
-                let snapshot = n.docs[i].document.freeze()
-                n.docs[i].document.mark_saved(snapshot)
-                snapshot.close()
+                // A loaded file starts as saved; without room for the snapshot
+                // it opens marked as changed.
+                if let Ok(snapshot) = n.docs[i].document.try_freeze() {
+                    n.docs[i].document.mark_saved(snapshot)
+                    snapshot.close()
+                }
                 n.docs[i].loading = false
                 n.status = f"Opened {n.docs[i].title()}"
                 gui::perform(Effect::FocusInWindow(n.window, f"editor-{key}"))
