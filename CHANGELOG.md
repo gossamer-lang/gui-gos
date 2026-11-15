@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.12 - Old font caches cleaned up
+
+- Font cache files in older formats are deleted after 30 days unused.
+- Builds on gui-engine-gos 0.2.25.
+
 ## 0.2.11 - No busy loop behind a hidden terminal
 
 - A terminal no window shows, such as a tab in the back, no longer keeps the loop awake.
