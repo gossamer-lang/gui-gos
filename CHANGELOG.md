@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1 - Closing a terminal on Windows never hangs
+
+- Closing a terminal on Windows no longer hangs when its program keeps running after the console closes.
+- Builds on gui-engine-gos 0.3.1.
+
 ## 0.3.0 - Version numbers that mean what they say
 
 - 0.2.3 through 0.2.12 should have been minor releases, not patches: they raised the minimum Gossamer (0.78 in 0.2.3, 0.79 in 0.2.10), changed terminal behavior, and added struct fields and enum variants. From now on, any release that can break a build bumps the minor version.
