@@ -345,7 +345,7 @@ fn done(answer: Result<Answer, errors::Error>) -> Result<(), errors::Error> {
 impl Terminal {
     /// Opens a terminal in the running session.
     pub fn open(options: Options = Options { rows: 24, cols: 80, scrollback: 2_000, byte_limit: 67_108_864 }) -> Result<Terminal, errors::Error> {
-        match call("open", 0, json::encode(options))? {
+        match call("open", 0, json::encode(options)?)? {
             Answer::Id(id) => Ok(Terminal { id: id })
             _ => Err(errors::new("invalid terminal identity answer"))
         }
@@ -357,47 +357,47 @@ impl Terminal {
     /// terminal no view shows (a tab in the back of a window) starts after a
     /// short wait, at the size a view last gave the session's terminals.
     pub fn spawn(&self, command: Command) -> Result<(), errors::Error> {
-        done(call("spawn", self.id, json::encode(command)))
+        done(call("spawn", self.id, json::encode(command)?))
     }
 
     /// Shows `text` as program output: a recorded stream, or output the
     /// application writes itself.
     pub fn feed(&self, text: String) -> Result<(), errors::Error> {
-        done(call("feed", self.id, json::encode(text)))
+        done(call("feed", self.id, json::encode(text)?))
     }
 
     /// Sends `text` to the program as typed input.
     pub fn input(&self, text: String) -> Result<(), errors::Error> {
-        done(call("input", self.id, json::encode(text)))
+        done(call("input", self.id, json::encode(text)?))
     }
 
     /// Pastes `text`, bracketed when the program asked for bracketed paste.
     pub fn paste(&self, text: String) -> Result<(), errors::Error> {
-        done(call("paste", self.id, json::encode(text)))
+        done(call("paste", self.id, json::encode(text)?))
     }
 
     /// Sends signal `signum` to the job in the terminal's foreground, or to
     /// the program when nothing else runs there. Windows has no signals and
     /// refuses.
     pub fn signal(&self, signum: i64) -> Result<(), errors::Error> {
-        done(call("signal", self.id, json::encode(signum)))
+        done(call("signal", self.id, json::encode(signum)?))
     }
 
     /// Sets the character set the program reads and writes, from its next
     /// output on: a label such as "ISO-8859-1", "windows-1251" or
     /// "Shift_JIS". "UTF-8" is the default.
     pub fn set_encoding(&self, label: String) -> Result<(), errors::Error> {
-        done(call("encoding", self.id, json::encode(label)))
+        done(call("encoding", self.id, json::encode(label)?))
     }
 
     pub fn resize(&self, rows: i64, cols: i64) -> Result<(), errors::Error> {
-        done(call("resize", self.id, json::encode((rows, cols))))
+        done(call("resize", self.id, json::encode((rows, cols))?))
     }
 
     /// Scrolls `rows` rows back into history (negative moves forward),
     /// answering how far back the view now is.
     pub fn scroll(&self, rows: i64) -> Result<i64, errors::Error> {
-        match call("scroll", self.id, json::encode(rows))? {
+        match call("scroll", self.id, json::encode(rows)?)? {
             Answer::Rows(n) => Ok(n)
             _ => Err(errors::new("invalid terminal scroll answer"))
         }
@@ -405,7 +405,7 @@ impl Terminal {
 
     /// Selects from `anchor` to `caret`.
     pub fn select(&self, anchor: Cell, caret: Cell) -> Result<(), errors::Error> {
-        done(call("select", self.id, json::encode((anchor, caret))))
+        done(call("select", self.id, json::encode((anchor, caret))?))
     }
 
     pub fn clear_selection(&self) -> Result<(), errors::Error> {
@@ -425,7 +425,7 @@ impl Terminal {
     /// oldest first, each wrapped row joined into its line. Answers the bytes
     /// written.
     pub fn save_text(&self, path: String, selection: bool) -> Result<i64, errors::Error> {
-        match call("save_text", self.id, json::encode((path, selection)))? {
+        match call("save_text", self.id, json::encode((path, selection))?)? {
             Answer::Rows(n) => Ok(n)
             _ => Err(errors::new("invalid terminal save answer"))
         }
@@ -442,7 +442,7 @@ impl Terminal {
     /// copies it when `copy` is set. Answers how many links there are: with
     /// none, no labels show.
     pub fn hints(&self, copy: bool) -> Result<i64, errors::Error> {
-        match call("hints", self.id, json::encode(copy))? {
+        match call("hints", self.id, json::encode(copy)?)? {
             Answer::Rows(n) => Ok(n)
             _ => Err(errors::new("invalid terminal hints answer"))
         }
@@ -521,7 +521,7 @@ impl Terminal {
     /// Shows `spans` of the buffer highlighted, as a weaker selection,
     /// replacing any it showed.
     pub fn set_highlights(&self, spans: Vec<Span>) -> Result<(), errors::Error> {
-        done(call("highlight", self.id, json::encode(spans)))
+        done(call("highlight", self.id, json::encode(spans)?))
     }
 
     pub fn clear_highlight(&self) -> Result<(), errors::Error> {

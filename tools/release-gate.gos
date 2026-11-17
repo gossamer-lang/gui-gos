@@ -204,7 +204,7 @@ fn which(tool: String) -> bool {
 }
 
 fn toml_value(file: String) -> Result<json::Value, errors::Error> {
-    Ok(json::parse(toml::to_json(fs::read_to_string(file)?)?)?)
+    Ok(json::parse(toml::to_json_text(fs::read_to_string(file)?)?)?)
 }
 
 fn text(value: json::Value, key: String) -> String {
@@ -386,7 +386,7 @@ fn run_step(step: Step, base: BTreeMap<String, String>, live: String, limit_ms: 
 }
 
 fn save(out: String, ledger: Ledger) -> Result<(), errors::Error> {
-    fs::write(path::join(out, "results.json"), (json::encode_pretty(ledger) + "\n").bytes())?
+    fs::write(path::join(out, "results.json"), (json::encode_pretty(ledger)? + "\n").bytes())?
     Ok(())
 }
 
@@ -404,7 +404,7 @@ fn gate() -> Result<i64, errors::Error> {
     }
     if options.list {
         for step in steps {
-            println(json::encode(step))
+            println(json::encode(step)?)
         }
         return Ok(0)
     }

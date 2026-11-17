@@ -204,7 +204,7 @@ fn localized(op: String, args: String) -> String {
 /// Makes `catalog` the one every translation reads; fails, keeping the
 /// installed one, when it is larger than the toolkit holds.
 pub fn install(catalog: Catalog) -> Result<(), errors::Error> {
-    gui_engine::localize("install", json::encode(catalog)).map_err(|why| errors::new(why))?
+    gui_engine::localize("install", json::encode(catalog)?).map_err(|why| errors::new(why))?
     Ok(())
 }
 
@@ -220,11 +220,11 @@ pub fn rtl() -> bool {
 
 /// `source` in the installed locale.
 pub fn tr(source: String) -> String {
-    crate::app::wire::text(localized("tr", json::encode(source)))
+    crate::app::wire::text(localized("tr", crate::app::wire::encoded(json::encode(source))))
 }
 
 /// `source` in context `context`, in the plural form `count` takes, with
 /// `args` substituted, in the installed locale.
 pub fn message(context: String, source: String, count: i64, args: Map<String, String>) -> String {
-    crate::app::wire::text(localized("message", f"[{json::encode(context)},{json::encode(source)},{count},{json::encode(args)}]"))
+    crate::app::wire::text(localized("message", f"[{crate::app::wire::encoded(json::encode(context))},{crate::app::wire::encoded(json::encode(source))},{count},{crate::app::wire::encoded(json::encode(args))}]"))
 }

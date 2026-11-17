@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0 - Gossamer 0.81
+
+- Requires Gossamer 0.81.0, windowing-gos 0.2.0 and gui-engine-gos 0.4.0.
+- Table headings line up with their columns' cells, and right-aligned numbers sit under their headings.
+- macOS menu shortcuts run their command once.
+
 ## 0.3.1 - Closing a terminal on Windows never hangs
 
 - Closing a terminal on Windows no longer hangs when its program keeps running after the console closes.

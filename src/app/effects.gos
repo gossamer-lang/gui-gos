@@ -172,7 +172,7 @@ pub enum Effect {
 
 /// Queues `effect` for the session to apply after the current update.
 pub fn perform(effect: Effect) {
-    if let Err(e) = gui_engine::perform(json::encode(effect)) {
+    if let Err(e) = gui_engine::perform(wire::encoded(json::encode(effect))) {
         panic(f"gui: perform: {e}")
     }
 }

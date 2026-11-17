@@ -222,7 +222,7 @@ fn fixture() -> Result<(), errors::Error> {
     require(detached.contains("HELLO DOCK"), f"the preview lost its content: {detached}")?
     println("floating: preview detached with its content")
     let windows = json::get(json::parse(saved)?, "floating").ok_or(errors::new("no floating windows"))?
-    let window = json::get(json::at(windows, 0), "window").and_then(json::as_str).unwrap_or("")
+    let window = json::at(windows, 0).and_then(|w| json::get(w, "window")).and_then(json::as_str).unwrap_or("")
     s.emit(UiMsg::CloseRequested(window))
     s.flush()?
     let back = fs::read_to_string(layout_file())?

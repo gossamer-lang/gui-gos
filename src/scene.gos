@@ -113,7 +113,7 @@ fn info(answer: Result<Answer, errors::Error>) -> Result<Info, errors::Error> {
 
 impl Scene {
     pub fn open(nodes: Vec<Node>) -> Result<Scene, errors::Error> {
-        match call("open", 0, json::encode(nodes))? {
+        match call("open", 0, json::encode(nodes)?)? {
             Answer::Id(id) => Ok(Scene { id: id })
             _ => Err(errors::new("invalid scene answer"))
         }
@@ -121,28 +121,28 @@ impl Scene {
 
     /// Adds `node` to group `parent` ("" for the top level), last or at `index`.
     pub fn add(&self, node: Node, parent: String = "", index: i64 = -1) -> Result<Info, errors::Error> {
-        info(call("add", self.id, json::encode((parent, index, node))))
+        info(call("add", self.id, json::encode((parent, index, node))?))
     }
 
     pub fn replace(&self, node: Node) -> Result<Info, errors::Error> {
-        info(call("replace", self.id, json::encode(node)))
+        info(call("replace", self.id, json::encode(node)?))
     }
 
     pub fn remove(&self, ids: Vec<String>) -> Result<Info, errors::Error> {
-        info(call("remove", self.id, json::encode(ids)))
+        info(call("remove", self.id, json::encode(ids)?))
     }
 
     /// Moves an object to `index` among its siblings.
     pub fn restack(&self, object: String, index: i64) -> Result<Info, errors::Error> {
-        info(call("restack", self.id, json::encode((object, index))))
+        info(call("restack", self.id, json::encode((object, index))?))
     }
 
     pub fn translate(&self, ids: Vec<String>, dx: f64, dy: f64) -> Result<Info, errors::Error> {
-        info(call("translate", self.id, json::encode((ids, dx, dy))))
+        info(call("translate", self.id, json::encode((ids, dx, dy))?))
     }
 
     pub fn resize(&self, object: String, width: f64, height: f64) -> Result<Info, errors::Error> {
-        info(call("resize", self.id, json::encode((object, width, height))))
+        info(call("resize", self.id, json::encode((object, width, height))?))
     }
 
     pub fn undo(&self) -> Result<Info, errors::Error> {
@@ -154,11 +154,11 @@ impl Scene {
     }
 
     pub fn select(&self, ids: Vec<String>) -> Result<Info, errors::Error> {
-        info(call("select", self.id, json::encode(ids)))
+        info(call("select", self.id, json::encode(ids)?))
     }
 
     pub fn set_camera(&self, camera: Camera) -> Result<(), errors::Error> {
-        call("camera", self.id, json::encode(camera)).map(|_| ())
+        call("camera", self.id, json::encode(camera)?).map(|_| ())
     }
 
     pub fn info(&self) -> Result<Info, errors::Error> {
@@ -175,19 +175,19 @@ impl Scene {
 
     /// The top-level (or with `deep` the innermost) object under view pixel (`x`, `y`).
     pub fn hit(&self, x: f64, y: f64, deep: bool = false) -> Result<Option<String>, errors::Error> {
-        match call("hit", self.id, json::encode((x, y, deep)))? {
+        match call("hit", self.id, json::encode((x, y, deep))?)? {
             Answer::Hit(id) => Ok(id)
             _ => Err(errors::new("invalid scene answer"))
         }
     }
 
     pub fn export_png(&self, path: String, width: i64, height: i64) -> Result<(), errors::Error> {
-        call("export_png", self.id, json::encode((path, width, height))).map(|_| ())
+        call("export_png", self.id, json::encode((path, width, height))?).map(|_| ())
     }
 
     /// The scene as a printable drawing, for `gui::print` documents.
     pub fn print_item(&self, width: i64, height: i64) -> Result<crate::print::Item, errors::Error> {
-        match call("drawing", self.id, json::encode((width, height)))? {
+        match call("drawing", self.id, json::encode((width, height))?)? {
             Answer::Item(item) => Ok(item)
             _ => Err(errors::new("invalid scene answer"))
         }

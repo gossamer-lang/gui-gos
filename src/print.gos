@@ -180,7 +180,7 @@ pub struct PrintDocument {
 impl PrintDocument {
     /// Lays `items` out with `setup`.
     pub fn open(items: Vec<Item>, setup: PageSetup) -> Result<PrintDocument, errors::Error> {
-        match call("open", json::encode((items, setup)))? {
+        match call("open", json::encode((items, setup))?)? {
             Answer::Id(id) => Ok(PrintDocument { id: id })
             _ => Err(errors::new("invalid print answer"))
         }
@@ -188,16 +188,16 @@ impl PrintDocument {
 
     /// Lays the document out again with `setup`, answering its page count.
     pub fn set_setup(&self, setup: PageSetup) -> Result<i64, errors::Error> {
-        pages_of(call("setup", json::encode((self.id, setup)))?)
+        pages_of(call("setup", json::encode((self.id, setup))?)?)
     }
 
     pub fn page_count(&self) -> Result<i64, errors::Error> {
-        pages_of(call("count", json::encode(self.id))?)
+        pages_of(call("count", json::encode(self.id)?)?)
     }
 
     /// The text page `page` (from 1) shows, line by line.
     pub fn page_text(&self, page: i64) -> Result<String, errors::Error> {
-        match call("text", json::encode((self.id, page)))? {
+        match call("text", json::encode((self.id, page))?)? {
             Answer::Text(text) => Ok(text)
             _ => Err(errors::new("invalid print answer"))
         }
@@ -210,41 +210,41 @@ impl PrintDocument {
 
     /// Starts writing the pages to a PDF at `path` in the background.
     pub fn export_pdf(&self, title: String, path: String) -> Result<Job, errors::Error> {
-        started(call("start", json::encode((Source::Document(self.id), title, Target::Pdf(path))))?)
+        started(call("start", json::encode((Source::Document(self.id), title, Target::Pdf(path)))?)?)
     }
 
     /// Starts sending the pages to a printer in the background.
     pub fn print_document(&self, options: PrintOptions) -> Result<Job, errors::Error> {
         let title = options.title
-        started(call("start", json::encode((Source::Document(self.id), title, Target::Printer(options))))?)
+        started(call("start", json::encode((Source::Document(self.id), title, Target::Printer(options)))?)?)
     }
 
     pub fn close(&self) {
-        let _ = call("close", json::encode(self.id))
+        let _ = call("close", crate::app::wire::encoded(json::encode(self.id)))
     }
 }
 
 /// Starts laying out `items` and writing them to a PDF at `path` in the
 /// background, for documents not kept open.
 pub fn export_pdf(items: Vec<Item>, setup: PageSetup, title: String, path: String) -> Result<Job, errors::Error> {
-    started(call("start", json::encode((Source::Items(items, setup), title, Target::Pdf(path))))?)
+    started(call("start", json::encode((Source::Items(items, setup), title, Target::Pdf(path)))?)?)
 }
 
 impl Job {
     /// Stops the job; a document the spooler already holds is withdrawn.
     pub fn cancel(&self) -> Result<(), errors::Error> {
-        call("cancel", json::encode(self.id)).map(|_| ())
+        call("cancel", json::encode(self.id)?).map(|_| ())
     }
 }
 
 /// Withdraws a job a printer's spooler accepted earlier.
 pub fn withdraw(server: String, spooled: String) -> Result<(), errors::Error> {
-    call("withdraw", json::encode((server, spooled))).map(|_| ())
+    call("withdraw", json::encode((server, spooled))?).map(|_| ())
 }
 
 /// The printers `server` offers; "" asks the system's.
 pub fn destinations(server: String = "") -> Result<Vec<Destination>, errors::Error> {
-    match call("destinations", json::encode(server))? {
+    match call("destinations", json::encode(server)?)? {
         Answer::Destinations(list) => Ok(list)
         _ => Err(errors::new("invalid print answer"))
     }

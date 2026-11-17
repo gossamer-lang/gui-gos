@@ -114,7 +114,7 @@ fn done(answer: Result<Answer, errors::Error>) -> Result<(), errors::Error> {
 
 impl Chart {
     pub fn open(spec: Spec) -> Result<Chart, errors::Error> {
-        match call("open", 0, json::encode(spec))? {
+        match call("open", 0, json::encode(spec)?)? {
             Answer::Id(id) => Ok(Chart { id: id })
             _ => Err(errors::new("invalid chart answer"))
         }
@@ -122,27 +122,27 @@ impl Chart {
 
     /// Adds a series, answering its index.
     pub fn add_series(&self, style: SeriesStyle, points: Vec<(f64, f64)> = #[]) -> Result<i64, errors::Error> {
-        match call("add_series", self.id, json::encode((style, points)))? {
+        match call("add_series", self.id, json::encode((style, points))?)? {
             Answer::Id(index) => Ok(index)
             _ => Err(errors::new("invalid chart answer"))
         }
     }
 
     pub fn set_points(&self, series: i64, points: Vec<(f64, f64)>) -> Result<(), errors::Error> {
-        done(call("set_points", self.id, json::encode((series, points))))
+        done(call("set_points", self.id, json::encode((series, points))?))
     }
 
     /// Appends points from any goroutine; the window repaints.
     pub fn append(&self, series: i64, points: Vec<(f64, f64)>) -> Result<(), errors::Error> {
-        done(call("append", self.id, json::encode((series, points))))
+        done(call("append", self.id, json::encode((series, points))?))
     }
 
     pub fn set_hidden(&self, series: i64, hidden: bool) -> Result<(), errors::Error> {
-        done(call("set_hidden", self.id, json::encode((series, hidden))))
+        done(call("set_hidden", self.id, json::encode((series, hidden))?))
     }
 
     pub fn zoom_to(&self, window: Window) -> Result<(), errors::Error> {
-        done(call("zoom_to", self.id, json::encode(window)))
+        done(call("zoom_to", self.id, json::encode(window)?))
     }
 
     /// Fits the view to the data again.
@@ -159,7 +159,7 @@ impl Chart {
 
     /// The data as (series, x, y) text rows, at most `limit` per series.
     pub fn table(&self, limit: i64 = 1_000) -> Result<Vec<(String, String, String)>, errors::Error> {
-        match call("table", self.id, json::encode(limit))? {
+        match call("table", self.id, json::encode(limit)?)? {
             Answer::Rows(rows) => Ok(rows)
             _ => Err(errors::new("invalid chart answer"))
         }
@@ -174,12 +174,12 @@ impl Chart {
     }
 
     pub fn export_png(&self, path: String, width: i64, height: i64) -> Result<(), errors::Error> {
-        done(call("export_png", self.id, json::encode((path, width, height))))
+        done(call("export_png", self.id, json::encode((path, width, height))?))
     }
 
     /// The chart as a printable drawing, for `gui::print` documents.
     pub fn print_item(&self, width: i64 = 480, height: i64 = 300) -> Result<crate::print::Item, errors::Error> {
-        match call("drawing", self.id, json::encode((width, height)))? {
+        match call("drawing", self.id, json::encode((width, height))?)? {
             Answer::Item(item) => Ok(item)
             _ => Err(errors::new("invalid chart answer"))
         }

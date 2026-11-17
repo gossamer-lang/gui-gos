@@ -20,7 +20,7 @@ impl ColorPalette {
         if !fs::exists(file) { return Ok(ColorPalette::new()) }
         ColorPalette::decode(fs::read_to_string(file)?)
     }
-    pub fn save(&self, file: String) -> Result<(), errors::Error> { crate::services::write_atomic(file, json::encode(*self).bytes()) }
+    pub fn save(&self, file: String) -> Result<(), errors::Error> { crate::services::write_atomic(file, json::encode(*self)?.bytes()) }
     pub fn remember(&mut self, color: Color) { let css = color.css(); let mut next = #[css]; for item in self.recent { if item != css && next.len() < 16 { next.push(item) } }; self.recent = next }
     /// Saves `color` as a favorite named `name` and answers its id; a color
     /// already saved keeps its place and takes the new name.

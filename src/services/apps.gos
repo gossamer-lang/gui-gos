@@ -47,7 +47,7 @@ impl AppIcon {
     /// A `size` pixel square icon: a rounded tile of `background` with the
     /// built-in `glyph` drawn on it in `foreground`, transparent outside.
     pub fn drawn(glyph: crate::render::icons::Icon, size: i64, background: crate::style::color::Color, foreground: crate::style::color::Color) -> AppIcon {
-        let answered = gui_engine::app_icon_drawn(json::encode(glyph), size, json::encode(background), json::encode(foreground))
+        let answered = gui_engine::app_icon_drawn(crate::app::wire::encoded(json::encode(glyph)), size, crate::app::wire::encoded(json::encode(background)), crate::app::wire::encoded(json::encode(foreground)))
         match answered.map(|text| json::decode::<AppIcon>(text)) {
             Ok(Ok(icon)) => icon
             Ok(Err(e)) => panic(f"gui: a drawn icon did not decode: {e}")
@@ -64,7 +64,7 @@ impl AppIcon {
 
     /// The icon as a PNG file.
     pub fn to_png(&self) -> Vec<u8> {
-        match gui_engine::app_icon_png(json::encode(*self)) {
+        match gui_engine::app_icon_png(crate::app::wire::encoded(json::encode(*self))) {
             Ok(png) => png
             Err(e) => panic(f"gui: encoding an icon: {e}")
         }
@@ -620,7 +620,7 @@ struct IconCatalog { entries: Vec<AppEntry> }
 
 /// Loads available desktop icons once; call off the UI thread for large catalogs.
 pub fn with_icons(entries: Vec<AppEntry>, size: i64) -> Vec<AppEntry> {
-    match gui_engine::apps_with_icons(json::encode(entries), size) {
+    match gui_engine::apps_with_icons(crate::app::wire::encoded(json::encode(entries)), size) {
         Ok(text) => json::decode::<IconCatalog>(f"{{\"entries\":{text}}}").map(|catalog| catalog.entries).unwrap_or(entries)
         Err(_) => entries
     }

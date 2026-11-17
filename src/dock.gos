@@ -85,13 +85,13 @@ fn call(method: String, args: String) -> Answer {
 }
 
 fn layout_of(value: json::Value) -> Layout {
-    Layout { state: json::render(value) }
+    Layout { state: crate::app::wire::encoded(json::encode(value)) }
 }
 
 impl Layout {
     /// One group holding `panes` in the main window.
     pub fn new(panes: Vec<String>) -> Layout {
-        match call("new", json::encode(panes)) {
+        match call("new", crate::app::wire::encoded(json::encode(panes))) {
             Answer::Layout(value) => layout_of(value)
             _ => panic("gui: invalid dock answer")
         }
@@ -101,7 +101,7 @@ impl Layout {
     /// repairing what it must; an unreadable save starts over. Answers the
     /// repairs made.
     pub fn restore(source: String, known: Vec<String>) -> (Layout, Vec<String>) {
-        match call("restore", json::encode((source, known))) {
+        match call("restore", crate::app::wire::encoded(json::encode((source, known)))) {
             Answer::Restored(value, repairs) => (layout_of(value), repairs)
             _ => panic("gui: invalid dock answer")
         }
@@ -115,11 +115,11 @@ impl Layout {
     fn apply(&mut self, answer: Answer) -> Vec<Change> {
         match answer {
             Answer::Changed(value, changes) => {
-                self.state = json::render(value)
+                self.state = crate::app::wire::encoded(json::encode(value))
                 changes
             }
             Answer::Layout(value) => {
-                self.state = json::render(value)
+                self.state = crate::app::wire::encoded(json::encode(value))
                 #[Change::Layout]
             }
             _ => panic("gui: invalid dock answer")
@@ -130,26 +130,26 @@ impl Layout {
     /// activation, reordering, moves between windows, detaching, edge and
     /// center drops, split ratios and floating windows closing.
     pub fn handle(&mut self, dock: String, msg: crate::UiMsg) -> Vec<Change> {
-        let args = f"[{self.state},{json::encode(dock)},{json::encode(msg)}]"
+        let args = f"[{self.state},{crate::app::wire::encoded(json::encode(dock))},{crate::app::wire::encoded(json::encode(msg))}]"
         self.apply(call("handle", args))
     }
 
     /// Runs a `dock.*` keyboard command of dock `dock` on the focused pane.
     pub fn command(&mut self, dock: String, pane: String, command: String) -> Vec<Change> {
-        let args = f"[{self.state},{json::encode(dock)},{json::encode(pane)},{json::encode(command)}]"
+        let args = f"[{self.state},{crate::app::wire::encoded(json::encode(dock))},{crate::app::wire::encoded(json::encode(pane))},{crate::app::wire::encoded(json::encode(command))}]"
         self.apply(call("command", args))
     }
 
     /// Places `pane` against group `group` at `zone`.
     pub fn place(&mut self, pane: String, group: i64, zone: Zone) -> Vec<Change> {
-        let args = f"[{self.state},{json::encode(pane)},{group},{json::encode(zone)}]"
+        let args = f"[{self.state},{crate::app::wire::encoded(json::encode(pane))},{group},{crate::app::wire::encoded(json::encode(zone))}]"
         self.apply(call("place", args))
     }
 
     /// Gives the group holding `pane` this share (0 to 1) of the split it
     /// sits in.
     pub fn set_share(&mut self, pane: String, share: f64) -> Result<(), errors::Error> {
-        match call_result("set_share", f"[{self.state},{json::encode(pane)},{share}]") {
+        match call_result("set_share", f"[{self.state},{json::encode(pane)?},{share}]") {
             Ok(answer) => {
                 let _ = self.apply(answer)
                 Ok(())
@@ -160,12 +160,12 @@ impl Layout {
 
     /// Docks a new pane among the main window's first group of tabs.
     pub fn add(&mut self, pane: String) {
-        let _ = self.apply(call("add", f"[{self.state},{json::encode(pane)}]"))
+        let _ = self.apply(call("add", f"[{self.state},{crate::app::wire::encoded(json::encode(pane))}]"))
     }
 
     /// Records where a floating window is, so a restored layout reopens it there.
     pub fn place_window(&mut self, window: String, x: i64, y: i64, width: i64, height: i64) {
-        let args = f"[{self.state},{json::encode(window)},{x},{y},{width},{height}]"
+        let args = f"[{self.state},{crate::app::wire::encoded(json::encode(window))},{x},{y},{width},{height}]"
         let _ = self.apply(call("place_window", args))
     }
 
@@ -179,7 +179,7 @@ impl Layout {
 
     /// The group holding `pane`.
     pub fn group_of(&self, pane: String) -> Option<i64> {
-        match call("group_of", f"[{self.state},{json::encode(pane)}]") {
+        match call("group_of", f"[{self.state},{crate::app::wire::encoded(json::encode(pane))}]") {
             Answer::Group(group) => group
             _ => panic("gui: invalid dock answer")
         }
@@ -187,7 +187,7 @@ impl Layout {
 
     /// The active pane of the next (or previous) group, across windows.
     pub fn next_group(&self, pane: String, backward: bool = false) -> Option<String> {
-        match call("next_group", f"[{self.state},{json::encode(pane)},{backward}]") {
+        match call("next_group", f"[{self.state},{crate::app::wire::encoded(json::encode(pane))},{backward}]") {
             Answer::Pane(pane) => pane
             _ => panic("gui: invalid dock answer")
         }
@@ -197,9 +197,9 @@ impl Layout {
     pub fn view(&self, dock: String, window: String, panes: Vec<(String, Pane)>) -> crate::Widget {
         let mut entries = #[]
         for (key, pane) in panes {
-            entries.push(f"[{json::encode(key)},{{\"title\":{json::encode(pane.title)},\"content\":{json::encode(pane.content)},\"closable\":{pane.closable}}}]")
+            entries.push(f"[{crate::app::wire::encoded(json::encode(key))},{{\"title\":{crate::app::wire::encoded(json::encode(pane.title))},\"content\":{crate::app::wire::encoded(json::encode(pane.content))},\"closable\":{pane.closable}}}]")
         }
-        let args = f"[{self.state},{json::encode(dock)},{json::encode(window)},[{entries.join(",")}]]"
+        let args = f"[{self.state},{crate::app::wire::encoded(json::encode(dock))},{crate::app::wire::encoded(json::encode(window))},[{entries.join(",")}]]"
         match call("view", args) {
             Answer::View(widget) => widget
             _ => panic("gui: invalid dock answer")

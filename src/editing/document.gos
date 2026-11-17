@@ -49,33 +49,33 @@ fn expect_id(answer: Answer) -> i64 { if let Answer::Id(id) = answer { id } else
 fn expect_info(answer: Answer) -> Info { if let Answer::Info(info) = answer { info } else { panic("invalid document info answer") } }
 fn expect_position(answer: Answer) -> (i64, i64) { if let Answer::Position(a, b) = answer { (a, b) } else { panic("invalid document position answer") } }
 impl Document {
-    pub fn try_new(text: String) -> Result<Document, errors::Error> { Ok(Document { id: expect_id(call("new", 0, json::encode(text))?) }) }
+    pub fn try_new(text: String) -> Result<Document, errors::Error> { Ok(Document { id: expect_id(call("new", 0, json::encode(text)?)?) }) }
     pub fn new(text: String) -> Document { Document::try_new(text).unwrap_or_else(|why| panic(f"{why}")) }
     pub fn is_layout_ready(&self) -> bool {
         match call("layout_ready", self.id, "[]") { Ok(Answer::Flag(ready)) => ready, _ => false }
     }
     pub fn info(&self) -> Info { expect_info(call("info", self.id, "[]").unwrap_or_else(|why| panic(f"{why}"))) }
     pub fn read(&self, start: i64, end: i64) -> String {
-        let answer = call("read", self.id, json::encode((start.max(0), end.max(0)))).unwrap_or_else(|why| panic(f"{why}"))
+        let answer = call("read", self.id, crate::app::wire::encoded(json::encode((start.max(0), end.max(0))))).unwrap_or_else(|why| panic(f"{why}"))
         if let Answer::Text(text) = answer { text } else { panic("invalid document text answer") }
     }
     pub fn text(&self) -> String { self.read(0, self.info().bytes) }
     pub fn replace(&self, revision: i64, start: i64, end: i64, text: String) -> Result<Info, errors::Error> {
-        Ok(expect_info(call("replace", self.id, json::encode((revision, start.max(0), end.max(0), text)))?))
+        Ok(expect_info(call("replace", self.id, json::encode((revision, start.max(0), end.max(0), text))?)?))
     }
     /// A snapshot of the document as it is now; fails when the session's memory
     /// or handle budget cannot hold one more.
     pub fn try_freeze(&self) -> Result<Document, errors::Error> { Ok(Document { id: expect_id(call("freeze", self.id, "[]")?) }) }
     pub fn freeze(&self) -> Document { self.try_freeze().unwrap_or_else(|why| panic(f"{why}")) }
-    pub fn try_mark_saved(&self, snapshot: Document) -> Result<(), errors::Error>{ let _ = call("saved", self.id, json::encode(snapshot.id))?; Ok(()) }
+    pub fn try_mark_saved(&self, snapshot: Document) -> Result<(), errors::Error>{ let _ = call("saved", self.id, json::encode(snapshot.id)?)?; Ok(()) }
     pub fn mark_saved(&self, snapshot: Document) { self.try_mark_saved(snapshot).unwrap_or_else(|why| panic(f"Could not record save marker: {why}")) }
     pub fn close(&self) { let _ = call("close", self.id, "[]") }
-    pub fn position(&self, byte: i64) -> (i64, i64) { expect_position(call("position", self.id, json::encode(byte.max(0))).unwrap_or_else(|why| panic(f"{why}"))) }
-    pub fn line(&self, line: i64) -> (i64, i64) { expect_position(call("line", self.id, json::encode(line.max(0))).unwrap_or_else(|why| panic(f"{why}"))) }
-    pub fn anchor(&self, byte: i64, affinity: Affinity) -> Result<i64, errors::Error> { Ok(expect_id(call("anchor", self.id, json::encode((byte.max(0), affinity)))?)) }
+    pub fn position(&self, byte: i64) -> (i64, i64) { expect_position(call("position", self.id, crate::app::wire::encoded(json::encode(byte.max(0)))).unwrap_or_else(|why| panic(f"{why}"))) }
+    pub fn line(&self, line: i64) -> (i64, i64) { expect_position(call("line", self.id, crate::app::wire::encoded(json::encode(line.max(0)))).unwrap_or_else(|why| panic(f"{why}"))) }
+    pub fn anchor(&self, byte: i64, affinity: Affinity) -> Result<i64, errors::Error> { Ok(expect_id(call("anchor", self.id, json::encode((byte.max(0), affinity))?)?)) }
     pub fn resolve(&self, anchor: i64) -> Result<Anchor, errors::Error> {
-        let answer = call("resolve", self.id, json::encode(anchor))?
+        let answer = call("resolve", self.id, json::encode(anchor)?)?
         if let Answer::Anchor(anchor) = answer { Ok(anchor) } else { Err(errors::new("invalid anchor answer")) }
     }
-    pub fn release_anchor(&self, anchor: i64) { let _ = call("release_anchor", self.id, json::encode(anchor)) }
+    pub fn release_anchor(&self, anchor: i64) { let _ = call("release_anchor", self.id, crate::app::wire::encoded(json::encode(anchor))) }
 }

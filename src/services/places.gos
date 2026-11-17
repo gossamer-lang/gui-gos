@@ -20,7 +20,7 @@ impl PlaceBook {
         for entry in book.entries { if entry.id.is_empty() || ids.contains(entry.id) { return Err(errors::new("Duplicate favorite identity")) }; ids.insert(entry.id) }
         Ok(book)
     }
-    pub fn encode(&self) -> String { json::encode(*self) }
+    pub fn encode(&self) -> String { crate::app::wire::encoded(json::encode(*self)) }
     pub fn add(&mut self, location: String, label: String) -> Result<String, errors::Error> {
         if location.is_empty() { return Err(errors::new("Enter a folder location")) }
         let wanted = identity(location)

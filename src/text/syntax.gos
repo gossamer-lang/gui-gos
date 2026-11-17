@@ -60,7 +60,7 @@ impl Document {
     }
 
     pub fn update(&mut self, text: String) {
-        let encoded = gui_engine::analyze(json::encode(*self), text)
+        let encoded = gui_engine::analyze(crate::app::wire::encoded(json::encode(*self)), text)
         match encoded {
             Ok(value) => {
                 match json::decode::<Document>(value) {

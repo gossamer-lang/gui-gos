@@ -60,7 +60,10 @@ fn session_path() -> String { path::join(gui::services::config_dir(APP_ID), "edi
 fn checkpoint(m: Model) {
     let records = m.docs.map(|doc| gui::editing::document::Record { key: doc.key, document: doc.document.id })
     let metadata = SessionMetadata { version: 1, docs: m.docs.map(|doc| SessionDocument { key: doc.key, path: doc.path, window: doc.window, pinned: doc.pinned }), active_windows: m.active_windows, next: m.next }
-    gui::perform(Effect::StartWork(Work::new("editor-session", -10, 0, Operation::SaveSession(session_path(), records, json::encode(metadata)))))
+    match json::encode(metadata) {
+        Ok(text) => gui::perform(Effect::StartWork(Work::new("editor-session", -10, 0, Operation::SaveSession(session_path(), records, text))))
+        Err(e) => eprintln(f"editor: the session was not saved: {e}")
+    }
 }
 fn restore(m: Model, records: Vec<gui::editing::document::Record>, metadata: String) -> Model {
     let mut n = m

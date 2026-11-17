@@ -71,32 +71,32 @@ fn arg<T>(decoded: Result<T, errors::Error>) -> T {
 
 /// `f` as a text validator the toolkit can call.
 pub fn validator(f: Fn(String) -> Validity) -> i64 {
-    keep(|a: String| json::encode(f(wire::text(a))))
+    keep(|a: String| wire::encoded(json::encode(f(wire::text(a)))))
 }
 
 /// `f` as a collection's row source.
 pub fn rows(f: Fn(i64) -> Row) -> i64 {
-    keep(|a: String| json::encode(f(wire::int(a))))
+    keep(|a: String| wire::encoded(json::encode(f(wire::int(a)))))
 }
 
 /// `f` as a collection's row heights.
 pub fn heights(f: Fn(i64) -> i64) -> i64 {
-    keep(|a: String| json::encode(f(wire::int(a))))
+    keep(|a: String| wire::encoded(json::encode(f(wire::int(a)))))
 }
 
 /// `f` as a collection's drag offer for the selected keys.
 pub fn drag_offer(f: Fn(Vec<String>) -> Vec<windowing::DragItem>) -> i64 {
-    keep(|a: String| json::encode(f(wire::texts(a))))
+    keep(|a: String| wire::encoded(json::encode(f(wire::texts(a)))))
 }
 
 /// `f` as a collection's row content.
 pub fn row_delegate(f: Fn(Row) -> Widget) -> i64 {
-    keep(|a: String| json::encode(f(arg(json::decode::<Row>(a)))))
+    keep(|a: String| wire::encoded(json::encode(f(arg(json::decode::<Row>(a))))))
 }
 
 /// `f` as a completion provider.
 pub fn completions(f: Fn(String) -> Vec<CompletionItem>) -> i64 {
-    keep(|a: String| json::encode(f(wire::text(a))))
+    keep(|a: String| wire::encoded(json::encode(f(wire::text(a)))))
 }
 
 /// `f` as a custom widget's measure.
@@ -105,7 +105,7 @@ pub fn measure(f: Fn(Constraints, Theme) -> Size) -> i64 {
         let both = wire::items(a)
         let c = arg(json::decode::<Constraints>(both[0]))
         let t = arg(json::decode::<Theme>(both[1]))
-        json::encode(f(c, t))
+        wire::encoded(json::encode(f(c, t)))
     })
 }
 
@@ -115,13 +115,13 @@ pub fn draw(f: Fn(Size, Theme) -> Vec<DrawOp>) -> i64 {
         let both = wire::items(a)
         let s = arg(json::decode::<Size>(both[0]))
         let t = arg(json::decode::<Theme>(both[1]))
-        json::encode(f(s, t))
+        wire::encoded(json::encode(f(s, t)))
     })
 }
 
 /// `f` as a custom widget's input handler.
 pub fn custom_input(f: Fn(CustomInput) -> Vec<UiMsg>) -> i64 {
-    keep(|a: String| json::encode(f(arg(json::decode::<CustomInput>(a)))))
+    keep(|a: String| wire::encoded(json::encode(f(arg(json::decode::<CustomInput>(a))))))
 }
 
 /// Releases both retained generations when a window is disposed.

@@ -184,7 +184,7 @@ impl Settings {
     }
 
     pub fn set_list(&mut self, key: String, items: Vec<String>) {
-        self.values[key] = json::encode(StringList { items: items })
+        self.values[key] = crate::app::wire::encoded(json::encode(StringList { items: items }))
     }
 }
 
@@ -227,7 +227,7 @@ pub fn load_settings(file: String, version: i64, migrate: Fn(i64, Settings) -> S
 }
 
 pub fn save_settings(file: String, settings: Settings) -> Result<(), errors::Error> {
-    write_atomic(file, json::encode(settings).bytes())
+    write_atomic(file, json::encode(settings)?.bytes())
 }
 
 /// The placement to restore a window to: position in native logical units,
@@ -266,7 +266,7 @@ pub fn load_window_placement(app_id: String, window: String) -> Option<WindowPla
 
 pub fn save_window_placement(app_id: String, window: String, placement: WindowPlacement) -> Result<(), errors::Error> {
     let file = path::join(config_dir(app_id), f"window-{sanitize(window)}.json")
-    write_atomic(file, json::encode(placement).bytes())
+    write_atomic(file, json::encode(placement)?.bytes())
 }
 
 /// The desktop's contrast, motion, accent and text-size preferences; each is

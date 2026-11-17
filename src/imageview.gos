@@ -78,7 +78,7 @@ impl Viewer {
 
     /// Starts decoding the file at `path`; answers at once.
     pub fn load(&self, path: String) -> Result<(), errors::Error> {
-        call("load", self.id, json::encode(path)).map(|_| ())
+        call("load", self.id, json::encode(path)?).map(|_| ())
     }
 
     /// Loads the shown file again, answering whether there was one.
@@ -95,12 +95,12 @@ impl Viewer {
     }
 
     pub fn set_zoom(&self, zoom: Zoom) -> Result<(), errors::Error> {
-        call("zoom", self.id, json::encode(zoom)).map(|_| ())
+        call("zoom", self.id, json::encode(zoom)?).map(|_| ())
     }
 
     /// Turns the image clockwise by `turns` quarter turns.
     pub fn turn(&self, turns: i64 = 1) -> Result<(), errors::Error> {
-        call("turn", self.id, json::encode(turns)).map(|_| ())
+        call("turn", self.id, json::encode(turns)?).map(|_| ())
     }
 
     pub fn status(&self) -> Result<Status, errors::Error> {

@@ -68,27 +68,27 @@ fn expect_id(answer: Answer) -> i64 { if let Answer::Id(id) = answer { id } else
 fn expect_info(answer: Answer) -> Info { if let Answer::Info(info) = answer { info } else { panic("invalid rich document info answer") } }
 fn expect_text(answer: Answer) -> String { if let Answer::Text(text) = answer { text } else { panic("invalid rich document text answer") } }
 impl Document {
-    pub fn wrap(&self, kind: Kind) -> Result<Info, errors::Error> { Ok(expect_info(call("wrap", self.id, json::encode(kind))?)) }
+    pub fn wrap(&self, kind: Kind) -> Result<Info, errors::Error> { Ok(expect_info(call("wrap", self.id, json::encode(kind)?)?)) }
     pub fn enter(&self) -> Result<Info, errors::Error> { Ok(expect_info(call("enter", self.id, "[]")?)) }
-    pub fn indent(&self, outdent: bool = false) -> Result<Info, errors::Error> { Ok(expect_info(call("indent", self.id, json::encode(outdent))?)) }
+    pub fn indent(&self, outdent: bool = false) -> Result<Info, errors::Error> { Ok(expect_info(call("indent", self.id, json::encode(outdent)?)?)) }
     pub fn new() -> Result<Document, errors::Error> { Ok(Document { id: expect_id(call("new", 0, "[]")?) }) }
-    pub fn import(doc_format: Format, source: String) -> Result<Document, errors::Error> { Ok(Document { id: expect_id(call("import", 0, json::encode((doc_format, source)))?) }) }
+    pub fn import(doc_format: Format, source: String) -> Result<Document, errors::Error> { Ok(Document { id: expect_id(call("import", 0, json::encode((doc_format, source))?)?) }) }
     pub fn info(&self) -> Result<Info, errors::Error> { Ok(expect_info(call("info", self.id, "[]")?)) }
-    pub fn block(&self, id: i64) -> Result<Block, errors::Error> { if let Answer::Block(block) = call("block", self.id, json::encode(id))? { Ok(block) } else { panic("invalid rich block answer") } }
-    pub fn blocks(&self, start: i64, count: i64) -> Result<Vec<Block>, errors::Error> { if let Answer::Blocks(blocks) = call("blocks", self.id, json::encode((start.max(0), count.max(0))))? { Ok(blocks) } else { Err(errors::new("invalid rich block page answer")) } }
+    pub fn block(&self, id: i64) -> Result<Block, errors::Error> { if let Answer::Block(block) = call("block", self.id, json::encode(id)?)? { Ok(block) } else { panic("invalid rich block answer") } }
+    pub fn blocks(&self, start: i64, count: i64) -> Result<Vec<Block>, errors::Error> { if let Answer::Blocks(blocks) = call("blocks", self.id, json::encode((start.max(0), count.max(0)))?)? { Ok(blocks) } else { Err(errors::new("invalid rich block page answer")) } }
     pub fn text(&self) -> Result<String, errors::Error> { Ok(expect_text(call("plain", self.id, "[]")?)) }
     pub fn freeze(&self) -> Result<Document, errors::Error> { Ok(Document { id: expect_id(call("freeze", self.id, "[]")?) }) }
     pub fn close(&self) { let _ = call("close", self.id, "[]") }
-    pub fn select(&self, selection: Selection) -> Result<(), errors::Error> { let _ = call("select", self.id, json::encode(selection))?; Ok(()) }
-    pub fn transact(&self, revision: i64, edits: Vec<Edit>) -> Result<Info, errors::Error> { Ok(expect_info(call("transact", self.id, json::encode((revision, edits)))?)) }
-    pub fn undo(&self) -> Result<Info, errors::Error> { Ok(expect_info(call("undo", self.id, json::encode(self.info()?.revision))?)) }
-    pub fn redo(&self) -> Result<Info, errors::Error> { Ok(expect_info(call("redo", self.id, json::encode(self.info()?.revision))?)) }
-    pub fn mark_saved(&self, snapshot: Document) -> Result<(), errors::Error> { let _ = call("saved", self.id, json::encode(snapshot.id))?; Ok(()) }
-    pub fn export(&self, doc_format: Format) -> Result<String, errors::Error> { Ok(expect_text(call("export", self.id, json::encode((self.info()?.revision, doc_format)))?)) }
+    pub fn select(&self, selection: Selection) -> Result<(), errors::Error> { let _ = call("select", self.id, json::encode(selection)?)?; Ok(()) }
+    pub fn transact(&self, revision: i64, edits: Vec<Edit>) -> Result<Info, errors::Error> { Ok(expect_info(call("transact", self.id, json::encode((revision, edits))?)?)) }
+    pub fn undo(&self) -> Result<Info, errors::Error> { Ok(expect_info(call("undo", self.id, json::encode(self.info()?.revision)?)?)) }
+    pub fn redo(&self) -> Result<Info, errors::Error> { Ok(expect_info(call("redo", self.id, json::encode(self.info()?.revision)?)?)) }
+    pub fn mark_saved(&self, snapshot: Document) -> Result<(), errors::Error> { let _ = call("saved", self.id, json::encode(snapshot.id)?)?; Ok(()) }
+    pub fn export(&self, doc_format: Format) -> Result<String, errors::Error> { Ok(expect_text(call("export", self.id, json::encode((self.info()?.revision, doc_format))?)?)) }
 }
 
 impl Document {
-    pub fn outline(&self, start: i64, count: i64) -> Result<Vec<OutlineRow>, errors::Error>{ if let Answer::Outline(rows) = call("outline", self.id, json::encode((start.max(0), count.max(0))))? { Ok(rows) } else { Err(errors::new("invalid rich outline answer")) } }
+    pub fn outline(&self, start: i64, count: i64) -> Result<Vec<OutlineRow>, errors::Error>{ if let Answer::Outline(rows) = call("outline", self.id, json::encode((start.max(0), count.max(0)))?)? { Ok(rows) } else { Err(errors::new("invalid rich outline answer")) } }
     pub fn preview(&self, id: String, start: i64 = 0, count: i64 = 32) -> Result<crate::Widget, errors::Error>{
         let answer = gui_engine::rich_preview(self.id, id, start, count).map_err(|why| errors::new(why))?
         json::decode::<crate::Widget>(answer)

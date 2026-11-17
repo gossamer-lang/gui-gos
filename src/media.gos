@@ -88,7 +88,7 @@ pub fn clock(ms: i64) -> String {
 
 impl Player {
     pub fn open(output: AudioOutput = AudioOutput::System) -> Result<Player, errors::Error> {
-        match call("open", 0, json::encode(output))? {
+        match call("open", 0, json::encode(output)?)? {
             Answer::Id(id) => Ok(Player { id: id })
             _ => Err(errors::new("invalid media answer"))
         }
@@ -96,7 +96,7 @@ impl Player {
 
     /// Loads a file path or URI, paused at its start.
     pub fn load(&self, source: String) -> Result<(), errors::Error> {
-        done(call("load", self.id, json::encode(source)))
+        done(call("load", self.id, json::encode(source)?))
     }
 
     pub fn play(&self) -> Result<(), errors::Error> {
@@ -108,16 +108,16 @@ impl Player {
     }
 
     pub fn seek(&self, position_ms: i64) -> Result<(), errors::Error> {
-        done(call("seek", self.id, json::encode(position_ms)))
+        done(call("seek", self.id, json::encode(position_ms)?))
     }
 
     /// Sets the volume, 0 to 1.
     pub fn set_volume(&self, volume: f64) -> Result<(), errors::Error> {
-        done(call("volume", self.id, json::encode(volume)))
+        done(call("volume", self.id, json::encode(volume)?))
     }
 
     pub fn set_muted(&self, muted: bool) -> Result<(), errors::Error> {
-        done(call("mute", self.id, json::encode(muted)))
+        done(call("mute", self.id, json::encode(muted)?))
     }
 
     pub fn status(&self) -> Result<Status, errors::Error> {
