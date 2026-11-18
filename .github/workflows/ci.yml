@@ -12,14 +12,14 @@ permissions:
 env:
   GOSSAMER_REPO: gossamer-lang/gossamer
   # The toolchain release CI installs: the one this library requires.
-  GOSSAMER_VERSION: v0.81.0
+  GOSSAMER_VERSION: v0.81.1
   WINDOWING_REPO: gossamer-lang/windowing-gos
   ENGINE_REPO: gossamer-lang/gui-engine-gos
   # The releases the manifests depend on. The Rust cores and windowing's own
   # native tests are checked out at the same tags; set these repository
   # variables together to check a newer compatibility set.
-  WINDOWING_REF: v0.2.0
-  ENGINE_REF: v0.4.0
+  WINDOWING_REF: v0.3.0
+  ENGINE_REF: v0.5.0
   RUSTUP_TOOLCHAIN: 1.95.0
   # Every job that needs no real display draws into SDL's offscreen driver.
   SDL_VIDEO_DRIVER: offscreen
@@ -172,6 +172,10 @@ jobs:
       - name: Fetch the tagged dependencies
         working-directory: gui-gos
         run: tools/fetch.sh
+      - name: Gossamer unit suite
+        if: matrix.part == 'journeys'
+        working-directory: gui-gos
+        run: gos test .
       - name: Rust cores and bindings (format, Clippy, tests)
         if: matrix.part == 'rust'
         working-directory: gui-gos

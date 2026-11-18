@@ -1,8 +1,8 @@
 # Changelog
 
-## 0.4.0 - Gossamer 0.81
+## 0.5.0 - Gossamer 0.81.1
 
-- Requires Gossamer 0.81.0, windowing-gos 0.2.0 and gui-engine-gos 0.4.0.
+- Requires Gossamer 0.81.1, windowing-gos 0.3.0 and gui-engine-gos 0.5.0.
 - Table headings line up with their columns' cells, and right-aligned numbers sit under their headings.
 - macOS menu shortcuts run their command once.
 

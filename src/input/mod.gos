@@ -315,8 +315,24 @@ pub fn key_from_name(name: String) -> Option<Key> {
 
 #[cfg(test)]
 mod tests {
-    use super::{key_from_name, produces_text, KeyStroke, Shortcut}
+    use super::{key_from_name, key_name, produces_text, KeyStroke, Shortcut}
     use windowing::Mods
+
+    // The text `parse` reads for a shortcut. A label is the platform's
+    // display text (glyphs on macOS), so it is not parse input.
+    fn written(s: Shortcut) -> String {
+        let strokes = s.strokes.map(|k| {
+            let mut parts = #[]
+            if k.primary { parts.push("Primary") }
+            if k.ctrl { parts.push("Ctrl") }
+            if k.alt { parts.push("Alt") }
+            if k.shift { parts.push("Shift") }
+            if k.meta { parts.push("Super") }
+            parts.push(key_name(k.key))
+            parts.join("+")
+        })
+        strokes.join(" ")
+    }
 
     fn ctrl() -> Mods {
         let mut m = Mods::default()
@@ -340,7 +356,9 @@ mod tests {
     #[test]
     fn parse_and_label_round_trip() {
         let s = Shortcut::parse("Primary+Shift+S").unwrap()
-        assert_eq(Shortcut::parse(s.label().replace("Ctrl", "Primary")), Some(s))
+        assert_eq(Shortcut::parse(written(s)), Some(s))
+        let label = if super::platform_is_macos() { "\u{21E7}\u{2318}S" } else { "Ctrl+Shift+S" }
+        assert_eq(s.label(), label)
         let chord = Shortcut::parse("Ctrl+K Ctrl+C").unwrap()
         assert(chord.is_chord())
         assert_eq(chord.strokes.len(), 2)
@@ -352,7 +370,7 @@ mod tests {
     fn the_equals_and_minus_keys_and_their_keypad_twins_name_themselves_apart() {
         for text in #["Primary+Shift+=", "Primary+Shift+-", "Primary+NumPlus", "Primary+NumMinus"] {
             let s = Shortcut::parse(text).unwrap()
-            assert_eq(Shortcut::parse(s.label().replace("Ctrl", "Primary")), Some(s))
+            assert_eq(Shortcut::parse(written(s)), Some(s))
         }
         assert_eq(key_from_name("="), Some(windowing::Key::Char('=')))
         assert_eq(key_from_name("-"), Some(windowing::Key::Char('-')))
