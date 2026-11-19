@@ -12,14 +12,14 @@ permissions:
 env:
   GOSSAMER_REPO: gossamer-lang/gossamer
   # The toolchain release CI installs: the one this library requires.
-  GOSSAMER_VERSION: v0.81.1
+  GOSSAMER_VERSION: v0.82.0
   WINDOWING_REPO: gossamer-lang/windowing-gos
   ENGINE_REPO: gossamer-lang/gui-engine-gos
   # The releases the manifests depend on. The Rust cores and windowing's own
   # native tests are checked out at the same tags; set these repository
   # variables together to check a newer compatibility set.
-  WINDOWING_REF: v0.3.0
-  ENGINE_REF: v0.5.0
+  WINDOWING_REF: v0.4.0
+  ENGINE_REF: v0.6.0
   RUSTUP_TOOLCHAIN: 1.95.0
   # Every job that needs no real display draws into SDL's offscreen driver.
   SDL_VIDEO_DRIVER: offscreen
@@ -197,8 +197,11 @@ jobs:
         env:
           SDL_VIDEO_DRIVER: windows
         run: |
-          & 'C:\msys64\mingw64\bin\gcc.exe' -O1 -o uia-client.exe client.c -lole32 -loleaut32 -luuid -luser32
-          if ($LASTEXITCODE -ne 0) { throw "building UIA client failed" }
+          # cc1 sits outside mingw64\bin and finds its DLLs through PATH, where the
+          # runner's other MinGW copies (Git, Strawberry Perl) would come first.
+          $env:PATH = "C:\msys64\mingw64\bin;$env:PATH"
+          gcc -O1 -o uia-client.exe client.c -lole32 -loleaut32 -luuid -luser32
+          if ($LASTEXITCODE -ne 0) { throw "building UIA client failed (exit $LASTEXITCODE)" }
           .\run.ps1
       - name: Native single-instance foreground handoff
         if: matrix.part == 'platform'

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0 - Arranged windows
+
+- `Effect::Arrange` and `Arrangement` lay an application's windows out side by side over a display.
+- `UiMsg::WindowFullscreenChanged` tells the application when a window enters or leaves fullscreen, whether it asked or the desktop did.
+- Requires Gossamer 0.82.0, windowing-gos 0.4.0 and gui-engine-gos 0.6.0.
+
 ## 0.4.0 - Gossamer 0.81.1
 
 - Requires Gossamer 0.81.1, windowing-gos 0.3.0 and gui-engine-gos 0.5.0.

@@ -26,6 +26,24 @@ pub enum Edge {
     Right
 }
 
+/// How `Effect::Arrange` lays windows out over a display.
+#[derive(Debug, PartialEq)]
+pub enum Arrangement {
+    /// Rows of this many equal cells; 0 makes the grid as even as it can.
+    /// A last row with fewer windows shares its whole width among them.
+    Grid(i64)
+    /// Every window side by side, full height.
+    Columns
+    /// Every window stacked, full width.
+    Rows
+    /// The first window along an edge, this fraction of the way across; the
+    /// rest share the remainder evenly.
+    Main(Edge, f64)
+    /// The first window in the middle, this fraction of the width; the rest
+    /// alternate into stacks on its left and right.
+    Centered(f64)
+}
+
 /// One request from application code.
 pub enum Effect {
     /// Revisioned IO, analysis and completion on the bounded session worker.
@@ -70,6 +88,12 @@ pub enum Effect {
     /// on: it spans `length` of that edge, centered along it, and reaches
     /// `depth` of the way across, both fractions.
     Dock(String, Edge, f64, f64)
+    /// Lays the windows named out side by side over the usable area of the
+    /// display the first is on, in order, `gap` units apart. A window that
+    /// is minimized, on another virtual desktop or docked keeps its place;
+    /// a maximized or fullscreen one returns to a frame first. Wayland
+    /// places windows itself, so there nothing moves.
+    Arrange { windows: Vec<String>, arrangement: Arrangement, gap: i64 }
     /// Asks the desktop to deliver a shortcut such as "F12" or
     /// "Ctrl+Shift+T" as `UiMsg::Hotkey(id)` while any application has
     /// focus; `description` names it where the desktop lists shortcuts. A
@@ -194,5 +218,28 @@ impl Display for Effect {
 impl Debug for Effect {
     fn fmt(&self) -> String {
         "Effect"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Arrangement, Edge, Effect}
+
+    #[test]
+    fn every_arrangement_crosses_to_the_engine_and_back_unchanged() {
+        let sent = #[Arrangement::Grid(0), Arrangement::Grid(3), Arrangement::Columns, Arrangement::Rows, Arrangement::Main(Edge::Right, 0.65), Arrangement::Centered(0.5)]
+        for a in sent { super::perform(Effect::Arrange { windows: #["main", "window-2"], arrangement: a, gap: 4 }) }
+        let back = super::take()
+        assert_eq(back.len(), sent.len())
+        for (i, effect) in back.iter().enumerate() {
+            match effect {
+                Effect::Arrange { windows, arrangement, gap } => {
+                    assert_eq(windows, #["main", "window-2"])
+                    assert_eq(arrangement, sent[i])
+                    assert_eq(gap, 4)
+                }
+                _ => assert(false, "another effect came back")
+            }
+        }
     }
 }

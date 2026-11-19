@@ -34,6 +34,7 @@ pub type ClosePolicy = app::ClosePolicy
 pub type WindowStyle = app::WindowStyle
 pub type Effect = app::effects::Effect
 pub type Edge = app::effects::Edge
+pub type Arrangement = app::effects::Arrangement
 pub type Mailbox = app::Mailbox
 pub type Launch = app::Launch
 pub type Listener = app::Listener
@@ -112,7 +113,7 @@ pub type Settings = services::Settings
 pub type AppIcon = services::apps::AppIcon
 
 /// The toolkit version.
-pub const VERSION: String = "0.4.0"
+pub const VERSION: String = "0.5.0"
 
 
 /// The `gui.tab.*` commands a tabbed window offers, with their shortcuts.
