@@ -520,7 +520,7 @@ impl Session {
 
     /// Window `w`'s platform id, as its events carry it.
     pub fn window_id(&self, w: i64) -> windowing::WindowId {
-        (wire::int(self.call("window_id", #[f"{w}"]).unwrap_or("0")) as u32).into()
+        (wire::int(self.call("window_id", #[f"{w}"]).unwrap_or("0")) as% u32).into()
     }
 
     /// Frames window `w` has presented.

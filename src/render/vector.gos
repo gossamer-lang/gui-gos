@@ -209,10 +209,10 @@ impl Mask {
             if y > maxy { maxy = y }
             i += 2
         }
-        let left = floor(minx) as i64
-        let top = floor(miny) as i64
-        let width = ceil(maxx) as i64 - left + 2
-        let height = ceil(maxy) as i64 - top + 1
+        let left = floor(minx) as% i64
+        let top = floor(miny) as% i64
+        let width = ceil(maxx) as% i64 - left + 2
+        let height = ceil(maxy) as% i64 - top + 1
         if width <= 0 || height <= 0 || width * height > 16_000_000 {
             return Mask::default()
         }
@@ -237,7 +237,7 @@ impl Mask {
                     if m > 1.0 { 2.0 - m } else { m }
                 }
             }
-            coverage[k] = (v * 255.0 + 0.5) as u8
+            coverage[k] = (v * 255.0 + 0.5) as% u8
             k += 1
         }
         Mask { left: left, top: top, width: width, height: height, coverage: coverage }
@@ -266,8 +266,8 @@ fn accumulate(acc: &mut Vec<f64>, w: i64, h: i64, ax: f64, ay: f64, bx: f64, by:
     if y0 < 0.0 {
         x -= y0 * dxdy
     }
-    let ystart = if y0 < 0.0 { 0 } else { y0 as i64 }
-    let yend = (ceil(y1) as i64).min(h)
+    let ystart = if y0 < 0.0 { 0 } else { y0 as% i64 }
+    let yend = (ceil(y1) as% i64).min(h)
     let limit = acc.len() as i64
     let mut y = ystart
     while y < yend {
@@ -278,9 +278,9 @@ fn accumulate(acc: &mut Vec<f64>, w: i64, h: i64, ax: f64, ay: f64, bx: f64, by:
         let lo = if x < xnext { x } else { xnext }
         let hi = if x < xnext { xnext } else { x }
         let lo_floor = floor(lo)
-        let lo_i = (lo_floor as i64).max(0)
+        let lo_i = (lo_floor as% i64).max(0)
         let hi_ceil = ceil(hi)
-        let hi_i = (hi_ceil as i64).max(0)
+        let hi_i = (hi_ceil as% i64).max(0)
         if hi_i <= lo_i + 1 {
             let xmf = 0.5 * (x + xnext) - lo_floor
             add(acc, limit, line + lo_i, d - d * xmf)
@@ -369,7 +369,7 @@ pub fn flatten_with(cmds: Vec<f64>, a: f64, b: f64, c: f64, d: f64, e: f64, f: f
                 let ddx = px - 2.0 * cx0 + x
                 let ddy = py - 2.0 * cy0 + y
                 let dev = sqrt(ddx * ddx + ddy * ddy)
-                let steps = (1.0 + floor(sqrt(dev * 5.0))) as i64
+                let steps = (1.0 + floor(sqrt(dev * 5.0))) as% i64
                 let mut k = 1
                 let mut lx = px
                 let mut ly = py
@@ -399,7 +399,7 @@ pub fn flatten_with(cmds: Vec<f64>, a: f64, b: f64, c: f64, d: f64, e: f64, f: f
                 let d2x = c1x - 2.0 * c2x + x
                 let d2y = c1y - 2.0 * c2y + y
                 let dev = sqrt(d1x * d1x + d1y * d1y).max(sqrt(d2x * d2x + d2y * d2y))
-                let steps = (1.0 + floor(sqrt(dev * 15.0))) as i64
+                let steps = (1.0 + floor(sqrt(dev * 15.0))) as% i64
                 let mut k = 1
                 let mut lx = px
                 let mut ly = py

@@ -449,14 +449,14 @@ impl Theme {
     pub fn px(&self, units: i64) -> i64 {
         let v = units as f64 * self.scale
         let rounded = if v >= 0.0 { v + 0.5 } else { v - 0.5 }
-        rounded as i64
+        rounded as% i64
     }
 
     /// Fractional pixels for `units` interface units.
     /// Pixels for `units` of a length that holds text, such as a table
     /// column: it grows with the text size as well as the display scale.
     pub fn text_px(&self, units: i64) -> i64 {
-        self.px((units as f64 * self.text_scale + 0.5) as i64)
+        self.px((units as f64 * self.text_scale + 0.5) as% i64)
     }
 
     pub fn pxf(&self, units: f64) -> f64 {
@@ -474,7 +474,7 @@ impl Theme {
     /// Spacing step `n` (multiples of the shape's spacing step,
     /// density-adjusted), pixels.
     pub fn space(&self, n: i64) -> i64 {
-        self.px(((n * self.shape.space) as f64 * self.density_factor() + 0.5) as i64)
+        self.px(((n * self.shape.space) as f64 * self.density_factor() + 0.5) as% i64)
     }
 
     /// Inner padding of a control, pixels.

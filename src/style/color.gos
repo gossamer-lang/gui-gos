@@ -68,7 +68,7 @@ impl Color {
 
     /// This color with alpha `a` (0..=255).
     pub fn with_alpha(&self, a: i64) -> Color {
-        Color { r: self.r, g: self.g, b: self.b, a: a.max(0).min(255) as u8 }
+        Color { r: self.r, g: self.g, b: self.b, a: a.max(0).min(255) as% u8 }
     }
 
     /// The color `t` of the way from this one to `other`, per channel.
@@ -163,7 +163,7 @@ impl Color {
     /// `hsl(h s% l% / a)` text with whole-number components.
     pub fn css_hsl(&self) -> String {
         let h, s, l = self.hsl_parts()
-        let core = f"hsl({floor(h + 0.5) as i64} {floor(s * 100.0 + 0.5) as i64}% {floor(l * 100.0 + 0.5) as i64}%"
+        let core = f"hsl({floor(h + 0.5) as% i64} {floor(s * 100.0 + 0.5) as% i64}% {floor(l * 100.0 + 0.5) as% i64}%"
         if self.a == 255 { core + ")" } else { core + f" / {round3(self.a as f64 / 255.0)})" }
     }
 
@@ -241,12 +241,12 @@ fn parse_hex(digits: String) -> CssColor {
     match n {
         3 | 4 => {
             let a = if n == 4 { values[3] * 17 } else { 255 }
-            CssColor::Valid(Color::rgba((values[0] * 17) as u8, (values[1] * 17) as u8, (values[2] * 17) as u8, a as u8))
+            CssColor::Valid(Color::rgba((values[0] * 17) as% u8, (values[1] * 17) as% u8, (values[2] * 17) as% u8, a as% u8))
         }
         6 | 8 => {
             let a = if n == 8 { values[6] * 16 + values[7] } else { 255 }
-            CssColor::Valid(Color::rgba((values[0] * 16 + values[1]) as u8, (values[2] * 16 + values[3]) as u8
-                (values[4] * 16 + values[5]) as u8, a as u8))
+            CssColor::Valid(Color::rgba((values[0] * 16 + values[1]) as% u8, (values[2] * 16 + values[3]) as% u8
+                (values[4] * 16 + values[5]) as% u8, a as% u8))
         }
         0 | 1 | 2 | 5 | 7 => CssColor::Intermediate
         _ => CssColor::Invalid("hex colors have 3, 4, 6, or 8 digits")
@@ -323,7 +323,7 @@ fn parse_function(name: String, inner: String) -> CssColor {
             if v < 0.0 || v > 255.0 {
                 return CssColor::Invalid(f"channel {p} is outside 0..255")
             }
-            ch.push((v + 0.5) as u8)
+            ch.push((v + 0.5) as% u8)
         }
         return CssColor::Valid(Color::rgba(ch[0], ch[1], ch[2], a))
     }
@@ -412,11 +412,11 @@ fn rgb_sector(hh: f64, c: f64, x: f64) -> (f64, f64, f64) {
 }
 
 fn to_byte(v: f64) -> u8 {
-    (v.max(0.0).min(1.0) * 255.0 + 0.5) as u8
+    (v.max(0.0).min(1.0) * 255.0 + 0.5) as% u8
 }
 
 fn lerp(a: u8, b: u8, t: f64) -> u8 {
-    (a as f64 + (b as f64 - a as f64) * t + 0.5).max(0.0).min(255.0) as u8
+    (a as f64 + (b as f64 - a as f64) * t + 0.5).max(0.0).min(255.0) as% u8
 }
 
 fn round3(v: f64) -> String {

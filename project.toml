@@ -1,7 +1,7 @@
 [project]
 id = "github.com/gossamer-lang/gui-gos"
-version = "0.5.0"
-gossamer-version = "^v0.82.0"
+version = "0.5.1"
+gossamer-version = "^v0.82.2"
 authors = ["Dan Pozmanter"]
 license = "Apache 2.0"
 
@@ -17,5 +17,5 @@ jpeg = ["gui_engine/jpeg"]
 gif = ["gui_engine/gif"]
 
 [dependencies]
-"github.com/gossamer-lang/windowing-gos" = { git = "https://github.com/gossamer-lang/windowing-gos", tag = "v0.4.0" }
-"github.com/gossamer-lang/gui-engine-gos" = { git = "https://github.com/gossamer-lang/gui-engine-gos", tag = "v0.6.0", default-features = false }
+"github.com/gossamer-lang/windowing-gos" = { git = "https://github.com/gossamer-lang/windowing-gos", tag = "v0.4.2" }
+"github.com/gossamer-lang/gui-engine-gos" = { git = "https://github.com/gossamer-lang/gui-engine-gos", tag = "v0.6.2", default-features = false }

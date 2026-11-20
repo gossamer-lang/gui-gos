@@ -383,7 +383,7 @@ fn native_entries(items: Vec<MenuItem>, registry: Vec<Command>, commands: &mut V
                 let Some(c) = found(command) else { continue }
                 if !c.visible { continue }
                 commands.push(c.id)
-                let id = commands.len() as u32
+                let id = commands.len() as% u32
                 let title, _ = mnemonic(if label.is_empty() { c.label } else { label })
                 let shortcut = native_shortcut(c)
                 if c.checked >= 0 {
@@ -400,7 +400,7 @@ fn native_entries(items: Vec<MenuItem>, registry: Vec<Command>, commands: &mut V
                 let Some(c) = found(command) else { continue }
                 if !c.visible { continue }
                 commands.push(c.id)
-                let id = commands.len() as u32
+                let id = commands.len() as% u32
                 let title, _ = mnemonic(if label.is_empty() { c.label } else { label })
                 out.push(windowing::MenuEntry::Radio { id: id, title: title, enabled: c.enabled, checked: c.checked == 1, group: *group, shortcut: native_shortcut(c) })
             }

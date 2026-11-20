@@ -30,7 +30,7 @@ fn chart() -> Item {
     let values = #[42, 31, 27]
     for i in 0..values.len() {
         let h = values[i] * 4
-        ops.push(DrawOp::FillRect { rect: gui::Rect { x: 40 + i * 120, y: 190 - h, width: 80, height: h }, color: gui::Color::rgb(30, (100 + i * 50) as u8, 200) })
+        ops.push(DrawOp::FillRect { rect: gui::Rect { x: 40 + i * 120, y: 190 - h, width: 80, height: h }, color: gui::Color::rgb(30, (100 + i * 50) as% u8, 200) })
     }
     Item::Drawing { ops: ops, width: 400.0, height: 200.0 }
 }

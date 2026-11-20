@@ -156,7 +156,7 @@ impl Player {
                 true
             }
             UiMsg::ValueChanged(id, value) if id == f"{prefix}:seek" => {
-                let _ = self.seek((value * 1000.0) as i64)
+                let _ = self.seek((value * 1000.0) as% i64)
                 true
             }
             UiMsg::ValueChanged(id, value) if id == f"{prefix}:volume" => {

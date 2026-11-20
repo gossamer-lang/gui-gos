@@ -570,17 +570,17 @@ pub fn icon_file(name: String, size: i64) -> Option<String> {
 fn shrink(rgba: Vec<u8>, w: i64, h: i64, size: i64) -> AppIcon {
     if w <= size && h <= size { return AppIcon { rgba: rgba, width: w, height: h } }
     let scale = (w.max(h) as f64) / size as f64
-    let tw = ((w as f64 / scale) as i64).max(1)
-    let th = ((h as f64 / scale) as i64).max(1)
+    let tw = ((w as f64 / scale) as% i64).max(1)
+    let th = ((h as f64 / scale) as% i64).max(1)
     let mut out = #[0u8; tw * th * 4]
     let mut y = 0
     while y < th {
-        let y0 = (y as f64 * scale) as i64
-        let y1 = (((y + 1) as f64 * scale) as i64).min(h).max(y0 + 1)
+        let y0 = (y as f64 * scale) as% i64
+        let y1 = (((y + 1) as f64 * scale) as% i64).min(h).max(y0 + 1)
         let mut x = 0
         while x < tw {
-            let x0 = (x as f64 * scale) as i64
-            let x1 = (((x + 1) as f64 * scale) as i64).min(w).max(x0 + 1)
+            let x0 = (x as f64 * scale) as% i64
+            let x1 = (((x + 1) as f64 * scale) as% i64).min(w).max(x0 + 1)
             let mut sums = [0, 0, 0, 0]
             let mut sy = y0
             while sy < y1 {
@@ -600,11 +600,11 @@ fn shrink(rgba: Vec<u8>, w: i64, h: i64, size: i64) -> AppIcon {
             let count = (y1 - y0) * (x1 - x0)
             let o = (y * tw + x) * 4
             if sums[3] > 0 {
-                out[o] = (sums[0] / sums[3]) as u8
-                out[o + 1] = (sums[1] / sums[3]) as u8
-                out[o + 2] = (sums[2] / sums[3]) as u8
+                out[o] = (sums[0] / sums[3]) as% u8
+                out[o + 1] = (sums[1] / sums[3]) as% u8
+                out[o + 2] = (sums[2] / sums[3]) as% u8
             }
-            out[o + 3] = (sums[3] / count) as u8
+            out[o + 3] = (sums[3] / count) as% u8
             x += 1
         }
         y += 1

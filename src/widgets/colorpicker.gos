@@ -44,10 +44,10 @@ impl ColorPicker {
                 let _, s, val = color.hsv_parts()
                 let _, hs, l = color.hsl_parts()
                 match part {
-                    "r" => color.r = v.max(0.0).min(255.0).round() as u8
-                    "g" => color.g = v.max(0.0).min(255.0).round() as u8
-                    "b" => color.b = v.max(0.0).min(255.0).round() as u8
-                    "a" => color.a = v.max(0.0).min(255.0).round() as u8
+                    "r" => color.r = v.max(0.0).min(255.0).round() as% u8
+                    "g" => color.g = v.max(0.0).min(255.0).round() as% u8
+                    "b" => color.b = v.max(0.0).min(255.0).round() as% u8
+                    "a" => color.a = v.max(0.0).min(255.0).round() as% u8
                     "h" => { self.hue = v.max(0.0).min(360.0) % 360.0; color = Color::hsv(self.hue, s, val).with_alpha(color.a as i64) }
                     "s" => color = Color::hsv(self.hue, v / 100.0, val).with_alpha(color.a as i64)
                     "v" => color = Color::hsv(self.hue, s, v / 100.0).with_alpha(color.a as i64)
@@ -133,7 +133,7 @@ fn hue_ring(side: i64, fade: Option<Color>) -> Vec<u8> {
             px[at] = c.r
             px[at + 1] = c.g
             px[at + 2] = c.b
-            px[at + 3] = (cover * 255.0 + 0.5) as u8
+            px[at + 3] = (cover * 255.0 + 0.5) as% u8
         }
     }
     if RINGS.len() >= 8 { RINGS = Map::new() }

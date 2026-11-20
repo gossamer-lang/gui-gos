@@ -154,7 +154,7 @@ fn fixture() -> Result<(), errors::Error> {
     require(s.semantics(0).dump().contains("7 objects"), "adding shapes")?
     let r = s.rect_of("canvas").unwrap()
     // Scene units are interface units; the offscreen display has a scale of 1.
-    let at = |x: f64, y: f64| -> (i64, i64) { (r.x + x as i64, r.y + y as i64) }
+    let at = |x: f64, y: f64| -> (i64, i64) { (r.x + x as% i64, r.y + y as% i64) }
     let sun_x, sun_y = at(515.0, 55.0)
     s.click_at(sun_x, sun_y)?
     await_dump(&mut s, "selected: sun")?

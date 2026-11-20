@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.1 - Gossamer 0.82.2
+
+- Builds on windowing-gos 0.4.2 and gui-engine-gos 0.6.2, which keep event words, handles, and float bits exact under Gossamer 0.82.2's checked `as`; with windowing-gos 0.4.0 a negative coordinate or a high handle stopped the program. Requires Gossamer 0.82.2.
+- Pixel, color, layout, and media conversions that narrow a value keep their earlier wrapping and saturating results under Gossamer 0.82.2, where a plain `as` panics for a value its target cannot hold.
+
 ## 0.5.0 - Arranged windows
 
 - `Effect::Arrange` and `Arrangement` lay an application's windows out side by side over a display.

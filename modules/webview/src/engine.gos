@@ -120,11 +120,11 @@ mod linux {
     }
 
     fn id_pointer(id: i64) -> Option<Ptr<Void>> {
-        unsafe { Ptr::from_address(id as u64) }
+        unsafe { Ptr::from_address(id as% u64) }
     }
 
     fn id_of(data: Option<Ptr<Void>>) -> i64 {
-        match data { Some(p) => p.address() as i64, None => 0 }
+        match data { Some(p) => p.address() as% i64, None => 0 }
     }
 
     fn fresh() -> i64 {
@@ -174,8 +174,8 @@ mod linux {
                 if n.width == w && n.height == h && n.scale == scale { return }
                 // An offscreen window has no window manager to configure it; it
                 // takes its default size whenever it is laid out again.
-                unsafe { g::gtk_window_set_default_size(n.window, w as i32, h as i32) }
-                unsafe { g::gtk_window_resize(n.window, w as i32, h as i32) }
+                unsafe { g::gtk_window_set_default_size(n.window, w as% i32, h as% i32) }
+                unsafe { g::gtk_window_resize(n.window, w as% i32, h as% i32) }
                 unsafe { g::gtk_widget_queue_resize(n.window) }
                 unsafe { g::webkit_web_view_set_zoom_level(n.view, scale) }
                 let mut next = n
@@ -204,7 +204,7 @@ mod linux {
                 let bytes = unsafe { g::webkit_web_view_session_state_serialize(state) }
                 let mut size: usize = 0
                 let data = match unsafe { g::g_bytes_get_data(bytes, &mut size) } {
-                    Some(p) => unsafe { ffi::View::new(p, size as i64) }.to_vec()
+                    Some(p) => unsafe { ffi::View::new(p, size as% i64) }.to_vec()
                     None => #[]
                 }
                 unsafe { g::g_bytes_unref(bytes) }
@@ -212,7 +212,7 @@ mod linux {
                 emit(Event::Session { page: id, state: data })
             })
             Command::RestoreSession(id, data) => with_view(id, |v| {
-                let bytes = unsafe { g::g_bytes_new(data, data.len() as usize) }
+                let bytes = unsafe { g::g_bytes_new(data, data.len() as% usize) }
                 let state = unsafe { g::webkit_web_view_session_state_new(bytes) }
                 unsafe { g::g_bytes_unref(bytes) }
                 let Some(s) = state else { return }
@@ -355,7 +355,7 @@ mod linux {
     fn download_finished(download: Ptr<Void>, data: Option<Ptr<Void>>) {
         let id = id_of(data)
         let file = DOWNLOADS.get(id).unwrap_or("")
-        let bytes = unsafe { g::webkit_download_get_received_data_length(download) } as i64
+        let bytes = unsafe { g::webkit_download_get_received_data_length(download) } as% i64
         if FAILED_DOWNLOADS.contains(id) {
             let _ = FAILED_DOWNLOADS.remove(id)
             return
@@ -442,7 +442,7 @@ mod linux {
     // ---- input ----
 
     fn now() -> u32 {
-        (unsafe { g::g_get_monotonic_time() } / 1000) as u32
+        (unsafe { g::g_get_monotonic_time() } / 1000) as% u32
     }
 
     fn state_of(mods: Mods, buttons: u32) -> u32 {
@@ -555,7 +555,7 @@ mod linux {
         if value == 0 { return }
         let e = unsafe { g::gdk_event_new(kind) }
         let bytes = c(text)
-        unsafe { ffi::write(e.cast::<g::KeyEvent>(), g::KeyEvent { kind: kind, window: g::g_object_ref(window), send_event: 1, time: now(), state: state, keyval: value, length: text.byte_len() as i32, string: g::g_strdup(bytes), hardware_keycode: keycode(value), group: 0, is_modifier: 0 }) }
+        unsafe { ffi::write(e.cast::<g::KeyEvent>(), g::KeyEvent { kind: kind, window: g::g_object_ref(window), send_event: 1, time: now(), state: state, keyval: value, length: text.byte_len() as% i32, string: g::g_strdup(bytes), hardware_keycode: keycode(value), group: 0, is_modifier: 0 }) }
         deliver(widget, e, keyboard)
     }
 
@@ -567,7 +567,7 @@ mod linux {
         let mut count: i32 = 0
         if unsafe { g::gdk_keymap_get_entries_for_keyval(keymap, value, &mut keys, &mut count) } == 0 { return 0 }
         let Some(k) = keys else { return 0 }
-        let code = if count > 0 { unsafe { ffi::read(k) }.keycode as u16 } else { 0 }
+        let code = if count > 0 { unsafe { ffi::read(k) }.keycode as% u16 } else { 0 }
         unsafe { g::g_free(Some(k.cast::<Void>())) }
         code
     }

@@ -358,7 +358,7 @@ pub fn selection(st: StateStore, id: String) -> (i64, i64) {
 
 /// Floors a layout x to a pixel; exposed for the code editor's gutter.
 pub fn pixel(x: f64) -> i64 {
-    floor(x) as i64
+    floor(x) as% i64
 }
 
 impl Display for TextInput {

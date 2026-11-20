@@ -43,7 +43,7 @@ pub fn substitute(text: String, values: Map<String, String>) -> String {
 /// locales use one/other. Noninteger/ordinal rules require a separate catalog.
 pub fn plural(locale: String, count: i64) -> String {
     let lang = locale.replace("_", "-").split("-")[0]
-    let n = if count < 0 { -(count % 1_000_000) } else { count % 1_000_000 }
+    let n = (count % 1_000_000).abs()
     if lang == "ja" || lang == "zh" || lang == "ko" || lang == "th" { return "other" }
     if lang == "ar" {
         if count == 0 { return "zero" }; if count == 1 || count == -1 { return "one" }; if count == 2 || count == -2 { return "two" }
