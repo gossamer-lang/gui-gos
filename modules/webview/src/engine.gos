@@ -86,7 +86,7 @@ mod linux {
     const SCROLL_SMOOTH: i32 = 4
 
     pub fn run(runner: Runner) -> Result<(), errors::Error> {
-        RUNNER = Some(runner)
+        unsafe { RUNNER = Some(runner) }
         // Core pointer devices: GTK's XInput 2 path queries the pointer on the
         // offscreen windows' nonexistent X windows when given forwarded input.
         unsafe { g::gdk_disable_multidevice() }
@@ -96,17 +96,17 @@ mod linux {
             return Err(errors::new(why))
         }
         let context = unsafe { g::webkit_web_context_new() }
-        CONTEXT = Some(context)
+        unsafe { CONTEXT = Some(context) }
         let _ = unsafe { g::connect_pointer(context, c("download-started"), download_started, None, None, 0) }
         let _ = drain(None)
         unsafe { g::gtk_main() }
-        for (_, n) in PAGES { unsafe { g::gtk_widget_destroy(n.window) } }
-        PAGES = Map::new()
-        for (_, p) in PERMISSIONS { unsafe { g::g_object_unref(p) } }
-        PERMISSIONS = Map::new()
-        CONTEXT = None
+        for (_, n) in unsafe { PAGES } { unsafe { g::gtk_widget_destroy(n.window) } }
+        unsafe { PAGES = Map::new() }
+        for (_, p) in unsafe { PERMISSIONS } { unsafe { g::g_object_unref(p) } }
+        unsafe { PERMISSIONS = Map::new() }
+        unsafe { CONTEXT = None }
         unsafe { g::g_object_unref(context) }
-        RUNNER = None
+        unsafe { RUNNER = None }
         Ok(())
     }
 
@@ -128,18 +128,18 @@ mod linux {
     }
 
     fn fresh() -> i64 {
-        NEXT_ID += 1
-        NEXT_ID
+        unsafe { NEXT_ID += 1 }
+        unsafe { NEXT_ID }
     }
 
     fn emit(event: Event) {
-        let Some(r) = RUNNER else { return }
+        let Some(r) = unsafe { RUNNER } else { return }
         r.events.send(event)
         if let Some(m) = r.mailbox { m.post(gui::UiMsg::Custom(WAKE, "")) }
     }
 
     fn page_of_view(view: Ptr<Void>) -> i64 {
-        for (id, n) in PAGES {
+        for (id, n) in unsafe { PAGES } {
             if n.view == view { return id }
         }
         0
@@ -147,7 +147,7 @@ mod linux {
 
     // Runs every queued command; the engine wakes it after each send.
     fn drain(_data: Option<Ptr<Void>>) -> i32 {
-        let Some(r) = RUNNER else { return 0 }
+        let Some(r) = unsafe { RUNNER } else { return 0 }
         while let Some(command) = r.commands.try_recv() {
             handle(command)
         }
@@ -158,9 +158,9 @@ mod linux {
         match command {
             Command::Create(id) => create(id)
             Command::Close(id) => {
-                if let Some(n) = PAGES.get(id) {
+                if let Some(n) = unsafe { PAGES }.get(id) {
                     unsafe { g::gtk_widget_destroy(n.window) }
-                    let _ = PAGES.remove(id)
+                    let _ = unsafe { PAGES }.remove(id)
                 }
             }
             Command::Load(id, uri) => with_view(id, |v| unsafe { g::webkit_web_view_load_uri(v, c(uri)) })
@@ -170,7 +170,7 @@ mod linux {
             Command::Back(id) => with_view(id, |v| unsafe { g::webkit_web_view_go_back(v) })
             Command::Forward(id) => with_view(id, |v| unsafe { g::webkit_web_view_go_forward(v) })
             Command::Resize(id, w, h, scale) => {
-                let Some(n) = PAGES.get(id) else { return }
+                let Some(n) = unsafe { PAGES }.get(id) else { return }
                 if n.width == w && n.height == h && n.scale == scale { return }
                 // An offscreen window has no window manager to configure it; it
                 // takes its default size whenever it is laid out again.
@@ -182,22 +182,22 @@ mod linux {
                 next.width = w
                 next.height = h
                 next.scale = scale
-                PAGES[id] = next
+                unsafe { PAGES[id] = next }
             }
             Command::Input(id, input) => forward(id, input)
             Command::Evaluate(id, request, script) => {
-                SCRIPTS[request] = id
+                unsafe { SCRIPTS[request] = id }
                 with_view(id, |v| unsafe { g::webkit_web_view_evaluate_javascript(v, c(script), -1, None, None, None, script_done, id_pointer(request)) })
             }
             Command::Permission(request, allow) => {
-                if let Some(p) = PERMISSIONS.get(request) {
+                if let Some(p) = unsafe { PERMISSIONS }.get(request) {
                     if allow { unsafe { g::webkit_permission_request_allow(p) } } else { unsafe { g::webkit_permission_request_deny(p) } }
                     unsafe { g::g_object_unref(p) }
-                    let _ = PERMISSIONS.remove(request)
+                    let _ = unsafe { PERMISSIONS }.remove(request)
                 }
             }
             Command::Download(id, uri) => with_view(id, |v| { let _ = unsafe { g::webkit_web_view_download_uri(v, c(uri)) } })
-            Command::DownloadDir(dir) => DOWNLOAD_DIR = dir
+            Command::DownloadDir(dir) => unsafe { DOWNLOAD_DIR = dir }
             Command::Terminate(id) => with_view(id, |v| unsafe { g::webkit_web_view_terminate_web_process(v) })
             Command::SaveSession(id) => with_view(id, |v| {
                 let state = unsafe { g::webkit_web_view_get_session_state(v) }
@@ -228,20 +228,20 @@ mod linux {
     }
 
     fn with_view(id: i64, act: Fn(Ptr<Void>)) {
-        if let Some(n) = PAGES.get(id) { act(n.view) }
+        unsafe { if let Some(n) = PAGES.get(id) { act(n.view) } }
     }
 
     fn create(id: i64) {
-        if PAGES.contains_key(id) { return }
+        unsafe { if PAGES.contains_key(id) { return } }
         let window = unsafe { g::gtk_offscreen_window_new() }
         unsafe { g::gtk_window_set_default_size(window, 800, 600) }
-        let Some(context) = CONTEXT else { return }
+        let Some(context) = unsafe { CONTEXT } else { return }
         let view = unsafe { g::webkit_web_view_new_with_context(context) }
         // Software rendering keeps the offscreen window's pixels readable.
         unsafe { g::webkit_settings_set_hardware_acceleration_policy(g::webkit_web_view_get_settings(view), ACCELERATION_NEVER) }
         unsafe { g::gtk_container_add(window, view) }
         unsafe { g::gtk_widget_show_all(window) }
-        PAGES[id] = Native { view: view, window: window, snapshot_pending: false, buttons: 0, width: 800, height: 600, scale: 1.0 }
+        unsafe { PAGES[id] = Native { view: view, window: window, snapshot_pending: false, buttons: 0, width: 800, height: 600, scale: 1.0 } }
         let data = id_pointer(id)
         unsafe {
             g::connect_int(view, c("load-changed"), load_changed, data, None, 0)
@@ -287,7 +287,7 @@ mod linux {
 
     fn history_changed(_list: Ptr<Void>, _added: Option<Ptr<Void>>, _removed: Option<Ptr<Void>>, data: Option<Ptr<Void>>) {
         let page = id_of(data)
-        let Some(n) = PAGES.get(page) else { return }
+        let Some(n) = unsafe { PAGES }.get(page) else { return }
         emit(Event::History { page: page, back: unsafe { g::webkit_web_view_can_go_back(n.view) } != 0, forward: unsafe { g::webkit_web_view_can_go_forward(n.view) } != 0 })
     }
 
@@ -324,7 +324,7 @@ mod linux {
             "other"
         }
         let id = fresh()
-        PERMISSIONS[id] = unsafe { g::g_object_ref(r) }
+        unsafe { PERMISSIONS[id] = g::g_object_ref(r) }
         emit(Event::Permission { page: id_of(data), request: id, kind: kind })
         1
     }
@@ -345,19 +345,19 @@ mod linux {
 
     fn decide_destination(download: Ptr<Void>, suggested: Option<Ptr<Void>>, data: Option<Ptr<Void>>) -> i32 {
         let name = g::text(suggested.map(|p| p.cast::<u8>()))
-        let dir = if DOWNLOAD_DIR.is_empty() { env::temp_dir() } else { DOWNLOAD_DIR }
+        let dir = if unsafe { DOWNLOAD_DIR }.is_empty() { env::temp_dir() } else { unsafe { DOWNLOAD_DIR } }
         let file = path::join(dir, if name.is_empty() { "download" } else { path::file_name(name).unwrap_or("download") })
-        DOWNLOADS[id_of(data)] = file
+        unsafe { DOWNLOADS[id_of(data)] = file }
         unsafe { g::webkit_download_set_destination(download, c(windowing::instance::file_uri(file))) }
         1
     }
 
     fn download_finished(download: Ptr<Void>, data: Option<Ptr<Void>>) {
         let id = id_of(data)
-        let file = DOWNLOADS.get(id).unwrap_or("")
+        let file = unsafe { DOWNLOADS }.get(id).unwrap_or("")
         let bytes = unsafe { g::webkit_download_get_received_data_length(download) } as% i64
-        if FAILED_DOWNLOADS.contains(id) {
-            let _ = FAILED_DOWNLOADS.remove(id)
+        if unsafe { FAILED_DOWNLOADS }.contains(id) {
+            let _ = unsafe { FAILED_DOWNLOADS }.remove(id)
             return
         }
         emit(Event::DownloadFinished { download: id, path: file, bytes: bytes })
@@ -365,14 +365,14 @@ mod linux {
 
     fn download_failed(_download: Ptr<Void>, error: Option<Ptr<Void>>, data: Option<Ptr<Void>>) {
         let id = id_of(data)
-        FAILED_DOWNLOADS.insert(id)
+        unsafe { FAILED_DOWNLOADS.insert(id) }
         emit(Event::DownloadFailed { download: id, error: g::message(error.map(|p| p.cast::<g::Error>()), "the download failed") })
     }
 
     fn script_done(source: Option<Ptr<Void>>, result: Ptr<Void>, data: Option<Ptr<Void>>) {
         let request = id_of(data)
-        let page = SCRIPTS.get(request).unwrap_or(0)
-        let _ = SCRIPTS.remove(request)
+        let page = unsafe { SCRIPTS }.get(request).unwrap_or(0)
+        let _ = unsafe { SCRIPTS }.remove(request)
         let Some(view) = source else { return }
         let mut error: Option<Ptr<g::Error>> = None
         let answer = match unsafe { g::webkit_web_view_evaluate_javascript_finish(view, result, &mut error) } {
@@ -392,11 +392,11 @@ mod linux {
 
     fn damaged(_widget: Ptr<Void>, _event: Option<Ptr<Void>>, data: Option<Ptr<Void>>) -> i32 {
         let id = id_of(data)
-        let Some(n) = PAGES.get(id) else { return 0 }
+        let Some(n) = unsafe { PAGES }.get(id) else { return 0 }
         if !n.snapshot_pending {
             let mut next = n
             next.snapshot_pending = true
-            PAGES[id] = next
+            unsafe { PAGES[id] = next }
             let _ = unsafe { g::g_idle_add(snapshot, data) }
         }
         0
@@ -405,10 +405,10 @@ mod linux {
     // Copies the page's window into a frame, once per burst of damage.
     fn snapshot(data: Option<Ptr<Void>>) -> i32 {
         let id = id_of(data)
-        let Some(n) = PAGES.get(id) else { return 0 }
+        let Some(n) = unsafe { PAGES }.get(id) else { return 0 }
         let mut next = n
         next.snapshot_pending = false
-        PAGES[id] = next
+        unsafe { PAGES[id] = next }
         let Some(pixbuf) = unsafe { g::gtk_offscreen_window_get_pixbuf(n.window) } else { return 0 }
         let frame = frame_of(pixbuf, n.scale)
         unsafe { g::g_object_unref(pixbuf) }
@@ -483,7 +483,7 @@ mod linux {
     }
 
     fn forward(id: i64, input: CustomInput) {
-        let Some(n) = PAGES.get(id) else { return }
+        let Some(n) = unsafe { PAGES }.get(id) else { return }
         let Some(window) = unsafe { g::gtk_widget_get_window(n.view) } else { return }
         let pointer, keyboard = devices()
         let none = Ptr::null()
@@ -497,7 +497,7 @@ mod linux {
                 }
                 let mut next = n
                 next.buttons = n.buttons | button_mask(number)
-                PAGES[id] = next
+                unsafe { PAGES[id] = next }
                 unsafe { g::gtk_widget_grab_focus(n.view) }
             }
             CustomInput::Release { x, y, button, mods } => {
@@ -507,7 +507,7 @@ mod linux {
                 deliver(n.view, e, pointer)
                 let mut next = n
                 next.buttons = n.buttons & !button_mask(number)
-                PAGES[id] = next
+                unsafe { PAGES[id] = next }
             }
             CustomInput::Hover { x, y } | CustomInput::Drag { x, y } => {
                 let e = unsafe { g::gdk_event_new(MOTION) }

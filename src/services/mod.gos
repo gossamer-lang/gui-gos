@@ -14,7 +14,7 @@ use windowing
 /// `~/Library/Application Support/<app>` on macOS, `%APPDATA%\<app>` on
 /// Windows.
 pub fn config_dir(app_id: String) -> String {
-    let base = if CONFIG_ROOT.is_empty() { config_base() } else { CONFIG_ROOT }
+    let base = if unsafe { CONFIG_ROOT }.is_empty() { config_base() } else { unsafe { CONFIG_ROOT } }
     path::join(base, sanitize(app_id))
 }
 
@@ -24,7 +24,7 @@ static mut CONFIG_ROOT: String = ""
 /// Keeps every application's settings and caches under `root` instead of the
 /// platform defaults, for tests and portable installs; "" restores them.
 pub fn set_config_root(root: String) {
-    CONFIG_ROOT = root
+    unsafe { CONFIG_ROOT = root }
     gui_engine::set_config_root(root)
 }
 
@@ -69,7 +69,7 @@ fn config_base() -> String {
 /// `~/Library/Caches/<app>` on macOS, `%LOCALAPPDATA%\<app>` on Windows; under
 /// `<root>/cache` when `set_config_root` gave a root.
 pub fn cache_dir(app_id: String) -> String {
-    let base = if CONFIG_ROOT.is_empty() { cache_base() } else { path::join(CONFIG_ROOT, "cache") }
+    let base = if unsafe { CONFIG_ROOT }.is_empty() { cache_base() } else { path::join(unsafe { CONFIG_ROOT }, "cache") }
     path::join(base, sanitize(app_id))
 }
 

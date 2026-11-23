@@ -254,7 +254,7 @@ static mut SETS: Map<String, Map<String, IconArt>> = {}
 /// Adds `art` to the icon set `set` as `icon`; a theme whose `icons` names
 /// the set draws it in place of the built-in one.
 pub fn register(set: String, icon: Icon, art: IconArt) {
-    let mut icons = SETS.get(set).unwrap_or(Map::new())
+    let mut icons = unsafe { SETS }.get(set).unwrap_or(Map::new())
     icons[icon.name()] = art
-    SETS[set] = icons
+    unsafe { SETS[set] = icons }
 }

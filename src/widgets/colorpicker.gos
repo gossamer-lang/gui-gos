@@ -112,7 +112,7 @@ static mut RINGS: Map<String, Vec<u8>> = {}
 // both edges are antialiased by their pixel coverage.
 fn hue_ring(side: i64, fade: Option<Color>) -> Vec<u8> {
     let key = match fade { Some(c) => f"{side}:{c.css()}", None => f"{side}" }
-    if let Some(cached) = RINGS.get(key) {
+    if let Some(cached) = unsafe { RINGS }.get(key) {
         return cached
     }
     let mid = side as f64 / 2.0
@@ -136,8 +136,8 @@ fn hue_ring(side: i64, fade: Option<Color>) -> Vec<u8> {
             px[at + 3] = (cover * 255.0 + 0.5) as% u8
         }
     }
-    if RINGS.len() >= 8 { RINGS = Map::new() }
-    RINGS[key] = px
+    unsafe { if RINGS.len() >= 8 { RINGS = Map::new() } }
+    unsafe { RINGS[key] = px }
     px
 }
 pub fn wheel_semantics(w: ColorWheel) -> Option<AccessNode> {

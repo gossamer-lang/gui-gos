@@ -13,13 +13,13 @@ static mut SENT: Vec<String> = #[]
 
 /// Routes notifications to an in-memory record (`true`) or the system.
 pub fn use_memory(memory: bool) {
-    MEMORY = memory
-    SENT = #[]
+    unsafe { MEMORY = memory }
+    unsafe { SENT = #[] }
 }
 
 /// The notifications recorded in memory mode, oldest first, as `title: body`.
 pub fn sent() -> Vec<String> {
-    SENT
+    unsafe { SENT }
 }
 
 /// How urgent a notification is.
@@ -35,8 +35,8 @@ pub enum Urgency {
 /// service the error says so; callers keep the information visible in the
 /// window instead.
 pub fn notify(app: windowing::App, title: String, body: String, urgency: Urgency) -> Result<(), errors::Error> {
-    if MEMORY {
-        SENT.push(f"{title}: {body}")
+    if unsafe { MEMORY } {
+        unsafe { SENT.push(f"{title}: {body}") }
         return Ok(())
     }
     let level = match urgency {

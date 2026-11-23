@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.2 - Gossamer 0.84.3
+
+- Builds on windowing-gos 0.4.3 and gui-engine-gos 0.6.3. Requires Gossamer 0.84.3. Since Gossamer 0.84.0 a `static mut` is read and written only inside `unsafe { }`: the view registry, icon sets, color-picker rings, desktop notification log, configuration root, and webview engine state keep their statics and reach them that way.
+
 ## 0.5.1 - Gossamer 0.82.2
 
 - Builds on windowing-gos 0.4.2 and gui-engine-gos 0.6.2, which keep event words, handles, and float bits exact under Gossamer 0.82.2's checked `as`; with windowing-gos 0.4.0 a negative coordinate or a high handle stopped the program. Requires Gossamer 0.82.2.
