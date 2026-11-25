@@ -26,7 +26,7 @@ fn panes_known() -> Vec<String> {
 }
 
 fn layout_file() -> String {
-    path::join(env::var("XDG_CONFIG_HOME").unwrap_or(env::temp_dir()), "gui-docking-layout.json")
+    path::join(env::var("XDG_CONFIG_HOME").unwrap_or(env::temp_dir()), "gui-docking-layout.json").expect("relative segment")
 }
 
 // The editor in the middle, the outline to its left, the preview to its

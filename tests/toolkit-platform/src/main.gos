@@ -48,15 +48,15 @@ fn browser_check(ok: bool, step: String) -> Result<(), errors::Error> {
     Ok(())
 }
 fn file_browser_journey(session: &mut gui::Session) -> Result<(), errors::Error> {
-    let folder = path::join(env::temp_dir(), f"gui-toolkit-files-{process::id()}")
+    let folder = path::join(env::temp_dir(), f"gui-toolkit-files-{process::id()}")?
     fs::create_dir_all(folder)?
-    fs::write(path::join(folder, ".hidden"), "hidden".bytes())?
+    fs::write(path::join(folder, ".hidden")?, "hidden".bytes())?
     let folder = fs::canonicalize(folder)?
     // A full recent list must not make focus scroll the toolbar out of reach.
     let settings_file = gui::services::settings_path("dev.gossamer.toolkit-integration", "file-dialogs")
     let mut settings = gui::services::load_settings(settings_file, 1, |_, s| s)?
     let mut recent = #[]
-    for i in 0..8 { recent.push(path::join(folder, f"previous-{i}")) }
+    for i in 0..8 { recent.push(path::join(folder, f"previous-{i}")?) }
     settings.set_list("recent:integration-navigation", recent)
     gui::services::save_settings(settings_file, settings)?
     session.open_dialog_in(0, request::DialogRequest::File { id: "files", mode: request::FileMode::Save, title: "Save file", directory: folder, name: "draft.gos", filters: #[], backend: request::FileBackend::Toolkit, purpose: "integration-navigation", needs_favorites: true })
@@ -67,12 +67,12 @@ fn file_browser_journey(session: &mut gui::Session) -> Result<(), errors::Error>
     browser_check(session.focused() == "dlg:files:new-folder:name", "focus new folder name")?
     session.type_text("created")?
     session.press(windowing::Key::Return, windowing::Mods::default())?
-    browser_check(fs::is_dir(path::join(folder, "created")), "create folder")?
+    browser_check(fs::is_dir(path::join(folder, "created")?), "create folder")?
     browser_check(session.focused() == "dlg:files:entries", "focus entries after creation")?
     browser_check(session.click("dlg:files:back")?, "click Back")?
     browser_check(session.dialog_draft(session.dialog_ids()[0]).1.get("directory") == Some(folder), "Back navigates after list focus")?
     browser_check(session.click("dlg:files:forward")?, "click Forward")?
-    browser_check(session.dialog_draft(session.dialog_ids()[0]).1.get("directory") == Some(path::join(folder, "created")), "Forward navigates")?
+    browser_check(session.dialog_draft(session.dialog_ids()[0]).1.get("directory") == Some(path::join(folder, "created")?), "Forward navigates")?
     browser_check(session.click(f"dlg:files:breadcrumb:{folder}")?, "click parent breadcrumb")?
     browser_check(session.dialog_draft(session.dialog_ids()[0]).1.get("directory") == Some(folder), "breadcrumb navigates")?
     browser_check(session.click("dlg:files:back")?, "click Back after breadcrumb")?

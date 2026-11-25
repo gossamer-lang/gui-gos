@@ -153,7 +153,7 @@ fn main() -> Result<(), errors::Error>{
     let bad = Document::import(Format::Html, "<p onclick=\"alert(1)\">unsafe</p>")
     require(bad.is_err(), "Unsafe HTML accepted")?
     require(s.semantics(0).dump().contains("document"), "Accessible preview missing")?
-    let image_file = path::join(env::temp_dir(), f"gui-rich-image-{process::id()}.png")
+    let image_file = path::join(env::temp_dir(), f"gui-rich-image-{process::id()}.png")?
     fs::write(image_file, gui::AppIcon::drawn(gui::Icon::Search, 16, gui::Color::white(), gui::Color::rgb(20, 40, 60)).to_png())?
     // A script answers the toolkit's file browser; the native chooser the
     // button opens on a desktop takes a person.

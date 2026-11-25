@@ -132,7 +132,7 @@ fn absolute(p: String) -> Result<String, errors::Error> {
     if path::is_absolute(p) {
         return Ok(path::normalize(p))
     }
-    Ok(path::normalize(path::join(env::current_dir()?, p)))
+    Ok(path::normalize(path::join(env::current_dir()?, p)?))
 }
 
 fn sorted_entries(dir: String) -> Result<Vec<fs::DirInfo>, errors::Error> {
@@ -160,7 +160,7 @@ fn hash_tree(root: String, dir: String, rows: &mut Vec<String>) -> Result<(), er
 fn source_hashes(root: String) -> Result<String, errors::Error> {
     let mut rows = #[]
     for project in PROJECTS {
-        hash_tree(root, path::join(root, project), &mut rows)?
+        hash_tree(root, path::join(root, project)?, &mut rows)?
     }
     Ok(rows.join("\n") + "\n")
 }
@@ -200,7 +200,7 @@ fn which(tool: String) -> bool {
     let separator = if os::family() == "windows" { ";" } else { ":" }
     let suffix = if os::family() == "windows" { ".exe" } else { "" }
     let search = env::var("PATH").unwrap_or("")
-    search.split(separator).any(|dir| !dir.is_empty() && fs::is_file(path::join(dir, tool + suffix)))
+    search.split(separator).any(|dir| !dir.is_empty() && fs::is_file(path::join(dir, tool + suffix).expect("relative segment")))
 }
 
 fn toml_value(file: String) -> Result<json::Value, errors::Error> {
@@ -252,7 +252,7 @@ fn plan(gui: String, root: String, out: String, profile: String) -> Result<Vec<S
     for (name, crate) in RUST_CRATES {
         group = name
         let command = if system() == "Linux" || system() == "FreeBSD" {
-            #["sh", path::join(root, "windowing-gos/tools/private-bus.sh"), "--", "tools/check-rust.sh", crate]
+            #["sh", path::join(root, "windowing-gos/tools/private-bus.sh")?, "--", "tools/check-rust.sh", crate]
         } else {
             #["sh", "tools/check-rust.sh", crate]
         }
@@ -261,7 +261,7 @@ fn plan(gui: String, root: String, out: String, profile: String) -> Result<Vec<S
     // gui-gos's four-tier parity is the longest of these steps, so it runs
     // apart; the rest join the core group.
     for project in #["windowing-gos", "gui-gos"] {
-        let directory = path::join(root, project)
+        let directory = path::join(root, project)?
         group = "core"
         add(f"{project} quick-check", directory, #["sh", "quick-check.sh"], none)
         add(f"{project} unit tests", directory, #[gos, "test", "."], none)
@@ -286,30 +286,30 @@ fn plan(gui: String, root: String, out: String, profile: String) -> Result<Vec<S
             "wrapper" => "wrap"
             _ => "journeys"
         }
-        add(name, gui, #["sh", script], only(variable, path::join(out, name.replace(" ", "-"))))
+        add(name, gui, #["sh", script], only(variable, path::join(out, name.replace(" ", "-"))?))
     }
     group = "visuals"
     add("scale journeys", gui, #["sh", "tests/scale/run.sh"], none)
     for (i, example) in EXAMPLES.iter().enumerate() {
         group = f"examples-{i % EXAMPLE_GROUPS + 1}"
-        add(f"example {example}", gui, #["sh", "tools/check-examples.sh", example], only("GUI_EXAMPLE_REPORT", path::join(out, "examples")))
+        add(f"example {example}", gui, #["sh", "tools/check-examples.sh", example], only("GUI_EXAMPLE_REPORT", path::join(out, "examples")?))
     }
     group = "native"
-    let windowing = path::join(root, "windowing-gos")
+    let windowing = path::join(root, "windowing-gos")?
     add("single-instance four tiers", windowing, #["sh", "tests/instance/run.sh"], none)
     if profile == "linux" {
-        add("native X11 Wayland platform and activation", windowing, #["sh", "tests/instance/native.sh"], only("WINDOWING_INSTANCE_REPORT", path::join(out, "native-platform")))
-        add("native rendering and recovery", gui, #["sh", "tests/rendering/run.sh"], only("GUI_RENDER_OUT", path::join(out, "rendering")))
+        add("native X11 Wayland platform and activation", windowing, #["sh", "tests/instance/native.sh"], only("WINDOWING_INSTANCE_REPORT", path::join(out, "native-platform")?))
+        add("native rendering and recovery", gui, #["sh", "tests/rendering/run.sh"], only("GUI_RENDER_OUT", path::join(out, "rendering")?))
         for (name, script) in #[("native smoke", "tests/smoke/run.sh"), ("native XDND", "tests/xdnd/run.sh"), ("native Wayland drag", "tests/wldnd/run.sh"), ("native preferences", "tests/preferences/run.sh")] {
             add(name, windowing, #["sh", script], none)
         }
     } else if profile == "native" {
         let driver = if system() == "Windows" { "windows" } else { "cocoa" }
-        let core = path::join(root, "windowing-gos/rust/gos-windowing")
+        let core = path::join(root, "windowing-gos/rust/gos-windowing")?
         for example in #["instance-check", "platform-check"] {
             add(f"native {example}", core, #["cargo", "run", "--release", "--example", example], only("SDL_VIDEO_DRIVER", driver))
         }
-        let toolkit = path::join(root, "gui-engine-gos/rust/gui-engine")
+        let toolkit = path::join(root, "gui-engine-gos/rust/gui-engine")?
         add("native software default", toolkit, #["cargo", "run", "--release", "--example", "render-check", "--", "--require-software"], only("SDL_VIDEO_DRIVER", driver))
         let mut gpu = only("SDL_VIDEO_DRIVER", driver)
         gpu.insert("GUI_RENDERER", "gpu")
@@ -318,12 +318,12 @@ fn plan(gui: String, root: String, out: String, profile: String) -> Result<Vec<S
     group = "packages"
     for target in CROSS_TARGETS {
         for project in #["gui-gos", "windowing-gos"] {
-            let base = path::join(root, project)
+            let base = path::join(root, project)?
             let mut directories = #[base]
-            let examples = path::join(base, "examples")
+            let examples = path::join(base, "examples")?
             if fs::is_dir(examples) {
                 for entry in sorted_entries(examples)? {
-                    if fs::is_file(path::join(entry.path, "project.toml")) {
+                    if fs::is_file(path::join(entry.path, "project.toml")?) {
                         directories.push(entry.path)
                     }
                 }
@@ -386,7 +386,7 @@ fn run_step(step: Step, base: BTreeMap<String, String>, live: String, limit_ms: 
 }
 
 fn save(out: String, ledger: Ledger) -> Result<(), errors::Error> {
-    fs::write(path::join(out, "results.json"), (json::encode_pretty(ledger)? + "\n").bytes())?
+    fs::write(path::join(out, "results.json")?, (json::encode_pretty(ledger)? + "\n").bytes())?
     Ok(())
 }
 
@@ -409,12 +409,12 @@ fn gate() -> Result<i64, errors::Error> {
         return Ok(0)
     }
     fs::create_dir_all(out)?
-    let evidence = path::join(out, "steps")
+    let evidence = path::join(out, "steps")?
     fs::create_dir_all(evidence)?
     let gos = env::var("GOS").unwrap_or("gos")
     let mut missing = #[]
     for project in PROJECTS {
-        if !fs::is_file(path::join(root, f"{project}/project.toml")) {
+        if !fs::is_file(path::join(root, f"{project}/project.toml")?) {
             missing.push(f"declared sibling checkout {project}")
         }
     }
@@ -431,14 +431,14 @@ fn gate() -> Result<i64, errors::Error> {
         return Err(fail(f"missing release prerequisites: {missing.join(", ")}"))
     }
     let before = source_hashes(root)?
-    fs::write(path::join(out, "source-sha256.txt"), before.bytes())?
+    fs::write(path::join(out, "source-sha256.txt")?, before.bytes())?
     let mut base = BTreeMap::new()
     base.insert("SDL_VIDEO_DRIVER", "offscreen")
-    base.insert("XDG_CONFIG_HOME", path::join(out, "config"))
-    base.insert("XDG_CACHE_HOME", path::join(out, "cache"))
+    base.insert("XDG_CONFIG_HOME", path::join(out, "config")?)
+    base.insert("XDG_CACHE_HOME", path::join(out, "cache")?)
     // Steps that isolate their own XDG_CACHE_HOME still share one build of
     // each Rust binding set, which gos keys by its sources and profile.
-    base.insert("GOSSAMER_CACHE", path::join(out, "cache"))
+    base.insert("GOSSAMER_CACHE", path::join(out, "cache")?)
     let mut server: Option<process::Child> = None
     defer if let Some(mut x) = server { stop(&mut x) }
     let mut runtime_dir: Option<String> = None
@@ -451,7 +451,7 @@ fn gate() -> Result<i64, errors::Error> {
         runtime_dir = Some(runtime)
         base.insert("XDG_RUNTIME_DIR", runtime)
         // Xvfb writes the display it chose to the descriptor -displayfd names.
-        let log = fs::create(path::join(out, "xvfb.txt"))?
+        let log = fs::create(path::join(out, "xvfb.txt")?)?
         let mut x = Command::new("Xvfb")
             .args(#["-displayfd", "1", "-screen", "0", "1280x900x24", "-nolisten", "tcp"])
             .stdout(Stdio::Piped)
@@ -468,7 +468,7 @@ fn gate() -> Result<i64, errors::Error> {
     }
     let mut revisions = BTreeMap::new()
     for project in PROJECTS {
-        let revision = process::run_in("git", #["rev-parse", "HEAD"], path::join(root, project), #[])
+        let revision = process::run_in("git", #["rev-parse", "HEAD"], path::join(root, project)?, #[])
         revisions.insert(project, match revision {
             Ok(r) => if r.code == 0 { Some(r.stdout.trim()) } else { None }
             Err(_) => None
@@ -498,8 +498,8 @@ fn gate() -> Result<i64, errors::Error> {
         number += 1
         let started = Instant::now()
         let label = f"{number:02}"
-        let log = path::join(evidence, f"{label}.txt")
-        let live = path::join(evidence, f"{label}.live.txt")
+        let log = path::join(evidence, f"{label}.txt")?
+        let live = path::join(evidence, f"{label}.live.txt")?
         let code = run_step(step, base, live, limit_ms)?
         seal_log(live, log)?
         let seconds = (started.elapsed_ms() as f64) / 1000.0
@@ -523,7 +523,7 @@ fn gate() -> Result<i64, errors::Error> {
     let after = source_hashes(root)?
     let unchanged = after == before
     if !unchanged {
-        fs::write(path::join(out, "source-sha256-after.txt"), after.bytes())?
+        fs::write(path::join(out, "source-sha256-after.txt")?, after.bytes())?
         for file in changed_files(before, after) {
             println(f"CHANGED during the gate: {file}")
         }
@@ -571,7 +571,7 @@ mod tests {
     fn a_step_log_holds_both_output_streams_in_the_order_written() -> Result<(), errors::Error> {
         let dir = fs::temp_dir("gui-step-")?
         defer fs::remove_dir_all(dir)
-        let live = path::join(dir, "01.live.txt")
+        let live = path::join(dir, "01.live.txt")?
         let step = super::Step {
             name: "streams"
             group: "core"
@@ -588,8 +588,8 @@ mod tests {
     fn sealed_logs_keep_their_bytes_when_a_service_writes_after_its_step() -> Result<(), errors::Error> {
         let dir = fs::temp_dir("gui-release-")?
         defer fs::remove_dir_all(dir)
-        let live = path::join(dir, "01.live.txt")
-        let sealed = path::join(dir, "01.txt")
+        let live = path::join(dir, "01.live.txt")?
+        let sealed = path::join(dir, "01.txt")?
         // The service keeps the step's stdout after the step has returned; its
         // readiness line and stdin release order the writes without timing.
         let output = fs::create(live)?

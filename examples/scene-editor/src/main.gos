@@ -46,7 +46,7 @@ fn init() -> Model {
 }
 
 fn export_base() -> String {
-    path::join(env::temp_dir(), f"gui-scene-{process::id()}")
+    path::join(env::temp_dir(), f"gui-scene-{process::id()}").expect("relative segment")
 }
 
 fn save_dialog(kind: String, toolkit: bool) {

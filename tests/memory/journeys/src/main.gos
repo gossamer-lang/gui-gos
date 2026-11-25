@@ -202,7 +202,7 @@ fn main() -> Result<(), errors::Error> {
     let args = env::args()
     if args.len() < 2 { return Err(errors::new("usage: journeys windows|popups|tabs|editor ITERATIONS")) }
     let n = args[1].to_i64().ok_or(errors::new("ITERATIONS must be a number"))?
-    let config = path::join(env::temp_dir(), f"gui-journeys-{process::id()}")
+    let config = path::join(env::temp_dir(), f"gui-journeys-{process::id()}")?
     gui::services::set_config_root(config)
     defer fs::remove_dir_all(config).unwrap_or(())
     match args[0] {

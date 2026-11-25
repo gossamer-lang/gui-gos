@@ -56,7 +56,7 @@ struct SessionMetadata {
     active_windows: Map<String, String>
     next: i64
 }
-fn session_path() -> String { path::join(gui::services::config_dir(APP_ID), "editor-session.gosdoc") }
+fn session_path() -> String { path::join(gui::services::config_dir(APP_ID), "editor-session.gosdoc").expect("relative segment") }
 fn checkpoint(m: Model) {
     let records = m.docs.map(|doc| gui::editing::document::Record { key: doc.key, document: doc.document.id })
     let metadata = SessionMetadata { version: 1, docs: m.docs.map(|doc| SessionDocument { key: doc.key, path: doc.path, window: doc.window, pinned: doc.pinned }), active_windows: m.active_windows, next: m.next }
@@ -939,14 +939,14 @@ fn journey(s: &mut gui::Session, file: String) -> Result<(), errors::Error> {
     let name_rect = s.rect_of("dlg:save-as:doc2:filename").ok_or(errors::new("missing file name field"))?
     let save_rect = s.rect_of("dlg:save-as:doc2:action:choose").ok_or(errors::new("missing Save button"))?
     if name_rect.height < 20 || save_rect.height < 20 || name_rect.intersects(save_rect) { return Err(errors::new("Save As controls overlap or collapse")) }
-    s.screenshot(path::join(env::temp_dir(), "gui-editor-save-dialog.png"))?
+    s.screenshot(path::join(env::temp_dir(), "gui-editor-save-dialog.png")?)?
     if !s.click("dlg:save-as:doc2:action:choose")? { return Err(errors::new("Save button is not clickable")) }
     wait_for(s, f"Saved {path::file_name(target).unwrap_or(target)}")?
     if fs::read_to_string(target)? != "draft" { return Err(errors::new("Save As wrote different text")) }
     println("save dialog accepts typed path and click: ok")
     s.press(windowing::Key::A, primary)?
     s.type_text("fn main() {\n    let count = 42\n    println(\"Hello\") // syntax colors\n}\n")?
-    s.screenshot(path::join(env::temp_dir(), "gui-editor-syntax.png"))?
+    s.screenshot(path::join(env::temp_dir(), "gui-editor-syntax.png")?)?
     find_journey(s, primary)?
     let before = s.edit_state(0, "editor-doc2")
     let Some(tab) = s.part_rect(0, "docs:main", 2) else { return Err(errors::new("the document tab strip is not shown")) }
@@ -1041,7 +1041,7 @@ fn find_journey(s: &mut gui::Session, primary: windowing::Mods) -> Result<(), er
 
 fn fixture() -> Result<(), errors::Error> {
     gui::services::clipboard::use_memory(true)
-    let file = path::join(env::temp_dir(), f"gui-code-editor-{process::id()}.txt")
+    let file = path::join(env::temp_dir(), f"gui-code-editor-{process::id()}.txt")?
     fs::write(file, "hello".bytes())?
     let mut s = app(#[file]).start()?
     let outcome = journey(&mut s, file)
@@ -1054,7 +1054,7 @@ fn fixture() -> Result<(), errors::Error> {
 // Save and restore the application's document order, pinning, window ownership,
 // active tabs and native undo roots across a complete session shutdown.
 fn session_fixture() -> Result<(), errors::Error> {
-    let root = path::join(env::temp_dir(), f"gui-editor-checkpoint-{process::id()}")
+    let root = path::join(env::temp_dir(), f"gui-editor-checkpoint-{process::id()}")?
     fs::remove_dir_all(root).unwrap_or(())
     gui::services::set_config_root(root)
     let mut primary = windowing::Mods::default()
@@ -1101,7 +1101,7 @@ fn close_fixture() -> Result<(), errors::Error> {
     let mut primary = windowing::Mods::default()
     if gui::input::platform_is_macos() { primary.gui = true } else { primary.ctrl = true }
     for action in #["cancel", "discard", "save"] {
-        let file = path::join(env::temp_dir(), f"gui-close-{process::id()}-{action}.txt")
+        let file = path::join(env::temp_dir(), f"gui-close-{process::id()}-{action}.txt")?
         fs::write(file, "close-saved-body".bytes())?
         let mut s = app(#[file]).start()?
         let outcome = close_case(&mut s, action, primary)
