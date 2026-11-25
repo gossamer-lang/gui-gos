@@ -151,17 +151,17 @@ fn main() -> Result<(), errors::Error> {
     let golden = if args.len() > 0 { args[0] } else { "golden" }
     let report = if args.len() > 1 { args[1] } else { env::temp_dir() }
     let update = env::var("GUI_SCREENSHOT_UPDATE").unwrap_or("") == "1"
-    let config = path::join(report, "screenshot-config")?
+    let config = path::join(report, "screenshot-config")
     gui::services::set_config_root(config)
     let mut failures = 0
     for scene in scenes() {
-        let file = path::join(golden, f"{scene.name}.png")?
+        let file = path::join(golden, f"{scene.name}.png")
         if update {
             render(scene, file)?
             println(f"{scene.name}: written")
             continue
         }
-        let actual = path::join(report, f"{scene.name}-actual.png")?
+        let actual = path::join(report, f"{scene.name}-actual.png")
         render(scene, actual)?
         let width, height, pixels = pixels_of_png(actual)?
         let w, h, expected = pixels_of_png(file)?

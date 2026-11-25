@@ -40,7 +40,7 @@ fn init() -> Model {
 }
 
 fn export_base() -> String {
-    path::join(env::temp_dir(), f"gui-charts-{process::id()}").expect("relative segment")
+    path::join(env::temp_dir(), f"gui-charts-{process::id()}")
 }
 
 fn save_dialog(id: String, title: String, name: String, filter: request::FileFilter, toolkit: bool) {

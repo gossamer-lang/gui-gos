@@ -390,7 +390,7 @@ fn dialogs() -> Widget {
 
 // The file the drag card offers, written when the showcase starts.
 fn drag_file() -> String {
-    path::join(env::temp_dir(), f"gui-showcase-drag-{process::id()}.txt").expect("relative segment")
+    path::join(env::temp_dir(), f"gui-showcase-drag-{process::id()}.txt")
 }
 
 // A card that drags its file (and the same text) into another application.

@@ -69,7 +69,7 @@ fn diverse_source() -> String {
 
 fn main() -> Result<(), errors::Error>{
     gui::services::clipboard::use_memory(true)
-    let file = path::join(env::temp_dir(), f"gui-document-session-{process::id()}.bin")?
+    let file = path::join(env::temp_dir(), f"gui-document-session-{process::id()}.bin")
     let p95_limit = env::var("GUI_DOCUMENT_P95_MS").unwrap_or("1000").to_i64().unwrap_or(1000) * 1_000_000
     for kind in #["diverse", "long-line"] {
         let text = if kind == "diverse" { diverse_source() } else { "x".repeat(1_048_576) }

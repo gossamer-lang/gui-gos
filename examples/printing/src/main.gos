@@ -69,7 +69,7 @@ fn repaginate(m: Model) -> Model {
 }
 
 fn export_path() -> String {
-    path::join(env::temp_dir(), f"gui-printing-{process::id()}.pdf").expect("relative segment")
+    path::join(env::temp_dir(), f"gui-printing-{process::id()}.pdf")
 }
 
 fn update(m: Model, msg: UiMsg) -> Model {

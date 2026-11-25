@@ -346,13 +346,7 @@ mod linux {
     fn decide_destination(download: Ptr<Void>, suggested: Option<Ptr<Void>>, data: Option<Ptr<Void>>) -> i32 {
         let name = g::text(suggested.map(|p| p.cast::<u8>()))
         let dir = if unsafe { DOWNLOAD_DIR }.is_empty() { env::temp_dir() } else { unsafe { DOWNLOAD_DIR } }
-        // The page suggests the name, so only its last component is used, and
-        // never `.` or `..`, which name the download folder or its parent.
-        let leaf = match path::file_name(name) {
-            Some(n) if !n.is_empty() && n != "." && n != ".." => n
-            _ => "download"
-        }
-        let file = path::join(dir, leaf).expect("a single name below the folder")
+        let file = path::join(dir, if name.is_empty() { "download" } else { path::file_name(name).unwrap_or("download") })
         unsafe { DOWNLOADS[id_of(data)] = file }
         unsafe { g::webkit_download_set_destination(download, c(windowing::instance::file_uri(file))) }
         1

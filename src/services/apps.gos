@@ -265,16 +265,16 @@ pub fn command_for(entry: AppEntry, files: Vec<String>) -> Vec<String> {
 // Whether `program` can run: an existing absolute path, or a name found on PATH.
 fn on_path(program: String) -> bool {
     if path::is_absolute(program) { return fs::is_file(program) }
-    env::var("PATH").unwrap_or("").split(":").iter().any(|dir| !dir.is_empty() && path::join(dir, program).is_ok_and(|file| fs::is_file(file)))
+    env::var("PATH").unwrap_or("").split(":").iter().any(|dir| !dir.is_empty() && fs::is_file(path::join(dir, program)))
 }
 
 /// The XDG data folders' `applications` folders, most important first.
 pub fn desktop_entry_dirs() -> Vec<String> {
     let home = env::home_dir().unwrap_or("")
-    let data_home = env::var("XDG_DATA_HOME").unwrap_or(path::join(home, ".local/share").expect("relative segment"))
-    let mut out = #[path::join(data_home, "applications").expect("relative segment")]
+    let data_home = env::var("XDG_DATA_HOME").unwrap_or(path::join(home, ".local/share"))
+    let mut out = #[path::join(data_home, "applications")]
     for d in env::var("XDG_DATA_DIRS").unwrap_or("/usr/local/share:/usr/share").split(":") {
-        if !d.is_empty() { out.push(path::join(d, "applications").expect("relative segment")) }
+        if !d.is_empty() { out.push(path::join(d, "applications")) }
     }
     out
 }
@@ -347,7 +347,7 @@ pub fn bundle_entry(bundle: String, info: String) -> AppEntry {
     let folder = path::file_name(bundle).unwrap_or(bundle)
     let fallback = if folder.ends_with(".app") { folder.substring(0, folder.byte_len() - 4) } else { folder }
     let name = keys.get("CFBundleDisplayName").unwrap_or(keys.get("CFBundleName").unwrap_or(fallback))
-    AppEntry { id: bundle, name: name, generic_name: String::new(), comment: String::new(), icon: keys.get("CFBundleIconFile").unwrap_or(""), keywords: #[], categories: #[], exec: #["/usr/bin/open", "-a", bundle, "%F"], terminal: false, source: path::join(bundle, "Contents/Info.plist").expect("relative segment"), image: None }
+    AppEntry { id: bundle, name: name, generic_name: String::new(), comment: String::new(), icon: keys.get("CFBundleIconFile").unwrap_or(""), keywords: #[], categories: #[], exec: #["/usr/bin/open", "-a", bundle, "%F"], terminal: false, source: path::join(bundle, "Contents/Info.plist"), image: None }
 }
 
 fn scan_bundles(dirs: Vec<String>) -> Vec<AppEntry> {
@@ -356,7 +356,7 @@ fn scan_bundles(dirs: Vec<String>) -> Vec<AppEntry> {
         let Ok(entries) = fs::read_dir(dir) else { continue }
         for e in entries {
             if !e.is_dir || !e.name.ends_with(".app") { continue }
-            let info = fs::read_to_string(path::join(e.path, "Contents/Info.plist").expect("relative segment")).unwrap_or("")
+            let info = fs::read_to_string(path::join(e.path, "Contents/Info.plist")).unwrap_or("")
             out.push(bundle_entry(e.path, info))
         }
     }
@@ -485,18 +485,18 @@ impl IconLookup {
     /// The `hicolor` folders under the XDG data folders, the user's first.
     pub fn new() -> IconLookup {
         let home = env::home_dir().unwrap_or("")
-        let mut roots = #[path::join(env::var("XDG_DATA_HOME").unwrap_or(path::join(home, ".local/share").expect("relative segment")), "icons").expect("relative segment")]
+        let mut roots = #[path::join(env::var("XDG_DATA_HOME").unwrap_or(path::join(home, ".local/share")), "icons")]
         for d in env::var("XDG_DATA_DIRS").unwrap_or("/usr/local/share:/usr/share").split(":") {
-            if !d.is_empty() { roots.push(path::join(d, "icons").expect("relative segment")) }
+            if !d.is_empty() { roots.push(path::join(d, "icons")) }
         }
         IconLookup::in_roots(roots)
     }
 
     /// The `hicolor` folders under each of `roots`, the first most important.
     pub fn in_roots(roots: Vec<String>) -> IconLookup {
-        let homes = roots.map(|r| path::join(r, "hicolor").expect("relative segment")).filter(|d| fs::is_dir(d))
+        let homes = roots.map(|r| path::join(r, "hicolor")).filter(|d| fs::is_dir(d))
         let mut dirs = #[]
-        let Some(index) = homes.iter().map(|d| path::join(d, "index.theme").expect("relative segment")).find(|f| fs::is_file(f)) else { return IconLookup { dirs: dirs } }
+        let Some(index) = homes.iter().map(|d| path::join(d, "index.theme")).find(|f| fs::is_file(f)) else { return IconLookup { dirs: dirs } }
         let Ok(text) = fs::read_to_string(index) else { return IconLookup { dirs: dirs } }
         let groups = ini_groups(text)
         let head = groups.get("Icon Theme").unwrap_or(Map::new())
@@ -513,8 +513,7 @@ impl IconLookup {
                 _ => IconDirKind::Threshold
             }
             for home in homes {
-                // A theme directory outside the theme's own folder is not read.
-                let Ok(folder) = path::join(home, sub.trim()) else { continue }
+                let folder = path::join(home, sub.trim())
                 let Ok(entries) = fs::read_dir(folder) else { continue }
                 let mut files = Set::new()
                 for e in entries { files.insert(e.name) }
@@ -540,17 +539,16 @@ impl IconLookup {
                 let file = f"{stem}.{ext}"
                 if !d.files.contains(file) { continue }
                 let distance = d.distance(px)
-                // `file` is an entry the folder listed, one name with no separator.
-                if distance == 0 { return Some(path::join(d.folder, file).expect("listed entry")) }
+                if distance == 0 { return Some(path::join(d.folder, file)) }
                 if distance < best_distance {
-                    best = Some(path::join(d.folder, file).expect("listed entry"))
+                    best = Some(path::join(d.folder, file))
                     best_distance = distance
                 }
             }
         }
         if best.is_some() { return best }
         for ext in ICON_EXTENSIONS {
-            let Ok(file) = path::join("/usr/share/pixmaps", f"{stem}.{ext}") else { return None }
+            let file = path::join("/usr/share/pixmaps", f"{stem}.{ext}")
             if fs::is_file(file) { return Some(file) }
         }
         None
@@ -641,15 +639,15 @@ pub fn installed() -> Vec<AppEntry> {
 /// The applications installed for this user, by name.
 #[cfg(target_os = "macos")]
 pub fn installed() -> Vec<AppEntry> {
-    scan_bundles(#["/Applications", "/System/Applications", path::join(env::home_dir().unwrap_or(""), "Applications").expect("relative segment")])
+    scan_bundles(#["/Applications", "/System/Applications", path::join(env::home_dir().unwrap_or(""), "Applications")])
 }
 
 /// The applications installed for this user, by name.
 #[cfg(target_os = "windows")]
 pub fn installed() -> Vec<AppEntry> {
     let mut dirs = #[]
-    if let Some(d) = env::var("APPDATA") { dirs.push(path::join(d, "Microsoft\\Windows\\Start Menu\\Programs").expect("relative segment")) }
-    if let Some(d) = env::var("ProgramData") { dirs.push(path::join(d, "Microsoft\\Windows\\Start Menu\\Programs").expect("relative segment")) }
+    if let Some(d) = env::var("APPDATA") { dirs.push(path::join(d, "Microsoft\\Windows\\Start Menu\\Programs")) }
+    if let Some(d) = env::var("ProgramData") { dirs.push(path::join(d, "Microsoft\\Windows\\Start Menu\\Programs")) }
     scan_shortcuts(dirs)
 }
 

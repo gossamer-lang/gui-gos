@@ -55,7 +55,7 @@ fn submit(session: &mut gui::Session, request: i64, operation: Operation, status
 }
 
 fn main() -> Result<(), errors::Error> {
-    let file = path::join(env::temp_dir(), f"gui-resource-work-{process::id()}.txt")?
+    let file = path::join(env::temp_dir(), f"gui-resource-work-{process::id()}.txt")
     fs::write(file, "hello אבג 👩🏽‍💻".bytes())?
     let mut session = gui::application("Resource checks", "dev.gossamer.gui-resources", || Model::default(), update, view).windows(extra).size(320, 200).start()?
     let baseline_callbacks = gui::app::host::callback_count()

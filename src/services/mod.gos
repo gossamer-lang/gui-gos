@@ -15,7 +15,7 @@ use windowing
 /// Windows.
 pub fn config_dir(app_id: String) -> String {
     let base = if unsafe { CONFIG_ROOT }.is_empty() { config_base() } else { unsafe { CONFIG_ROOT } }
-    path::join(base, sanitize(app_id)).expect("sanitized name")
+    path::join(base, sanitize(app_id))
 }
 
 // Replaces the platform default when set.
@@ -32,7 +32,7 @@ pub fn set_config_root(root: String) {
 /// neither reads nor writes the user's configuration; answers the directory.
 #[cfg(test)]
 pub fn private_test_config() -> String {
-    let root = path::join(env::temp_dir(), f"gui-gos-test-config-{process::id()}").expect("relative segment")
+    let root = path::join(env::temp_dir(), f"gui-gos-test-config-{process::id()}")
     let _ = fs::remove_dir_all(root)
     set_config_root(root)
     root
@@ -49,12 +49,12 @@ pub fn remove_test_config(root: String) {
 fn config_base() -> String {
     let xdg = env::var("XDG_CONFIG_HOME").unwrap_or("")
     if !xdg.is_empty() { return xdg }
-    path::join(env::home_dir().unwrap_or("/tmp"), ".config").expect("relative segment")
+    path::join(env::home_dir().unwrap_or("/tmp"), ".config")
 }
 
 #[cfg(target_os = "macos")]
 fn config_base() -> String {
-    path::join(env::home_dir().unwrap_or("/tmp"), "Library/Application Support").expect("relative segment")
+    path::join(env::home_dir().unwrap_or("/tmp"), "Library/Application Support")
 }
 
 #[cfg(target_os = "windows")]
@@ -69,20 +69,20 @@ fn config_base() -> String {
 /// `~/Library/Caches/<app>` on macOS, `%LOCALAPPDATA%\<app>` on Windows; under
 /// `<root>/cache` when `set_config_root` gave a root.
 pub fn cache_dir(app_id: String) -> String {
-    let base = if unsafe { CONFIG_ROOT }.is_empty() { cache_base() } else { path::join(unsafe { CONFIG_ROOT }, "cache").expect("relative segment") }
-    path::join(base, sanitize(app_id)).expect("sanitized name")
+    let base = if unsafe { CONFIG_ROOT }.is_empty() { cache_base() } else { path::join(unsafe { CONFIG_ROOT }, "cache") }
+    path::join(base, sanitize(app_id))
 }
 
 #[cfg(any(target_os = "linux", target_os = "freebsd"))]
 fn cache_base() -> String {
     let xdg = env::var("XDG_CACHE_HOME").unwrap_or("")
     if !xdg.is_empty() { return xdg }
-    path::join(env::home_dir().unwrap_or("/tmp"), ".cache").expect("relative segment")
+    path::join(env::home_dir().unwrap_or("/tmp"), ".cache")
 }
 
 #[cfg(target_os = "macos")]
 fn cache_base() -> String {
-    path::join(env::home_dir().unwrap_or("/tmp"), "Library/Caches").expect("relative segment")
+    path::join(env::home_dir().unwrap_or("/tmp"), "Library/Caches")
 }
 
 #[cfg(target_os = "windows")]
@@ -98,9 +98,7 @@ fn sanitize(app_id: String) -> String {
     for c in app_id {
         if c.is_alphanumeric() || c == '.' || c == '-' || c == '_' { out.push(c) } else { out.push('_') }
     }
-    // Separators became `_` above, so of the names left only `.` and `..`
-    // would name the base folder or its parent.
-    if out.is_empty() || out == "." || out == ".." { "gui-gos-app" } else { out }
+    if out.is_empty() { "gui-gos-app" } else { out }
 }
 
 /// Writes `bytes` to `file` atomically: a sibling temporary file is
@@ -206,7 +204,7 @@ impl Default for StringList {
 
 /// Where `name` settings live for `app_id`.
 pub fn settings_path(app_id: String, name: String) -> String {
-    path::join(config_dir(app_id), f"{name}.json").expect("relative segment")
+    path::join(config_dir(app_id), f"{name}.json")
 }
 
 /// Loads settings; a missing file answers empty settings at `version`.
@@ -257,7 +255,7 @@ impl Default for WindowPlacement {
 
 /// The placement saved for one window of `app_id`, if any.
 pub fn load_window_placement(app_id: String, window: String) -> Option<WindowPlacement> {
-    let file = path::join(config_dir(app_id), f"window-{sanitize(window)}.json").expect("relative segment")
+    let file = path::join(config_dir(app_id), f"window-{sanitize(window)}.json")
     let text = fs::read_to_string(file).ok()?
     let p = json::decode::<WindowPlacement>(text).ok()?
     if p.width <= 0 || p.height <= 0 {
@@ -267,7 +265,7 @@ pub fn load_window_placement(app_id: String, window: String) -> Option<WindowPla
 }
 
 pub fn save_window_placement(app_id: String, window: String, placement: WindowPlacement) -> Result<(), errors::Error> {
-    let file = path::join(config_dir(app_id), f"window-{sanitize(window)}.json")?
+    let file = path::join(config_dir(app_id), f"window-{sanitize(window)}.json")
     write_atomic(file, json::encode(placement)?.bytes())
 }
 
