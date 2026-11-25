@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.3 - Gossamer 0.85.0
+
+- Builds on windowing-gos 0.4.3 and gui-engine-gos 0.6.3. Requires Gossamer 0.85.0.
+- A download whose suggested name is `.` or `..` is saved as `download` inside the download folder, where it named the folder itself or its parent. An application id of `.` or `..` keeps its settings and cache under `gui-gos-app`, beside the other applications' folders rather than in their parent.
+
 ## 0.5.2 - Gossamer 0.84.3
 
 - Builds on windowing-gos 0.4.3 and gui-engine-gos 0.6.3. Requires Gossamer 0.84.3. Since Gossamer 0.84.0 a `static mut` is read and written only inside `unsafe { }`: the view registry, icon sets, color-picker rings, desktop notification log, configuration root, and webview engine state keep their statics and reach them that way.

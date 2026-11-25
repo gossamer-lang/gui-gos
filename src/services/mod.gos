@@ -98,7 +98,9 @@ fn sanitize(app_id: String) -> String {
     for c in app_id {
         if c.is_alphanumeric() || c == '.' || c == '-' || c == '_' { out.push(c) } else { out.push('_') }
     }
-    if out.is_empty() { "gui-gos-app" } else { out }
+    // Separators became `_` above, so of the names left only `.` and `..`
+    // would name the base folder or its parent.
+    if out.is_empty() || out == "." || out == ".." { "gui-gos-app" } else { out }
 }
 
 /// Writes `bytes` to `file` atomically: a sibling temporary file is
@@ -309,3 +311,17 @@ pub fn locales() -> Vec<String> {
 }
 
 pub mod work
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn every_app_id_keeps_its_folders_inside_the_config_root() {
+        let root = super::private_test_config()
+        for id in #["dev.example.App", ".", "..", "", "a/../..", "..\\x"] {
+            for dir in #[super::config_dir(id), super::cache_dir(id)] {
+                assert(dir.starts_with(root + "/") && !dir.contains("/../") && !dir.ends_with("/.."), f"{id:?} -> {dir}")
+            }
+        }
+        super::remove_test_config(root)
+    }
+}
